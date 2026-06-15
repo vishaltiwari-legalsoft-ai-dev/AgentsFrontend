@@ -1,0 +1,51 @@
+<!-- @dsCard group="Components" viewport="700x320" name="Forms" subtitle="Input, Select, Switch, Checkbox & Radio" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<link rel="stylesheet" href="../../styles.css"/>
+<style>
+  html,body{ margin:0; }
+  body{ background:var(--surface); font-family:var(--font-sans); color:var(--text-primary); padding:22px 24px; }
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px 28px; align-items:start; }
+  .stack{ display:flex; flex-direction:column; gap:14px; }
+  .lucide{ width:16px; height:16px; }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <script src="../../_ds_bundle.js"></script>
+  <script type="text/babel">
+    const { Input, Select, Switch, Checkbox } = window.EnsembleDesignSystem_c3f858;
+    const I = (n) => <i data-lucide={n} className="lucide"></i>;
+    function Demo(){
+      const [on,setOn] = React.useState(true);
+      return (
+        <div className="grid">
+          <div className="stack">
+            <Input label="Campaign goal" placeholder="Launch the spring campaign" icon={I('target')} />
+            <Input label="Monthly budget" defaultValue="not a number" error="Enter a number" />
+          </div>
+          <div className="stack">
+            <Select label="Assign to team" options={["Campaign Manager","Outbound Reach","Content Engine"]} />
+            <div style={{display:'flex',flexDirection:'column',gap:12,marginTop:4}}>
+              <Switch label="Auto-publish approved posts" checked={on} onChange={e=>setOn(e.target.checked)} />
+              <Checkbox label="Notify me on every run" defaultChecked />
+              <div style={{display:'flex',gap:18}}>
+                <Checkbox radio name="cad" label="Daily" defaultChecked />
+                <Checkbox radio name="cad" label="Weekly" />
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);
+    requestAnimationFrame(() => window.lucide && window.lucide.createIcons());
+  </script>
+</body>
+</html>

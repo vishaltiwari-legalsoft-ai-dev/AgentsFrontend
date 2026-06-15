@@ -1,0 +1,26 @@
+<!-- @dsCard group="Type" viewport="700x300" name="Type scale" subtitle="Display / heading / body / caption roles in use" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<link rel="stylesheet" href="../styles.css"/>
+<style>
+  html,body{ margin:0; }
+  body{ background:var(--surface); color:var(--text-primary); padding:18px 22px; }
+  .row{ display:flex; align-items:baseline; gap:16px; padding:5px 0; border-bottom:1px solid var(--gray-100); }
+  .row:last-child{ border-bottom:0; }
+  .tag{ font-family:var(--font-mono); font-size:10.5px; color:var(--text-tertiary); width:110px; flex:none; }
+  .d{ font-family:var(--font-display); }
+  .s{ font-family:var(--font-sans); }
+</style>
+</head>
+<body>
+  <div class="row"><span class="tag">display-lg 40</span><span class="d" style="font-size:34px;font-weight:700;letter-spacing:-0.022em">Hire your team</span></div>
+  <div class="row"><span class="tag">h1 32</span><span class="d" style="font-size:28px;font-weight:600;letter-spacing:-0.02em">Active agents</span></div>
+  <div class="row"><span class="tag">h2 26 / h3 21</span><span class="d" style="font-size:21px;font-weight:600;letter-spacing:-0.014em">Campaign Manager</span></div>
+  <div class="row"><span class="tag">title 18</span><span class="s" style="font-size:18px;font-weight:600">Outbound Reach</span></div>
+  <div class="row"><span class="tag">body 15</span><span class="s" style="font-size:15px">Coordinates outreach across email and LinkedIn.</span></div>
+  <div class="row"><span class="tag">body-sm 13.5</span><span class="s" style="font-size:13.5px;color:var(--text-secondary)">Last run 2 hours ago · 4 members</span></div>
+  <div class="row"><span class="tag">overline 11</span><span class="s" style="font-size:11px;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-tertiary)">Marketing</span></div>
+</body>
+</html>

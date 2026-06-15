@@ -1,0 +1,26 @@
+<!-- @dsCard group="Brand" viewport="700x190" name="Logo" subtitle="Mark (2×2 agent cluster), wordmark, and mono lockup" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<link rel="stylesheet" href="../styles.css"/>
+<style>
+  html,body{ margin:0; }
+  body{ background:var(--surface); font-family:var(--font-sans); color:var(--text-primary); padding:0; }
+  .wrap{ display:flex; height:190px; }
+  .cell{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; border-right:1px solid var(--gray-100); }
+  .cell:last-child{ border-right:0; }
+  .cell.dark{ background:var(--ink); }
+  .cap{ font-family:var(--font-mono); font-size:10.5px; color:var(--text-tertiary); }
+  .cap.inv{ color:var(--gray-400); }
+  img{ display:block; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="cell"><img src="../assets/logo-wordmark.svg" width="190" alt="LegalSoft"/><div class="cap">Primary wordmark</div></div>
+    <div class="cell"><img src="../assets/logo-mark.svg" width="48" alt="mark"/><div class="cap">App mark (gradient)</div></div>
+    <div class="cell dark"><svg width="48" height="48" viewBox="0 0 40 40" fill="#fff" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="9"/><rect x="11" y="22" width="4.5" height="7" rx="1.2" fill="#1746A2" opacity="0.5"/><rect x="17.75" y="18" width="4.5" height="11" rx="1.2" fill="#1746A2" opacity="0.75"/><rect x="24.5" y="14" width="4.5" height="15" rx="1.2" fill="#1746A2"/><path d="M11 19.5 L18 15 L23 17.5 L30.5 11" stroke="#1746A2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg><div class="cap inv">Mono knockout</div></div>
+  </div>
+</body>
+</html>

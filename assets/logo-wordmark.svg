@@ -1,0 +1,15 @@
+<svg width="210" height="40" viewBox="0 0 210 40" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="LegalSoft">
+  <defs>
+    <linearGradient id="lsgw" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00B4D8"></stop>
+      <stop offset="1" stop-color="#03045E"></stop>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="36" height="36" rx="9" fill="url(#lsgw)"></rect>
+  <rect x="11" y="22" width="4.5" height="7" rx="1.2" fill="#fff" opacity="0.55"></rect>
+  <rect x="17.75" y="18" width="4.5" height="11" rx="1.2" fill="#fff" opacity="0.78"></rect>
+  <rect x="24.5" y="14" width="4.5" height="15" rx="1.2" fill="#fff"></rect>
+  <path d="M11 19.5 L18 15 L23 17.5 L30.5 11" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+  <path d="M27 10.4 L31 10 L30.6 14 Z" fill="#fff"></path>
+  <text x="50" y="27" font-family="&#39;Manrope&#39;,&#39;Causten&#39;,sans-serif" font-size="22" font-weight="800" letter-spacing="-0.01em" fill="#03045E">Legal<tspan fill="#0096C7">Soft</tspan></text>
+</svg>

@@ -1,0 +1,25 @@
+<!-- @dsCard group="Brand" viewport="700x210" name="Voice & tone" subtitle="Sentence case, verb-led, lightly playful — capable teammate, not vendor" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<link rel="stylesheet" href="../styles.css"/>
+<style>
+  html,body{ margin:0; }
+  body{ background:var(--surface); font-family:var(--font-sans); color:var(--text-primary); padding:18px 22px; }
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px 22px; }
+  .pair{ display:flex; flex-direction:column; gap:4px; padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius-md); }
+  .do{ font-size:14px; font-weight:600; }
+  .dont{ font-size:12.5px; color:var(--text-tertiary); text-decoration:line-through; }
+  .k{ font-family:var(--font-mono); font-size:10px; color:var(--brand); text-transform:uppercase; letter-spacing:0.06em; }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="pair"><span class="k">CTA</span><span class="do">Deploy team</span><span class="dont">Submit configuration</span></div>
+    <div class="pair"><span class="k">Empty</span><span class="do">No agents yet. Pick a specialist to start.</span><span class="dont">There are currently no agents.</span></div>
+    <div class="pair"><span class="k">Success</span><span class="do">Campaign Manager is live. It'll report back here.</span><span class="dont">Operation completed successfully.</span></div>
+    <div class="pair"><span class="k">Metric</span><span class="do">Drafted 12 posts in 4 min</span><span class="dont">Significantly boosts output</span></div>
+  </div>
+</body>
+</html>

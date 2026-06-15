@@ -1,0 +1,138 @@
+/* LegalSoft — Color tokens (Premium Ocean)
+   Brand kit: deep-twilight #03045E → french-blue #023E8A → bright-teal-blue #0077B6
+   → blue-green #0096C7 → turquoise-surf #00B4D8 → sky-aqua #48CAE4 → frosted/cyan tints.
+   Brand identity is the teal-blue #0077B6; accent is electric turquoise #00B4D8.
+   Gradients (navy → cyan) are core to the brand. */
+:root {
+  /* ---- Neutral scale (cool, subtly cyan-tinted to harmonize with the ocean palette) ---- */
+  --gray-0:   #FFFFFF;
+  --gray-25:  #F8FBFD;
+  --gray-50:  #F2F8FB;   /* app canvas */
+  --gray-100: #E7F0F6;
+  --gray-150: #DAE7EF;
+  --gray-200: #C8DAE5;
+  --gray-300: #A7C1D0;
+  --gray-400: #7794A6;
+  --gray-500: #57707F;
+  --gray-600: #3F525F;
+  --gray-700: #2C3B45;
+  --gray-800: #1A2730;
+  --gray-900: #0E1820;
+  --ink:      #03045E;   /* deep-twilight — premium navy ink */
+
+  /* ---- Warm neutral (kept for warnings only) ---- */
+  --cream-50: #FFFBF2;
+  --cream-100:#FFF7E9;
+  --cream-200:#FCEFD6;
+
+  /* ---- Brand ocean ramp (light cyan → deep twilight) ---- */
+  --blue-50:  #E8F6FC;   /* derived icy tint */
+  --blue-100: #CAF0F8;   /* light-cyan */
+  --blue-200: #ADE8F4;   /* frosted-blue-2 */
+  --blue-300: #90E0EF;   /* frosted-blue */
+  --blue-400: #48CAE4;   /* sky-aqua */
+  --blue-500: #00B4D8;   /* turquoise-surf */
+  --blue-600: #0096C7;   /* blue-green */
+  --blue-700: #0077B6;   /* bright-teal-blue — brand main */
+  --blue-800: #023E8A;   /* french-blue */
+  --blue-900: #03045E;   /* deep-twilight */
+
+  /* ---- Accent (electric turquoise — the single high-energy pop) ---- */
+  --accent-50:  #E8FBFF;
+  --accent-100: #CAF0F8;
+  --accent-200: #ADE8F4;
+  --accent-400: #48CAE4;
+  --accent-500: #00B4D8;  /* turquoise-surf */
+  --accent-600: #0096C7;  /* blue-green */
+  --accent-700: #0077B6;  /* bright-teal-blue */
+
+  /* ---- Semantic status ---- */
+  --green-50:  #E6F7EF;
+  --green-500: #12A150;
+  --green-600: #0E8543;
+  --amber-50:  var(--cream-100);
+  --amber-500: #D98A00;
+  --amber-600: #B87100;
+  --red-50:    #FCEBEC;
+  --red-500:   #E5484D;
+  --red-600:   #CB2B31;
+
+  /* ---- Brand gradients (navy → cyan ocean) ---- */
+  --grad-brand:      linear-gradient(135deg, #0096C7 0%, #0077B6 50%, #023E8A 100%); /* @kind color */
+  --grad-brand-soft: linear-gradient(135deg, #48CAE4 0%, #F2F8FB 100%); /* @kind color */
+  --grad-duo:        linear-gradient(135deg, #03045E 0%, #0077B6 45%, #00B4D8 100%); /* @kind color */
+  --grad-accent:     linear-gradient(135deg, #48CAE4 0%, #0096C7 100%); /* @kind color */
+  --grad-warm:       linear-gradient(135deg, #CAF0F8 0%, #00B4D8 100%); /* @kind color */
+  --grad-hero:       radial-gradient(120% 90% at 85% 0%, #CAF0F8 0%, #F2F8FB 55%, #FFFFFF 100%); /* @kind color */
+
+  /* ---- Playful per-domain palette (legal/marketing workstreams) ---- */
+  --cat-design-bg:   #D5EFF9;  --cat-design:   #0077B6;  /* on-brand teal-blue */
+  --cat-seo-bg:      #E6F6EC;  --cat-seo:      #109150;
+  --cat-copy-bg:     #FFF1E7;  --cat-copy:     #E85E0C;  /* one warm pop for variety */
+  --cat-social-bg:   #FCE9F2;  --cat-social:   #D63384;
+  --cat-ads-bg:      #E1ECF8;  --cat-ads:      #023E8A;  /* french-blue */
+  --cat-data-bg:     #D2F0F4;  --cat-data:     #0096C7;  /* blue-green */
+
+  /* =========================================================
+     Semantic aliases — reference these in components & kits
+     ========================================================= */
+  --bg-app:          var(--gray-50);
+  --surface:         var(--gray-0);
+  --surface-card:    var(--gray-0);
+  --surface-sunken:  var(--gray-50);
+  --surface-hover:   var(--gray-50);
+  --surface-active:  var(--gray-100);
+  --surface-warm:    var(--cream-100);
+
+  --border-subtle:   var(--gray-150);
+  --border:          var(--gray-200);
+  --border-strong:   var(--gray-300);
+
+  --text-primary:    var(--blue-900);
+  --text-secondary:  var(--gray-600);
+  --text-tertiary:   var(--gray-500);
+  --text-disabled:   var(--gray-400);
+  --text-inverse:    var(--gray-0);
+  --text-link:       var(--blue-700);
+
+  /* Brand teal-blue is the primary identity color */
+  --brand:           var(--blue-700);
+  --brand-hover:     var(--blue-800);
+  --brand-active:    var(--blue-900);
+  --brand-light:     var(--blue-400);
+  --brand-subtle:    var(--blue-50);
+  --brand-bg:        var(--blue-50);
+  --brand-border:    var(--blue-200);
+  --on-brand:        var(--gray-0);
+
+  /* Primary action = brand teal-blue (gradient-friendly) */
+  --action:          var(--blue-700);
+  --action-hover:    var(--blue-800);
+  --action-active:   var(--blue-900);
+  --on-action:       var(--gray-0);
+
+  /* Accent = electric turquoise, for the single high-energy highlight / key CTA.
+     Pairs with deep-navy text (white is unreadable on bright cyan). */
+  --accent:          var(--accent-500);
+  --accent-hover:    var(--accent-600);
+  --accent-active:   var(--accent-700);
+  --accent-subtle:   var(--accent-100);
+  --on-accent:       var(--blue-900);
+
+  --focus-ring:      color-mix(in srgb, var(--blue-500) 50%, transparent);
+
+  --success:         var(--green-500);
+  --success-bg:      var(--green-50);
+  --warning:         var(--amber-500);
+  --warning-bg:      var(--cream-100);
+  --danger:          var(--red-500);
+  --danger-hover:    var(--red-600);
+  --danger-bg:       var(--red-50);
+
+  /* Dotted canvas + frosted-glass finish */
+  --dot-grid:        rgba(2, 62, 138, 0.09);
+  --glass:           rgba(255, 255, 255, 0.60);
+  --glass-strong:    rgba(255, 255, 255, 0.74);
+  --glass-blur:      saturate(170%) blur(18px);
+  --glass-edge:      inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}

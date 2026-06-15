@@ -1,0 +1,58 @@
+<!-- @dsCard group="Components" viewport="700x300" name="Data display" subtitle="Avatar, AvatarGroup, Card & Tabs" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<link rel="stylesheet" href="../../styles.css"/>
+<style>
+  html,body{ margin:0; }
+  body{ background:var(--gray-50); font-family:var(--font-sans); color:var(--text-primary); padding:22px 24px; display:flex; flex-direction:column; gap:18px; }
+  .row{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .lucide{ width:15px; height:15px; }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <script src="../../_ds_bundle.js"></script>
+  <script type="text/babel">
+    const { Avatar, AvatarGroup, Card, CardHeader, CardBody, Tabs, Badge, Button } = window.EnsembleDesignSystem_c3f858;
+    const I = (n) => <i data-lucide={n} className="lucide"></i>;
+    function Demo(){
+      const [tab,setTab] = React.useState('agents');
+      return (
+        <div style={{display:'flex',gap:20,alignItems:'flex-start'}}>
+          <div style={{display:'flex',flexDirection:'column',gap:16,flex:'none'}}>
+            <div className="row">
+              <Avatar name="Ada Lovelace" size="sm"/>
+              <Avatar name="Grace Hopper" size="md" color="var(--cat-design)"/>
+              <Avatar name="Alan Turing" size="lg" color="var(--cat-seo)"/>
+              <Avatar size="lg" square color="var(--ink)"><i data-lucide="bot" style={{width:22,height:22,color:'#fff'}}></i></Avatar>
+            </div>
+            <AvatarGroup>
+              <Avatar name="A B" size="md" color="var(--cat-copy)"/>
+              <Avatar name="C D" size="md" color="var(--cat-social)"/>
+              <Avatar name="E F" size="md" color="var(--cat-data)"/>
+              <Avatar size="md">+5</Avatar>
+            </AvatarGroup>
+            <Tabs variant="pill" value={tab} onChange={setTab} items={[{value:'agents',label:'Agents',count:12},{value:'teams',label:'Teams',count:4}]}/>
+            <Tabs variant="line" value={tab} onChange={setTab} items={[{value:'agents',label:'Overview'},{value:'teams',label:'Activity'},{value:'x',label:'Settings'}]}/>
+          </div>
+          <Card style={{width:280}}>
+            <CardHeader title="Content Engine" action={<Badge variant="success" dot>Live</Badge>}/>
+            <CardBody>
+              <p style={{margin:0,fontSize:13.5,color:'var(--text-secondary)',lineHeight:1.5}}>A team of 4 agents drafting, editing, and scheduling content.</p>
+              <Button variant="secondary" size="sm" iconLeft={I('arrow-up-right')}>Open team</Button>
+            </CardBody>
+          </Card>
+        </div>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);
+    requestAnimationFrame(() => window.lucide && window.lucide.createIcons());
+  </script>
+</body>
+</html>
