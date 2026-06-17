@@ -107,10 +107,17 @@ export function AdminView({ onBack }: { onBack: () => void }) {
       <div className="csechead">
         <div>
           <h3 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 600, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-            <Icon name="shield" /> Super admin
+            <Icon name={isCreator ? "shield-check" : "shield"} /> {isCreator ? "Creator" : "Super admin"}
+            {isCreator && (
+              <span style={{ padding: "2px 9px", borderRadius: 99, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.04em", background: "var(--grad-brand)", color: "#fff" }}>
+                OWNER
+              </span>
+            )}
           </h3>
           <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
-            User directory and creative-request analytics.
+            {isCreator
+              ? "Full owner access — manage secrets & integrations, plus the user directory and analytics."
+              : "User directory and creative-request analytics."}
           </div>
         </div>
         <Button variant="secondary" size="sm" onClick={onBack}>

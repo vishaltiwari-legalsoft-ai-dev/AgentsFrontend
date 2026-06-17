@@ -85,12 +85,17 @@ export default function ConsoleApp() {
   };
 
   const meta = TITLES[nav] || { title: nav, subtitle: "", newLabel: "New" };
+  // Owners (Creator role) see the admin area branded as "Creator".
+  const headerMeta =
+    nav === "admin" && user.is_creator
+      ? { ...meta, title: "Creator", subtitle: "Owner panel — secrets, users & analytics" }
+      : meta;
 
   return (
     <div className="capp">
       <Sidebar nav={nav} setNav={setNav} user={user} isAdmin={user.is_admin} onLogout={logout} />
       <div className="cmain">
-        {nav !== "workspace" && nav !== "studio" && <Topbar {...meta} onNew={nav === "home" || nav === "agents" || nav === "workspace" ? onNew : undefined} />}
+        {nav !== "workspace" && nav !== "studio" && <Topbar {...headerMeta} onNew={nav === "home" || nav === "agents" || nav === "workspace" ? onNew : undefined} />}
         <div className="cscroll" style={nav === "workspace" || nav === "studio" ? { overflow: "hidden" } : undefined}>
           {nav === "home" && (
             <HomeView
