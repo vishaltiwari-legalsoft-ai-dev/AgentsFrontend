@@ -187,6 +187,35 @@
 .gdseg__btn { flex: 1 1 auto; min-width: 52px; font-size: 11px; font-weight: 600; padding: 5px 8px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); cursor: pointer; transition: border-color var(--dur-fast), background var(--dur-fast); }
 .gdseg__btn:hover { border-color: var(--brand); }
 .gdseg__btn--on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.gdseg--sm .gdseg__btn { min-width: 40px; font-size: 10px; padding: 3px 6px; }
+
+/* Per-element Stage-3 styling bars */
+.gdelems { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.gdelem { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 9px; background: var(--surface); }
+.gdelem__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gdelem__name { font-size: 11px; font-weight: 700; letter-spacing: 0.02em; color: var(--text-primary); }
+.gdelem__locked { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 600; color: var(--text-tertiary); }
+.gdelem__hint { font-size: 10.5px; line-height: 1.4; color: var(--text-tertiary); }
+.gdelem .gdswatches { margin-top: 0; }
+.gdselect--sm { font-size: 12px; padding: 4px 6px; }
+.gdcolor { width: 20px; height: 20px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.18); cursor: pointer; padding: 0; transition: transform var(--dur-fast), box-shadow var(--dur-fast); }
+.gdcolor:hover { transform: scale(1.08); }
+.gdcolor--on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--brand); }
+
+/* Stage-4 logo placement preview + controls */
+.gdlogobox { position: absolute; display: flex; align-items: center; justify-content: center; outline: 1.5px dashed var(--brand); outline-offset: 1px; }
+.gdlogobox img { width: 100%; height: 100%; object-fit: contain; }
+.gdgrid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; width: 108px; aspect-ratio: 4 / 5; }
+.gdgrid3__cell { display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: var(--radius-sm, 6px); background: var(--surface); cursor: pointer; transition: border-color var(--dur-fast), background var(--dur-fast); }
+.gdgrid3__cell:hover { border-color: var(--brand); }
+.gdgrid3__cell--on { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 16%, transparent); }
+.gdgrid3__dot { width: 6px; height: 6px; border-radius: 99px; background: var(--text-tertiary); }
+.gdgrid3__cell--on .gdgrid3__dot { background: var(--brand); }
+.gdrange { width: 100%; accent-color: var(--brand); cursor: pointer; }
+.gdpxgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gdpx { display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--text-tertiary); }
+.gdpx input { font-size: 12px; padding: 5px 7px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--text-primary); }
+.gdpx input:focus { outline: none; border-color: var(--brand); }
 
 /* ── Brand kit (read-only) ─────────────────────────────────────────────── */
 .gdkit__block { font-family: var(--font-mono, monospace); font-size: 11px; white-space: pre-wrap; color: var(--text-secondary); background: var(--surface-hover); border-radius: var(--radius-md); padding: 10px; line-height: 1.6; }

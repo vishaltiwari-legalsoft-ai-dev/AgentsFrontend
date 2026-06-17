@@ -419,6 +419,11 @@ export interface GdRun {
     aspect_ratio: string;
     text_placement?: string;
     cta_placement?: string;
+    element_styles?: Record<string, GdElementStyle>;
+    subheadings?: GdSubheading[];
+    logo_layout?: GdLogoLayout;
+    custom_gradient?: GdCustomGradient | null;
+    custom_element?: GdCustomElement | null;
     use_ai_compositor: boolean;
     tokens: Record<string, string>;
     tokens_approved: Record<string, boolean>;
@@ -431,6 +436,59 @@ export interface GdRun {
   updated_at: string;
 }
 
+// Per-element Stage-3 styling for the deterministic renderer. `placement`,
+// `size_pct` and the pixel nudge are omitted for the inline highlight (it follows
+// the headline); `color` is omitted for the CTA (its orange button is locked).
+// `size_pct` is the element's size as a % of the canvas width; `offset_x`/`offset_y`
+// are a pixel nudge from the placement anchor.
+export interface GdElementStyle {
+  font?: string;
+  color?: string;
+  placement?: string;
+  size_pct?: number;
+  offset_x?: number;
+  offset_y?: number;
+}
+
+// One Stage-3 sub-heading line (the dynamic 1–5 list, replacing the old fixed
+// subtext1/subtext2). Each line is independently styled, placed and approved.
+export interface GdSubheading {
+  text: string;
+  font?: string;
+  color?: string;
+  size_pct?: number;
+  placement?: string;
+  offset_x?: number;
+  offset_y?: number;
+  approved?: boolean;
+}
+
+// Stage-4 logo placement controls (deterministic compositor).
+export interface GdLogoLayout {
+  position: string;
+  size_pct: number | null;
+  margin_pct: number;
+  offset_x: number;
+  offset_y: number;
+}
+
+export interface GdStage3Element {
+  key: string;
+  label: string;
+  token: string;
+  placeable: boolean;
+  colorable: boolean;
+  sizable: boolean;
+  placement_kind: "text" | "cta";
+}
+
+export interface GdTextColor {
+  key: string;
+  label: string;
+  swatch: string;
+  phrase: string;
+}
+
 export interface GdVariant {
   id: string;
   title: string;
@@ -440,6 +498,48 @@ export interface GdVariant {
   css_gradient?: string;
   subject?: string; // Stage-2 element variants supply this instead of a prompt file
   prompt_file?: string; // Stage-1 variants only
+}
+
+// A per-creative, temporary AI gradient (Stage 1). Lives on the run config only —
+// never added to the canonical prompt library. Selected with variant id "AI".
+export interface GdCustomGradient {
+  id: string; // always "AI"
+  cid?: string; // curated/llm id, used to exclude already-seen picks on regenerate
+  title: string;
+  desc: string;
+  prompt: string;
+  css_gradient: string;
+  source?: string; // "agent" | "agent+llm"
+}
+
+export interface GdGradientSuggestion {
+  type: "gradient";
+  state: "proposed";
+  source: string;
+  ai: boolean;
+  gradient: GdCustomGradient;
+  note: string;
+}
+
+// A per-creative, temporary AI element (Stage 2). Lives on the run config only —
+// never added to the catalogue. Selected with variant id "AI".
+export interface GdCustomElement {
+  id: string; // always "AI"
+  cid?: string;
+  title: string;
+  desc: string;
+  category: string;
+  subject: string;
+  source?: string; // "agent" | "agent+llm"
+}
+
+export interface GdElementSuggestion {
+  type: "element";
+  state: "proposed";
+  source: string;
+  ai: boolean;
+  element: GdCustomElement;
+  note: string;
 }
 
 export interface GdExplorePick {
@@ -483,6 +583,18 @@ export interface GdConfig {
   font_variants: { name: string; weight: number; style: string; file: string }[];
   text_placements: { key: string; label: string; phrase: string }[];
   cta_placements: { key: string; label: string; phrase: string }[];
+  text_colors: GdTextColor[];
+  stage3_elements: GdStage3Element[];
+  text_size_pct_min: number;
+  text_size_pct_max: number;
+  default_text_size_pct: Record<string, number>;
+  text_offset_px_range: number;
+  subheading_min: number;
+  subheading_max: number;
+  logo_positions: { key: string; label: string; row: number; col: number }[];
+  logo_size_pct_min: number;
+  logo_size_pct_max: number;
+  logo_offset_px_range: number;
   aspect_ratios: GdAspectRatio[];
   brand_kit_block: string;
   locked_colors: {
@@ -529,6 +641,11 @@ export const gdUpdateConfig = (
     aspect_ratio?: string;
     text_placement?: string;
     cta_placement?: string;
+    element_styles?: Record<string, GdElementStyle>;
+    subheadings?: GdSubheading[];
+    logo_layout?: Partial<GdLogoLayout>;
+    custom_gradient?: GdCustomGradient | null;
+    custom_element?: GdCustomElement | null;
     use_ai_compositor?: boolean;
     tokens?: Record<string, string>;
     token_approvals?: Record<string, { approved: boolean; source?: string; original_suggestion?: string }>;
