@@ -1,9 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAdminAnalytics, getAdminUsers, type AdminUser, type Analytics } from "@/lib/api";
+import {
+  getAdminAnalytics,
+  getAdminUsers,
+  getAdminSettings,
+  updateAdminSettings,
+  testOpenRouterKey,
+  type AdminUser,
+  type Analytics,
+  type AdminSettings,
+  type AdminSettingsPatch,
+} from "@/lib/api";
 import { Icon, Button, Avatar } from "@/lib/kit-ui";
 import { GlyphTile } from "@/lib/glyph";
+import { useAuth } from "@/lib/auth";
 
 function formatDate(iso: string): string {
   if (!iso) return "—";
@@ -12,9 +23,29 @@ function formatDate(iso: string): string {
 }
 
 export function AdminView({ onBack }: { onBack: () => void }) {
+  const { user } = useAuth();
+  const isCreator = !!user?.is_creator;
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Secrets & Integrations form state.
+  const [cfg, setCfg] = useState<AdminSettings | null>(null);
+  const [keyDraft, setKeyDraft] = useState("");
+  const [models, setModels] = useState({ model: "", fast_model: "", image_model: "", vision_model: "" });
+  const [saving, setSaving] = useState(false);
+  const [secretMsg, setSecretMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  const loadSettings = () =>
+    getAdminSettings().then((s) => {
+      setCfg(s);
+      setModels({
+        model: s.openrouter.model,
+        fast_model: s.openrouter.fast_model,
+        image_model: s.openrouter.image_model,
+        vision_model: s.openrouter.vision_model,
+      });
+    });
 
   useEffect(() => {
     let cancelled = false;
@@ -27,10 +58,47 @@ export function AdminView({ onBack }: { onBack: () => void }) {
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load");
       });
+    if (isCreator) loadSettings().catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isCreator]);
+
+  const saveSecrets = async () => {
+    setSaving(true);
+    setSecretMsg(null);
+    try {
+      const patch: AdminSettingsPatch = {
+        openrouter_model: models.model,
+        openrouter_fast_model: models.fast_model,
+        openrouter_image_model: models.image_model,
+        openrouter_vision_model: models.vision_model,
+      };
+      // Only send the key if the admin typed a new one (blank = leave as-is).
+      if (keyDraft.trim()) patch.openrouter_api_key = keyDraft.trim();
+      const next = await updateAdminSettings(patch);
+      setCfg(next);
+      setKeyDraft("");
+      setSecretMsg({ kind: "ok", text: "Settings saved." });
+    } catch (err) {
+      setSecretMsg({ kind: "err", text: err instanceof Error ? err.message : "Save failed" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const testKey = async () => {
+    setSecretMsg(null);
+    try {
+      const r = await testOpenRouterKey();
+      setSecretMsg({
+        kind: "ok",
+        text: `Key works${r.label ? ` (${r.label})` : ""}${r.is_free_tier ? " · free tier" : ""}.`,
+      });
+    } catch (err) {
+      setSecretMsg({ kind: "err", text: err instanceof Error ? err.message : "Test failed" });
+    }
+  };
 
   const maxMonthly = analytics ? Math.max(1, ...analytics.monthly.map((m) => m.count)) : 1;
 
@@ -79,6 +147,74 @@ export function AdminView({ onBack }: { onBack: () => void }) {
           </div>
         </div>
       </div>
+
+      {/* Secrets & Integrations — Creator-only runtime config (OpenRouter). */}
+      {isCreator && (
+      <section style={{ background: "var(--glass)", backdropFilter: "var(--glass-blur)", WebkitBackdropFilter: "var(--glass-blur)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-2xl)", padding: 24, boxShadow: "var(--shadow-xs), var(--glass-edge)" }}>
+        <h4 style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 6px", color: "var(--text-tertiary)", display: "flex", alignItems: "center", gap: 6 }}>
+          <Icon name="lock" size={13} /> Secrets &amp; Integrations
+          <span style={{ marginLeft: 4, padding: "2px 8px", borderRadius: 99, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", background: "var(--grad-brand)", color: "#fff" }}>CREATOR</span>
+        </h4>
+        <p style={{ fontSize: 12.5, color: "var(--text-secondary)", margin: "0 0 18px", lineHeight: 1.5 }}>
+          Set the OpenRouter API key and models here instead of in the server environment. Stored securely
+          server-side; the key is never shown again after saving.
+        </p>
+
+        {/* OpenRouter API key */}
+        <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
+          OpenRouter API key
+          {cfg?.openrouter.api_key_set && (
+            <span style={{ marginLeft: 8, fontWeight: 500, color: "var(--text-tertiary)" }}>
+              currently set: {cfg.openrouter.api_key_hint} · {cfg.openrouter.api_key_source === "override" ? "saved here" : "from environment"}
+            </span>
+          )}
+        </label>
+        <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+          <input
+            type="password"
+            value={keyDraft}
+            placeholder={cfg?.openrouter.api_key_set ? "Enter a new key to replace it…" : "sk-or-v1-…"}
+            autoComplete="off"
+            onChange={(e) => setKeyDraft(e.target.value)}
+            style={{ flex: 1, padding: "9px 12px", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontSize: 13, fontFamily: "var(--font-mono)" }}
+          />
+          <Button variant="secondary" size="sm" onClick={testKey} disabled={!cfg?.openrouter.api_key_set}>
+            Test key
+          </Button>
+        </div>
+
+        {/* Model ids */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
+          {([
+            ["model", "Reasoning model"],
+            ["fast_model", "Fast / parsing model"],
+            ["image_model", "Image model"],
+            ["vision_model", "Vision model"],
+          ] as const).map(([key, label]) => (
+            <label key={key} style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>
+              {label}
+              <input
+                value={models[key]}
+                onChange={(e) => setModels((m) => ({ ...m, [key]: e.target.value }))}
+                spellCheck={false}
+                style={{ width: "100%", marginTop: 5, padding: "8px 11px", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontSize: 12.5, fontFamily: "var(--font-mono)" }}
+              />
+            </label>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <Button size="sm" onClick={saveSecrets} disabled={saving}>
+            {saving ? "Saving…" : "Save settings"}
+          </Button>
+          {secretMsg && (
+            <span style={{ fontSize: 12.5, color: secretMsg.kind === "ok" ? "var(--success, #16a34a)" : "var(--danger, #dc2626)" }}>
+              {secretMsg.text}
+            </span>
+          )}
+        </div>
+      </section>
+      )}
 
       {analytics && analytics.monthly.length > 0 && (
         <section style={{ background: "var(--glass)", backdropFilter: "var(--glass-blur)", WebkitBackdropFilter: "var(--glass-blur)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-2xl)", padding: 24, boxShadow: "var(--shadow-xs), var(--glass-edge)" }}>

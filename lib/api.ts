@@ -56,6 +56,8 @@ export interface User {
   name: string;
   picture: string;
   is_admin: boolean;
+  // Top-tier owner role (above Super Admin): may manage secrets/integrations.
+  is_creator?: boolean;
 }
 
 export interface GeneratedImage {
@@ -360,6 +362,41 @@ export async function getAdminUsers(): Promise<{ users: AdminUser[]; total: numb
 
 export async function getAdminAnalytics(): Promise<Analytics> {
   return getJson("/api/admin/analytics");
+}
+
+// Admin-only runtime settings (OpenRouter key + model ids). The key is never
+// returned in full — only a masked hint and whether it's set.
+export interface AdminSettings {
+  openrouter: {
+    api_key_set: boolean;
+    api_key_hint: string;
+    api_key_source: "override" | "env" | "unset";
+    model: string;
+    fast_model: string;
+    image_model: string;
+    vision_model: string;
+  };
+  sources: Record<string, "override" | "env">;
+}
+
+export interface AdminSettingsPatch {
+  openrouter_api_key?: string;
+  openrouter_model?: string;
+  openrouter_fast_model?: string;
+  openrouter_image_model?: string;
+  openrouter_vision_model?: string;
+}
+
+export function getAdminSettings(): Promise<AdminSettings> {
+  return getJson("/api/admin/settings");
+}
+
+export function updateAdminSettings(patch: AdminSettingsPatch): Promise<AdminSettings> {
+  return postJson("/api/admin/settings", patch);
+}
+
+export function testOpenRouterKey(): Promise<{ ok: boolean; label?: string; is_free_tier?: boolean }> {
+  return postJson("/api/admin/settings/test", {});
 }
 
 /* ----------------------- Graphic Designer pipeline ----------------------- */
