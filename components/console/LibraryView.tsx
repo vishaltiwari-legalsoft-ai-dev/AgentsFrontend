@@ -67,7 +67,7 @@ export function LibraryView({ onBack }: { onBack: () => void }) {
               {brand.creatives.length === 0 ? (
                 <div style={{ fontSize: 12, color: "var(--text-tertiary)", fontStyle: "italic" }}>No assets yet.</div>
               ) : (
-                <div className="cgrid cgrid--3">
+                <div className="clibgrid">
                   {brand.creatives.map((item) => (
                     <AssetThumb key={item.view_url} item={item} />
                   ))}
@@ -88,10 +88,11 @@ function AssetThumb({ item }: { item: GalleryItem }) {
       target="_blank"
       rel="noreferrer"
       title={item.file_name}
+      className="clibtile"
       style={{
         background: "var(--surface)",
         border: "1px solid var(--border)",
-        borderRadius: "var(--radius-xl)",
+        borderRadius: "var(--radius-lg)",
         overflow: "hidden",
         boxShadow: "var(--shadow-xs)",
         textDecoration: "none",
@@ -103,13 +104,13 @@ function AssetThumb({ item }: { item: GalleryItem }) {
           // eslint-disable-next-line @next/next/no-img-element
           <img src={item.view_url} alt={item.file_name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", fontSize: 12, fontWeight: 700, color: "var(--text-tertiary)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", fontSize: 11, fontWeight: 700, color: "var(--text-tertiary)" }}>
             {item.file_name.split(".").pop()?.toUpperCase() || "FILE"}
           </div>
         )}
       </div>
-      <div style={{ padding: "8px 10px" }}>
-        <div style={{ fontSize: 11, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <div style={{ padding: "6px 8px" }}>
+        <div style={{ fontSize: 10.5, fontWeight: 500, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {item.file_name}
         </div>
       </div>

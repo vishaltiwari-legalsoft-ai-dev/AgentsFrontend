@@ -86,6 +86,11 @@
   .cgrid--3{ grid-template-columns:repeat(3,1fr); }
   .cgrid--2{ grid-template-columns:repeat(2,1fr); }
 
+  /* Library — compact, minimal asset tiles (many per row) */
+  .clibgrid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:14px; }
+  .clibtile{ transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease; }
+  .clibtile:hover{ transform:translateY(-2px); border-color:var(--border-strong); box-shadow:var(--shadow-sm); }
+
   /* Stats */
   .cstatrow{ display:grid; grid-template-columns:repeat(4,1fr); gap:18px; }
   .cstat{ display:flex; align-items:center; gap:12px; padding:16px; background:var(--glass); -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); border:1px solid var(--border-subtle); border-radius:var(--radius-xl); box-shadow:var(--shadow-sm), var(--glass-edge); position:relative; }
