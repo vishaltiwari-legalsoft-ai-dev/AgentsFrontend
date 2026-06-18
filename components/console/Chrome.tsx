@@ -1,7 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { User } from "@/lib/api";
-import { Icon, Avatar, Button, IconButton, Input } from "@/lib/kit-ui";
+import { getNews } from "@/lib/api";
+import { Icon, Avatar, IconButton } from "@/lib/kit-ui";
+
+/** Fired by the creator's config panel after saving, so open bars refresh live. */
+export const NEWS_UPDATED_EVENT = "agentos:news-updated";
 
 const NAV = [
   { id: "home", label: "Home", icon: "layout-dashboard" },
@@ -57,15 +62,21 @@ export function Sidebar({
   setNav,
   user,
   isAdmin,
+  isCreator,
   onLogout,
 }: {
   nav: string;
   setNav: (id: string) => void;
   user: User;
   isAdmin?: boolean;
+  isCreator?: boolean;
   onLogout: () => void;
 }) {
-  const nav2 = isAdmin ? [...NAV2, { id: "admin", label: "Admin", icon: "shield" }] : NAV2;
+  // Creator-only "Agent config" sits above the admin panel; both are appended to
+  // the secondary nav so only privileged accounts ever see them.
+  let nav2 = NAV2;
+  if (isCreator) nav2 = [...nav2, { id: "agentcfg", label: "Agent config", icon: "sliders-horizontal" }];
+  if (isAdmin) nav2 = [...nav2, { id: "admin", label: "Admin", icon: "shield" }];
 
   return (
     <aside className="csidebar">
@@ -96,15 +107,6 @@ export function Sidebar({
           <NavItem key={it.id} item={it} active={nav === it.id} onClick={() => setNav(it.id)} />
         ))}
       </nav>
-      <div className="cupgrade">
-        <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 2 }}>Pro trial · 6 days left</div>
-        <div style={{ fontSize: 11.5, color: "var(--text-tertiary)", marginBottom: 10, lineHeight: 1.4 }}>
-          Unlimited agents and teams.
-        </div>
-        <Button size="sm" variant="accent" fullWidth>
-          Upgrade plan
-        </Button>
-      </div>
       <div className="cuser">
         <Avatar name={user.name || user.email} src={user.picture} size="sm" color="var(--cat-social)" />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -119,54 +121,73 @@ export function Sidebar({
   );
 }
 
-export function Topbar({
-  title,
-  subtitle,
-  onNew,
-  newLabel = "New agent",
-}: {
-  title: string;
-  subtitle?: string;
-  onNew?: () => void;
-  newLabel?: string;
-}) {
+/**
+ * Announcement strip that replaces the old top bar. Shows the single news
+ * bulletin the creator writes (via the Agent-config panel), scrolling right →
+ * left. Every signed-in user sees the same text; it refreshes on mount, when the
+ * tab regains focus, and immediately after the creator saves a new message.
+ */
+export function NewsBar() {
+  const [text, setText] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      getNews()
+        .then((n) => {
+          if (!cancelled) setText(n.text || "");
+        })
+        .catch(() => {
+          if (!cancelled) setText("");
+        });
+    load();
+
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    window.addEventListener(NEWS_UPDATED_EVENT, onFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener(NEWS_UPDATED_EVENT, onFocus);
+    };
+  }, []);
+
+  // Before the first fetch resolves, render the strip empty (no flash of text).
+  if (text === null) {
+    return (
+      <header className="cnewsbar cnewsbar--empty">
+        <span className="cnewsbar__tag">
+          <Icon name="megaphone" /> News
+        </span>
+      </header>
+    );
+  }
+
+  if (!text) {
+    return (
+      <header className="cnewsbar cnewsbar--empty">
+        <span className="cnewsbar__tag">
+          <Icon name="megaphone" /> News
+        </span>
+        <span>No announcements right now.</span>
+      </header>
+    );
+  }
+
+  // Two copies of the message make the marquee loop seamlessly (the keyframe
+  // translates the track by exactly one copy's width, -50%).
   return (
-    <header className="ctopbar">
-      <div>
-        <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 600, letterSpacing: "-0.018em" }}>
-          {title}
+    <header className="cnewsbar">
+      <span className="cnewsbar__tag">
+        <Icon name="megaphone" /> News
+      </span>
+      <div className="cnewsbar__viewport">
+        <div className="cnewsbar__track">
+          <span className="cnewsbar__item">{text}</span>
+          <span className="cnewsbar__item" aria-hidden="true">
+            {text}
+          </span>
         </div>
-        {subtitle ? <div style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 1 }}>{subtitle}</div> : null}
-      </div>
-      <div style={{ flex: 1, maxWidth: 360, margin: "0 24px" }}>
-        <Input icon={<Icon name="search" />} placeholder="Search agents, teams, runs…" />
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <IconButton label="Help" variant="ghost">
-          <Icon name="life-buoy" />
-        </IconButton>
-        <div style={{ position: "relative" }}>
-          <IconButton label="Notifications" variant="ghost">
-            <Icon name="bell" />
-          </IconButton>
-          <span
-            style={{
-              position: "absolute",
-              top: 6,
-              right: 7,
-              width: 7,
-              height: 7,
-              borderRadius: 99,
-              background: "var(--brand)",
-              boxShadow: "0 0 0 2px var(--surface)",
-            }}
-          />
-        </div>
-        {onNew ? (
-          <Button variant="primary" iconLeft={<Icon name="plus" />} onClick={onNew}>
-            {newLabel}
-          </Button>
-        ) : null}
       </div>
     </header>
   );

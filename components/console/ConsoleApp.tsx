@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listConversations } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { Sidebar, Topbar } from "@/components/console/Chrome";
+import { Sidebar, NewsBar } from "@/components/console/Chrome";
 import { HomeView, AgentsView, TeamsView, SettingsView } from "@/components/console/Views";
 import { IntegrationsView } from "@/components/console/IntegrationsView";
 import { isAgentLive } from "@/lib/console-data";
@@ -11,19 +11,8 @@ import { AgentChat } from "@/components/console/AgentChat";
 import { GraphicsStudio } from "@/components/console/GraphicsStudio";
 import { LibraryView } from "@/components/console/LibraryView";
 import { AdminView } from "@/components/console/AdminView";
+import { AgentConfigView } from "@/components/console/AgentConfigView";
 import { Icon } from "@/lib/kit-ui";
-
-const TITLES: Record<string, { title: string; subtitle: string; newLabel: string }> = {
-  home: { title: "Home", subtitle: "Your marketing workspace at a glance", newLabel: "New agent" },
-  agents: { title: "Agents", subtitle: "Specialist AI workers for single tasks", newLabel: "New agent" },
-  teams: { title: "Teams", subtitle: "Workflows assembled from agents", newLabel: "Build team" },
-  workspace: { title: "Graphic Designer", subtitle: "Brand & visual assets", newLabel: "New run" },
-  studio: { title: "Graphic Designer Studio", subtitle: "4-stage ad creative pipeline", newLabel: "New run" },
-  library: { title: "Library", subtitle: "Brand kit creatives", newLabel: "Upload" },
-  admin: { title: "Admin", subtitle: "Super admin panel", newLabel: "Export" },
-  integrations: { title: "Integrations", subtitle: "Connect your tools", newLabel: "Add integration" },
-  settings: { title: "Settings", subtitle: "Workspace preferences", newLabel: "Save" },
-};
 
 function Toast({ toast }: { toast: { msg: string; k: number } | null }) {
   if (!toast) return null;
@@ -78,24 +67,11 @@ export default function ConsoleApp() {
     setNav("studio");
   };
 
-  const onNew = () => {
-    if (nav === "workspace") fire("New conversation started");
-    else if (nav === "agents") onOpenAgent("a1");
-    else fire("Coming soon.");
-  };
-
-  const meta = TITLES[nav] || { title: nav, subtitle: "", newLabel: "New" };
-  // Owners (Creator role) see the admin area branded as "Creator".
-  const headerMeta =
-    nav === "admin" && user.is_creator
-      ? { ...meta, title: "Creator", subtitle: "Owner panel — secrets, users & analytics" }
-      : meta;
-
   return (
     <div className="capp">
-      <Sidebar nav={nav} setNav={setNav} user={user} isAdmin={user.is_admin} onLogout={logout} />
+      <Sidebar nav={nav} setNav={setNav} user={user} isAdmin={user.is_admin} isCreator={user.is_creator} onLogout={logout} />
       <div className="cmain">
-        {nav !== "workspace" && nav !== "studio" && <Topbar {...headerMeta} onNew={nav === "home" || nav === "agents" || nav === "workspace" ? onNew : undefined} />}
+        {nav !== "workspace" && nav !== "studio" && <NewsBar />}
         <div className="cscroll" style={nav === "workspace" || nav === "studio" ? { overflow: "hidden" } : undefined}>
           {nav === "home" && (
             <HomeView
@@ -115,6 +91,7 @@ export default function ConsoleApp() {
           {nav === "studio" && <GraphicsStudio onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "library" && <LibraryView onBack={() => setNav("workspace")} />}
           {nav === "admin" && user.is_admin && <AdminView onBack={() => setNav("home")} />}
+          {nav === "agentcfg" && user.is_creator && <AgentConfigView onBack={() => setNav("home")} />}
           {nav === "settings" && <SettingsView userName={user.name || user.email} userEmail={user.email} />}
           {nav === "integrations" && <IntegrationsView onToast={fire} />}
         </div>

@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { agents, teams, runSteps, isAgentLive } from "@/lib/console-data";
 import { Icon, Button, IconButton, Avatar, Badge, StatusDot, Tabs, AgentCard, TeamCard } from "@/lib/kit-ui";
-import { GlyphTile } from "@/lib/glyph";
+import { GlyphTile, CATEGORY_GLYPH } from "@/lib/glyph";
+import { getUsage, type UsageResponse } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { UsageChart } from "@/components/console/UsageChart";
 
 function Stat({ icon, iso, label, value, delta, tint }: { icon: string; iso?: string; label: string; value: string; delta?: string; tint: string }) {
   return (
@@ -62,6 +65,125 @@ function RunMini() {
   );
 }
 
+const WINDOWS = [
+  { value: "7", label: "7 days" },
+  { value: "30", label: "30 days" },
+  { value: "90", label: "90 days" },
+];
+
+/** Per-agent usage tile: the headline number is sessions/runs (the chosen
+ *  "one use" unit); creatives produced is the secondary line. */
+function AgentUsageTile({ agent }: { agent: UsageResponse["per_agent"][number] }) {
+  return (
+    <div className="cusagetile" data-live={agent.live ? "1" : "0"}>
+      <GlyphTile glyph={CATEGORY_GLYPH[agent.category] ?? "design"} tint={agent.category} size={40} glyphSize={21} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="cusagetile__name" title={agent.name}>{agent.name}</div>
+        <div className="cusagetile__sub">{agent.creatives} creative{agent.creatives === 1 ? "" : "s"}</div>
+      </div>
+      <div className="cusagetile__num">
+        <div className="cusagetile__val">{agent.sessions}</div>
+        <div className="cusagetile__lbl">{agent.live ? "runs" : "soon"}</div>
+      </div>
+    </div>
+  );
+}
+
+function UsageDashboard({ userIsCreator }: { userIsCreator: boolean }) {
+  const [days, setDays] = useState("30");
+  const [scope, setScope] = useState<"me" | "all">("me");
+  const [metric, setMetric] = useState<"creatives" | "sessions">("creatives");
+  const [data, setData] = useState<UsageResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setError(null);
+    getUsage(Number(days), scope)
+      .then((d) => {
+        if (!cancelled) setData(d);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load usage");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [days, scope]);
+
+  const t = data?.totals;
+  const chartColor = metric === "creatives" ? "var(--brand)" : "var(--cat-social)";
+
+  return (
+    <>
+      {/* Controls: time window, creator scope, and the headline totals */}
+      <div className="cusagebar">
+        <div className="cstatrow" style={{ flex: 1, gridTemplateColumns: "repeat(3, 1fr)" }}>
+          <Stat icon="zap" iso="bolt" label={`Sessions · last ${days}d`} value={String(t?.sessions ?? 0)} tint="ads" />
+          <Stat icon="image" iso="rocket" label="Creatives made" value={String(t?.creatives ?? 0)} tint="seo" />
+          <Stat icon="activity" iso="bolt" label="Active days" value={String(t?.active_days ?? 0)} tint="copy" />
+        </div>
+        <div className="cusagebar__ctrls">
+          {userIsCreator && (
+            <Tabs
+              variant="pill"
+              value={scope}
+              onChange={(v) => setScope(v as "me" | "all")}
+              items={[
+                { value: "me", label: "My usage" },
+                { value: "all", label: "All users" },
+              ]}
+            />
+          )}
+          <Tabs variant="line" value={days} onChange={setDays} items={WINDOWS} />
+        </div>
+      </div>
+
+      {error && (
+        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: 12, borderRadius: "var(--radius-lg)", fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+
+      {/* Daily graph with the creatives/sessions toggle */}
+      <section className="ccard">
+        <div className="csechead" style={{ marginBottom: 8 }}>
+          <h3>Daily activity</h3>
+          <Tabs
+            variant="pill"
+            value={metric}
+            onChange={(v) => setMetric(v as "creatives" | "sessions")}
+            items={[
+              { value: "creatives", label: "Creatives" },
+              { value: "sessions", label: "Sessions" },
+            ]}
+          />
+        </div>
+        {data ? (
+          <UsageChart data={data.daily} metric={metric} color={chartColor} />
+        ) : (
+          <div style={{ height: 210, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-tertiary)", fontSize: 13 }}>
+            Loading…
+          </div>
+        )}
+      </section>
+
+      {/* Per-agent usage tiles */}
+      <section>
+        <div className="csechead">
+          <h3>Usage by agent</h3>
+          <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>runs in the last {days} days</span>
+        </div>
+        <div className="cgrid cgrid--3">
+          {(data?.per_agent ?? []).map((a) => (
+            <AgentUsageTile key={a.agent_id} agent={a} />
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+
 export function HomeView({
   mode,
   setMode,
@@ -70,7 +192,6 @@ export function HomeView({
   onAdd,
   added,
   userName,
-  convCount,
 }: {
   mode: string;
   setMode: (m: string) => void;
@@ -81,6 +202,7 @@ export function HomeView({
   userName: string;
   convCount: number;
 }) {
+  const { user } = useAuth();
   const firstName = userName.split(" ")[0] || "there";
 
   return (
@@ -88,12 +210,18 @@ export function HomeView({
       <div className="cgreet">
         <div>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 600, letterSpacing: "-0.02em" }}>
-            Good morning, {firstName}
+            Welcome back, {firstName}
           </div>
           <div style={{ fontSize: 14, color: "var(--text-secondary)", marginTop: 3 }}>
-            Graphic Designer is live. Open the agent to start a creative run.
+            Your activity across every agent, at a glance.
           </div>
         </div>
+      </div>
+
+      <UsageDashboard userIsCreator={!!user?.is_creator} />
+
+      <div className="csechead" style={{ marginTop: 8 }}>
+        <h3>Open an agent</h3>
         <Tabs
           variant="pill"
           value={mode}
@@ -104,8 +232,6 @@ export function HomeView({
           ]}
         />
       </div>
-
-      <StatRow convCount={convCount} />
 
       {mode === "agents" ? (
         <section>

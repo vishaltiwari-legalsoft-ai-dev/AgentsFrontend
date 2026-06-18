@@ -253,22 +253,46 @@
 .ens-tab__count{ font-family:var(--font-mono); font-size:11px; color:var(--text-tertiary); font-weight:500; }
 .ens-tab[aria-selected="true"] .ens-tab__count { color: var(--brand); font-weight:600; }
 
-/* AgentCard — clean, Apple-style */
+/* AgentCard — premium glass tile */
 .ens-agentcard{
+  --card-accent: var(--brand);
+  position: relative;
   background: var(--glass);
   -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
   border:1px solid var(--border-subtle); border-radius:var(--radius-2xl);
   box-shadow: var(--shadow-xs), var(--glass-edge);
   padding:22px; display:flex; flex-direction:column; gap:14px;
-  position: relative;
+  overflow:hidden;
   transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out);
 }
+.ens-agentcard[data-category="design"]{ --card-accent:var(--cat-design); }
+.ens-agentcard[data-category="seo"]{ --card-accent:var(--cat-seo); }
+.ens-agentcard[data-category="copy"]{ --card-accent:var(--cat-copy); }
+.ens-agentcard[data-category="social"]{ --card-accent:var(--cat-social); }
+.ens-agentcard[data-category="ads"]{ --card-accent:var(--cat-ads); }
+.ens-agentcard[data-category="data"]{ --card-accent:var(--cat-data); }
+/* soft category glow anchored behind the glyph; blooms on hover */
+.ens-agentcard::before{
+  content:""; position:absolute; top:-56px; left:-40px; width:220px; height:220px;
+  background:radial-gradient(circle, var(--card-accent) 0%, transparent 70%);
+  opacity:0.08; pointer-events:none;
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+/* glass-edge sheen along the top */
+.ens-agentcard::after{
+  content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  background:linear-gradient(180deg, rgba(255,255,255,0.45) 0%, transparent 16%);
+}
+.ens-agentcard__top, .ens-agentcard__desc, .ens-agentcard__foot{ position:relative; z-index:1; }
 .ens-agentcard--interactive{ cursor:pointer; }
-.ens-agentcard--interactive:hover{ border-color:var(--border); box-shadow:var(--shadow-lg); transform:translateY(-3px); }
+.ens-agentcard--interactive:hover{ border-color:color-mix(in srgb, var(--card-accent) 36%, var(--border)); box-shadow:var(--shadow-lg); transform:translateY(-4px); }
+.ens-agentcard--interactive:hover::before{ opacity:0.18; }
 .ens-agentcard--interactive:active{ transform:translateY(-1px); }
 .ens-agentcard__top{ display:flex; align-items:center; gap:14px; }
-.ens-agentcard__tile{ transition: transform var(--dur-base) var(--ease-out); }
-.ens-agentcard--interactive:hover .ens-agentcard__tile{ transform: scale(1.06); }
+.glyphtile.ens-agentcard__tile{ transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+  box-shadow:0 8px 18px -7px color-mix(in srgb, var(--card-accent) 55%, transparent), inset 0 1px 1px rgba(255,255,255,0.4); }
+.ens-agentcard--interactive:hover .glyphtile.ens-agentcard__tile{ transform: translateY(-1px) scale(1.06);
+  box-shadow:0 14px 24px -7px color-mix(in srgb, var(--card-accent) 70%, transparent), inset 0 1px 1px rgba(255,255,255,0.45); }
 .ens-agentcard__id{ flex:1; min-width:0; }
 .ens-agentcard__glyph{ width:52px; height:52px; border-radius:27%; flex:none; display:flex; align-items:center; justify-content:center; background:var(--gray-100); color:var(--text-secondary); }
 .ens-agentcard__name{ font-family:var(--font-display); font-size:16.5px; font-weight:600; letter-spacing:-0.01em; color:var(--text-primary); transition: color var(--dur-fast) ease; }

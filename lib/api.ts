@@ -377,6 +377,8 @@ export interface AdminSettings {
     vision_model: string;
   };
   sources: Record<string, "override" | "env">;
+  // Curated model choices, keyed by runtime-config field, for dropdowns.
+  catalog: Record<AgentModelField, ModelOption[]>;
 }
 
 export interface AdminSettingsPatch {
@@ -397,6 +399,103 @@ export function updateAdminSettings(patch: AdminSettingsPatch): Promise<AdminSet
 
 export function testOpenRouterKey(): Promise<{ ok: boolean; label?: string; is_free_tier?: boolean }> {
   return postJson("/api/admin/settings/test", {});
+}
+
+/* ----------------------------- Usage dashboard --------------------------- */
+/* Per-user (or creator all-users) activity for the Home panel.               */
+
+export interface UsageAgent {
+  agent_id: string;
+  name: string;
+  role: string;
+  category: string;
+  live: boolean;
+  sessions: number;
+  creatives: number;
+}
+
+export interface UsageDay {
+  day: string;
+  creatives: number;
+  sessions: number;
+}
+
+export interface UsageResponse {
+  days: number;
+  scope: "me" | "all";
+  per_agent: UsageAgent[];
+  daily: UsageDay[];
+  totals: { sessions: number; creatives: number; active_days: number };
+}
+
+export function getUsage(days = 30, scope: "me" | "all" = "me"): Promise<UsageResponse> {
+  return getJson<UsageResponse>(`/api/usage?days=${days}&scope=${scope}`);
+}
+
+/* ---------------------------- News banner -------------------------------- */
+/* A single announcement set by the creator; shown to every signed-in user.   */
+
+export interface NewsBanner {
+  text: string;
+  updated_at: string;
+}
+
+export function getNews(): Promise<NewsBanner> {
+  return getJson<NewsBanner>("/api/news");
+}
+
+export function updateNews(text: string): Promise<NewsBanner> {
+  return postJson<NewsBanner>("/api/news", { text });
+}
+
+/* --------------------- Agent configuration (creator) --------------------- */
+/* Per-agent model overrides, managed only by the creator account.          */
+
+export interface ModelOption {
+  id: string;
+  name: string;
+  provider: string;
+  description: string;
+  recommended?: boolean;
+}
+
+/** A model field that can be overridden per agent (matches backend slugs). */
+export type AgentModelField =
+  | "openrouter_model"
+  | "openrouter_fast_model"
+  | "openrouter_image_model"
+  | "openrouter_vision_model";
+
+export interface AgentConfigItem {
+  id: string;
+  name: string;
+  role: string;
+  category: string;
+  live: boolean;
+  /** Explicit per-agent choice ("" = inherit the global default). */
+  overrides: Record<AgentModelField, string>;
+  /** What the agent actually uses right now (agent → global → env). */
+  effective: Record<AgentModelField, string>;
+}
+
+export interface AgentConfigResponse {
+  agents: AgentConfigItem[];
+  fields: AgentModelField[];
+  catalog: Record<AgentModelField, ModelOption[]>;
+  global_defaults: Record<AgentModelField, string>;
+}
+
+export type AgentConfigPatch = Partial<Record<AgentModelField, string>>;
+
+export function getAgentConfig(): Promise<AgentConfigResponse> {
+  return getJson("/api/admin/agents");
+}
+
+export function updateAgentConfig(
+  agentId: string,
+  patch: AgentConfigPatch,
+): Promise<AgentConfigResponse> {
+  return postJson(`/api/admin/agents/${agentId}`, patch);
 }
 
 /* ----------------------- Graphic Designer pipeline ----------------------- */

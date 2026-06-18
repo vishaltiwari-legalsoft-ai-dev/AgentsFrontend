@@ -190,24 +190,38 @@ export function AdminView({ onBack }: { onBack: () => void }) {
           </Button>
         </div>
 
-        {/* Model ids */}
+        {/* Global default models — curated dropdowns. These are the platform-wide
+            fallback; per-agent overrides live in the Agent configuration panel. */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
           {([
-            ["model", "Reasoning model"],
-            ["fast_model", "Fast / parsing model"],
-            ["image_model", "Image model"],
-            ["vision_model", "Vision model"],
-          ] as const).map(([key, label]) => (
-            <label key={key} style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>
-              {label}
-              <input
-                value={models[key]}
-                onChange={(e) => setModels((m) => ({ ...m, [key]: e.target.value }))}
-                spellCheck={false}
-                style={{ width: "100%", marginTop: 5, padding: "8px 11px", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontSize: 12.5, fontFamily: "var(--font-mono)" }}
-              />
-            </label>
-          ))}
+            ["model", "openrouter_model", "Reasoning model"],
+            ["fast_model", "openrouter_fast_model", "Fast / parsing model"],
+            ["image_model", "openrouter_image_model", "Image model"],
+            ["vision_model", "openrouter_vision_model", "Vision model"],
+          ] as const).map(([key, field, label]) => {
+            const options = cfg?.catalog?.[field] ?? [];
+            const current = models[key];
+            const known = options.some((m) => m.id === current);
+            return (
+              <label key={key} style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>
+                {label}
+                <select
+                  value={current}
+                  onChange={(e) => setModels((m) => ({ ...m, [key]: e.target.value }))}
+                  style={{ width: "100%", marginTop: 5, padding: "8px 11px", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontSize: 12.5 }}
+                >
+                  {/* Preserve a value that isn't in the catalog (e.g. an env default). */}
+                  {current && !known && <option value={current}>{current} (current)</option>}
+                  {options.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                      {m.recommended ? " ★" : ""} — {m.provider}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            );
+          })}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

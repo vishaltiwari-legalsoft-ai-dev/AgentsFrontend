@@ -309,12 +309,9 @@ export function AgentChat({
           <GlyphTile glyph="design" tint="design" size={42} glyphSize={22} />
           <div className="twconv__id">
             <div className="twconv__name">{AGENT.name}</div>
-            <div className="twconv__sub">
-              {AGENT.role}
-              {agentSettings
-                ? ` · ${settingsConfig?.image_models.find((m) => m.id === agentSettings.image_model)?.name ?? "Image model"}`
-                : ""}
-            </div>
+            {/* Model name intentionally not shown — model selection is creator-only
+                (Agent configuration panel). Users never see which LLM is used. */}
+            <div className="twconv__sub">{AGENT.role}</div>
           </div>
           <div className="twconv__actions">
             {selectedBrand ? (
@@ -344,9 +341,9 @@ export function AgentChat({
             <IconButton label="New conversation" variant="ghost" size="sm" onClick={startNew}>
               <Icon name="plus" size={17} />
             </IconButton>
-            <IconButton label="Agent settings" variant="ghost" size="sm" onClick={() => setSettingsOpen(true)}>
-              <Icon name="settings-2" size={16} />
-            </IconButton>
+            {/* Per-user "Agent settings" (Switch A) removed: model/LLM selection is
+                now creator-only via the Agent configuration panel. The drawer code
+                below is kept but no longer reachable. */}
           </div>
         </header>
 
