@@ -4,9 +4,8 @@ import { useEffect, useState } from "react";
 import { agents, teams, runSteps, isAgentLive } from "@/lib/console-data";
 import { Icon, Button, IconButton, Avatar, Badge, StatusDot, Tabs, AgentCard, TeamCard } from "@/lib/kit-ui";
 import { GlyphTile, CATEGORY_GLYPH } from "@/lib/glyph";
-import { getUsage, type UsageResponse } from "@/lib/api";
+import { getUsage, type UsageResponse, type UsageUser } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { UsageChart } from "@/components/console/UsageChart";
 
 function Stat({ icon, iso, label, value, delta, tint }: { icon: string; iso?: string; label: string; value: string; delta?: string; tint: string }) {
   return (
@@ -89,30 +88,109 @@ function AgentUsageTile({ agent }: { agent: UsageResponse["per_agent"][number] }
   );
 }
 
+/** One ranked row in the leaderboard. Top three ranks get a subtle medal tint. */
+function LeaderRow({ rank, u, metric }: { rank: number; u: UsageUser; metric: "creatives" | "sessions" }) {
+  const value = metric === "creatives" ? u.creatives : u.sessions;
+  return (
+    <div className="clbrow">
+      <div className="clbrow__rank" data-top={rank <= 3 ? rank : undefined}>{rank}</div>
+      <Avatar name={u.name} src={u.picture || undefined} size="sm" />
+      <div className="clbrow__id">
+        <div className="clbrow__name" title={u.name}>{u.name}</div>
+        <div className="clbrow__sub">
+          {u.agents_used} agent{u.agents_used === 1 ? "" : "s"} used
+        </div>
+      </div>
+      <div className="clbrow__num">
+        <div className="clbrow__val">{value}</div>
+        <div className="clbrow__lbl">{metric === "creatives" ? "creatives" : "runs"}</div>
+      </div>
+    </div>
+  );
+}
+
+/** Live, self-refreshing ranking of who has used the agents the most. */
+function Leaderboard({
+  data,
+  metric,
+  setMetric,
+}: {
+  data: UsageResponse | null;
+  metric: "creatives" | "sessions";
+  setMetric: (m: "creatives" | "sessions") => void;
+}) {
+  const board = [...(data?.per_user ?? [])].sort((a, b) =>
+    metric === "creatives" ? b.creatives - a.creatives : b.sessions - a.sessions
+  );
+  return (
+    <section className="ccard">
+      <div className="csechead" style={{ marginBottom: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <h3>Leaderboard</h3>
+          <span className="clblive">
+            <span className="clblive__dot" />
+            Live
+          </span>
+        </div>
+        <Tabs
+          variant="pill"
+          value={metric}
+          onChange={(v) => setMetric(v as "creatives" | "sessions")}
+          items={[
+            { value: "sessions", label: "Runs" },
+            { value: "creatives", label: "Creatives" },
+          ]}
+        />
+      </div>
+      {data ? (
+        board.length ? (
+          <div className="clbboard">
+            {board.map((u, i) => (
+              <LeaderRow key={u.user_id} rank={i + 1} u={u} metric={metric} />
+            ))}
+          </div>
+        ) : (
+          <div className="clbempty">No activity yet — runs will appear here as agents are used.</div>
+        )
+      ) : (
+        <div className="clbempty">Loading…</div>
+      )}
+    </section>
+  );
+}
+
+const USAGE_POLL_MS = 10_000; // keep the leaderboard "live" without a refresh
+
 function UsageDashboard({ userIsCreator }: { userIsCreator: boolean }) {
   const [days, setDays] = useState("30");
   const [scope, setScope] = useState<"me" | "all">("me");
-  const [metric, setMetric] = useState<"creatives" | "sessions">("creatives");
+  const [metric, setMetric] = useState<"creatives" | "sessions">("sessions");
   const [data, setData] = useState<UsageResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setError(null);
-    getUsage(Number(days), scope)
-      .then((d) => {
-        if (!cancelled) setData(d);
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load usage");
-      });
+    setData(null); // show the loading state while the window/scope changes
+    const load = (initial: boolean) => {
+      if (initial) setError(null);
+      getUsage(Number(days), scope)
+        .then((d) => {
+          if (!cancelled) setData(d);
+        })
+        .catch((e: unknown) => {
+          // Only surface errors on the first load; quiet on background polls.
+          if (!cancelled && initial) setError(e instanceof Error ? e.message : "Failed to load usage");
+        });
+    };
+    load(true);
+    const id = setInterval(() => load(false), USAGE_POLL_MS);
     return () => {
       cancelled = true;
+      clearInterval(id);
     };
   }, [days, scope]);
 
   const t = data?.totals;
-  const chartColor = metric === "creatives" ? "var(--brand)" : "var(--cat-social)";
 
   return (
     <>
@@ -145,28 +223,8 @@ function UsageDashboard({ userIsCreator }: { userIsCreator: boolean }) {
         </div>
       )}
 
-      {/* Daily graph with the creatives/sessions toggle */}
-      <section className="ccard">
-        <div className="csechead" style={{ marginBottom: 8 }}>
-          <h3>Daily activity</h3>
-          <Tabs
-            variant="pill"
-            value={metric}
-            onChange={(v) => setMetric(v as "creatives" | "sessions")}
-            items={[
-              { value: "creatives", label: "Creatives" },
-              { value: "sessions", label: "Sessions" },
-            ]}
-          />
-        </div>
-        {data ? (
-          <UsageChart data={data.daily} metric={metric} color={chartColor} />
-        ) : (
-          <div style={{ height: 210, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-tertiary)", fontSize: 13 }}>
-            Loading…
-          </div>
-        )}
-      </section>
+      {/* Live leaderboard — who has used the agents the most */}
+      <Leaderboard data={data} metric={metric} setMetric={setMetric} />
 
       {/* Per-agent usage tiles */}
       <section>

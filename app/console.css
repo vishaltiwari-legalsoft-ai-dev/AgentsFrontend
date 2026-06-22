@@ -116,6 +116,28 @@
   .cusagetile__val{ font-family:var(--font-display); font-size:22px; font-weight:700; letter-spacing:-0.02em; line-height:1; }
   .cusagetile__lbl{ font-size:10px; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:0.05em; margin-top:3px; }
 
+  /* Leaderboard (Home) — sleek, self-refreshing ranking */
+  .clblive{ display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:600; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:0.07em; }
+  .clblive__dot{ position:relative; width:7px; height:7px; border-radius:50%; background:var(--success); }
+  .clblive__dot::after{ content:""; position:absolute; inset:0; border-radius:50%; background:var(--success); animation:clbpulse 1.8s ease-out infinite; }
+  @keyframes clbpulse{ 0%{ transform:scale(1); opacity:.55; } 100%{ transform:scale(3.2); opacity:0; } }
+  .clbboard{ display:flex; flex-direction:column; }
+  .clbrow{ display:flex; align-items:center; gap:14px; padding:11px 6px; border-radius:var(--radius-lg); transition:background .12s ease; }
+  .clbrow:hover{ background:var(--surface-hover); }
+  .clbrow + .clbrow{ border-top:1px solid var(--border-subtle); }
+  .clbrow__rank{ width:22px; flex:none; text-align:center; font-family:var(--font-mono); font-size:13px; font-weight:600; color:var(--text-tertiary); }
+  .clbrow__rank[data-top]{ color:var(--text-primary); }
+  .clbrow__rank[data-top="1"]{ color:#d4a017; }
+  .clbrow__rank[data-top="2"]{ color:#9aa3ad; }
+  .clbrow__rank[data-top="3"]{ color:#b06a3b; }
+  .clbrow__id{ flex:1; min-width:0; }
+  .clbrow__name{ font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .clbrow__sub{ font-size:11.5px; color:var(--text-tertiary); margin-top:1px; }
+  .clbrow__num{ text-align:right; flex:none; }
+  .clbrow__val{ font-family:var(--font-display); font-size:20px; font-weight:700; letter-spacing:-0.02em; line-height:1; }
+  .clbrow__lbl{ font-size:10px; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:0.05em; margin-top:3px; }
+  .clbempty{ padding:34px 12px; text-align:center; color:var(--text-tertiary); font-size:13px; }
+
   /* Home teams layout */
   .chome-teams{ display:grid; grid-template-columns:1fr 300px; gap:24px; align-items:start; }
   .cactivity-mini{ background:var(--glass); -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); border:1px solid var(--border-subtle); border-radius:var(--radius-2xl); box-shadow:var(--shadow-xs), var(--glass-edge); padding:18px; }
