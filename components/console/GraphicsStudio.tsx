@@ -130,6 +130,68 @@ function computeLogoBox(baseW: number, baseH: number, lw: number, lh: number, la
   return { x, y, w, h };
 }
 
+/* ---- drag-bar placement: horizontal (L↔R) + vertical (T↔B) ---------------
+   Replaces the raw X/Y number inputs. Each bar maps 1:1 to the existing
+   `offset_x` / `offset_y` pixel fields the backend already accepts, so this is
+   purely a UI affordance: sliding the top bar right shifts the element right,
+   sliding the bottom bar toward "Bottom" moves it down. */
+function PlacementSliders({
+  offsetX,
+  offsetY,
+  range,
+  onChange,
+  showReset = true,
+}: {
+  offsetX: number;
+  offsetY: number;
+  range: number;
+  onChange: (patch: { offset_x?: number; offset_y?: number }) => void;
+  showReset?: boolean;
+}) {
+  const moved = offsetX !== 0 || offsetY !== 0;
+  const fmt = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+  return (
+    <div className="gdplace">
+      <div className="gdplace__bar">
+        <span className="gdplace__cap">Left</span>
+        <input
+          type="range"
+          className="gdrange"
+          min={-range}
+          max={range}
+          step={1}
+          value={offsetX}
+          aria-label="Horizontal placement"
+          onChange={(e) => onChange({ offset_x: Math.round(Number(e.target.value)) })}
+        />
+        <span className="gdplace__cap">Right</span>
+      </div>
+      <div className="gdplace__bar">
+        <span className="gdplace__cap">Top</span>
+        <input
+          type="range"
+          className="gdrange"
+          min={-range}
+          max={range}
+          step={1}
+          value={offsetY}
+          aria-label="Vertical placement"
+          onChange={(e) => onChange({ offset_y: Math.round(Number(e.target.value)) })}
+        />
+        <span className="gdplace__cap">Bottom</span>
+      </div>
+      <div className="gdplace__foot">
+        <span className="gdplace__val">H {fmt(offsetX)} · V {fmt(offsetY)} px</span>
+        {showReset && moved && (
+          <button type="button" className="gdplace__reset" onClick={() => onChange({ offset_x: 0, offset_y: 0 })}>
+            Reset position
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ---- live HTML/CSS mock of the Stage-3 text overlay (per-element style) -- */
 function MockPreview({
   tokens,
@@ -1173,21 +1235,9 @@ function StageControls(props: {
             onChange={(e) => onSize(Number(e.target.value))}
           />
         </div>
-        <div className="gdpxgrid">
-          <label className="gdpx">
-            <span>Nudge X (px)</span>
-            <input
-              type="number" value={ox} min={-OFF} max={OFF}
-              onChange={(e) => onOff({ offset_x: Math.round(Number(e.target.value)) })}
-            />
-          </label>
-          <label className="gdpx">
-            <span>Nudge Y (px)</span>
-            <input
-              type="number" value={oy} min={-OFF} max={OFF}
-              onChange={(e) => onOff({ offset_y: Math.round(Number(e.target.value)) })}
-            />
-          </label>
+        <div className="gdfield" style={{ gap: 4, margin: 0 }}>
+          <span className="gdfield__label" style={{ fontSize: 10 }}>Position</span>
+          <PlacementSliders offsetX={ox} offsetY={oy} range={OFF} onChange={onOff} />
         </div>
       </>
     );
@@ -1521,10 +1571,17 @@ function StageControls(props: {
               />
             </div>
 
-            {/* fine refinement — px-level control */}
+            {/* drag-bar placement + size/margin refinement */}
             <div className="gdfield">
-              <span className="gdfield__label">Fine refinement (px)</span>
-              <div className="gdpxgrid">
+              <span className="gdfield__label">Drag to position</span>
+              <PlacementSliders
+                offsetX={layout.offset_x ?? 0}
+                offsetY={layout.offset_y ?? 0}
+                range={config.logo_offset_px_range}
+                onChange={(patch) => setLayout(patch)}
+                showReset={false}
+              />
+              <div className="gdpxgrid" style={{ marginTop: 8 }}>
                 <label className="gdpx">
                   <span>Width</span>
                   <input
@@ -1544,26 +1601,6 @@ function StageControls(props: {
                     max={25}
                     step={0.5}
                     onChange={(e) => setLayout({ margin_pct: Number(e.target.value) })}
-                  />
-                </label>
-                <label className="gdpx">
-                  <span>Nudge X</span>
-                  <input
-                    type="number"
-                    value={layout.offset_x}
-                    min={-config.logo_offset_px_range}
-                    max={config.logo_offset_px_range}
-                    onChange={(e) => setLayout({ offset_x: Math.round(Number(e.target.value)) })}
-                  />
-                </label>
-                <label className="gdpx">
-                  <span>Nudge Y</span>
-                  <input
-                    type="number"
-                    value={layout.offset_y}
-                    min={-config.logo_offset_px_range}
-                    max={config.logo_offset_px_range}
-                    onChange={(e) => setLayout({ offset_y: Math.round(Number(e.target.value)) })}
                   />
                 </label>
               </div>

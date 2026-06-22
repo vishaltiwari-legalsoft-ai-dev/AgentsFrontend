@@ -217,6 +217,17 @@
 .gdpx input { font-size: 12px; padding: 5px 7px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--text-primary); }
 .gdpx input:focus { outline: none; border-color: var(--brand); }
 
+/* ── Drag-bar placement (horizontal L↔R + vertical T↔B) ─────────────────── */
+.gdplace { display: flex; flex-direction: column; gap: 7px; }
+.gdplace__bar { display: flex; align-items: center; gap: 8px; }
+.gdplace__bar .gdrange { flex: 1 1 auto; }
+.gdplace__cap { flex: 0 0 auto; min-width: 40px; font-size: 10px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; color: var(--text-tertiary); }
+.gdplace__bar .gdplace__cap:last-child { text-align: right; }
+.gdplace__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gdplace__val { font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.gdplace__reset { font-size: 10.5px; font-weight: 600; color: var(--brand); background: none; border: none; cursor: pointer; padding: 0; }
+.gdplace__reset:hover { text-decoration: underline; }
+
 /* ── Brand kit (read-only) ─────────────────────────────────────────────── */
 .gdkit__block { font-family: var(--font-mono, monospace); font-size: 11px; white-space: pre-wrap; color: var(--text-secondary); background: var(--surface-hover); border-radius: var(--radius-md); padding: 10px; line-height: 1.6; }
 .gdswatches { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
