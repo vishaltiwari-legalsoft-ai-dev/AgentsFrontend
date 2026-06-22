@@ -420,10 +420,21 @@ export interface UsageDay {
   sessions: number;
 }
 
+export interface UsageUser {
+  user_id: string;
+  email: string;
+  name: string;
+  picture?: string;
+  sessions: number;
+  creatives: number;
+  agents_used: number;
+}
+
 export interface UsageResponse {
   days: number;
   scope: "me" | "all";
   per_agent: UsageAgent[];
+  per_user: UsageUser[];
   daily: UsageDay[];
   totals: { sessions: number; creatives: number; active_days: number };
 }
@@ -710,7 +721,14 @@ export interface GdQuestion {
   options: { id: string; label: string }[];
 }
 
+export interface GdBrandOption {
+  id: string;
+  name: string;
+}
+
 export interface GdConfig {
+  brand_id: string;
+  brand_name: string;
   stage1_variants: GdVariant[];
   stage2_variants: GdVariant[];
   stage2_categories: string[];
@@ -758,11 +776,19 @@ export interface GdHookSuggestion {
   subtext_pairs: { subtext1: string; subtext2: string }[];
 }
 
-export const gdGetConfig = () => getJson<GdConfig>("/api/gd/config");
+/** Brands the studio can produce for (registry packs) — drives the picker. */
+export const gdListBrands = () =>
+  getJson<{ brands: GdBrandOption[]; default: string }>("/api/gd/brands");
 
-export const gdGetPrompts = () =>
+const _brandQuery = (brand?: string | null) =>
+  brand ? `?brand=${encodeURIComponent(brand)}` : "";
+
+export const gdGetConfig = (brand?: string | null) =>
+  getJson<GdConfig>(`/api/gd/config${_brandQuery(brand)}`);
+
+export const gdGetPrompts = (brand?: string | null) =>
   getJson<{ prompts: { filename: string; hash: string; expected: string; ok: boolean; bytes: number }[] }>(
-    "/api/gd/prompts",
+    `/api/gd/prompts${_brandQuery(brand)}`,
   );
 
 export const gdCreateRun = (brandId?: string | null) =>
@@ -803,13 +829,25 @@ export const gdPromptPreview = (id: string, stage: number, variant: string) =>
 export const gdSuggest = (id: string, body: Record<string, unknown>) =>
   postJson<Record<string, unknown>>(`/api/gd/runs/${id}/suggest`, body);
 
+/** Whether the run's brand has a logo on file (so Stage 4 can skip the upload). */
+export interface GdBrandLogo {
+  available: boolean;
+  view_url: string | null;
+  file_name: string | null;
+  brand_name: string | null;
+}
+
+export const gdBrandLogo = (id: string) =>
+  getJson<GdBrandLogo>(`/api/gd/runs/${id}/brand-logo`);
+
 export async function gdStage4(
   id: string,
-  logo: File,
+  logo: File | null,
   useAi: boolean,
 ): Promise<{ attempt: GdAttempt; run: GdRun }> {
   const form = new FormData();
-  form.append("logo", logo);
+  // Omitting the file makes the backend fall back to the brand's logo.
+  if (logo) form.append("logo", logo);
   form.append("use_ai", String(useAi));
   const response = await request(`/api/gd/runs/${id}/stage4`, { method: "POST", body: form });
   if (!response.ok) throw new Error(await parseError(response));

@@ -5,14 +5,18 @@ import {
   gdApprove,
   gdArtifactBlob,
   gdBack,
+  gdBrandLogo,
   gdCreateRun,
   gdGenerate,
   gdGetConfig,
   gdGetPrompts,
   gdPromptPreview,
+  gdListBrands,
   gdStage4,
   gdSuggest,
   gdUpdateConfig,
+  type GdBrandOption,
+  type GdBrandLogo,
   type GdConfig,
   type GdElementStyle,
   type GdSubheading,
@@ -351,22 +355,58 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   // stage 4
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  // brand selection (drives the whole pipeline) + the run's resolved logo (Stage 4)
+  const [brands, setBrands] = useState<GdBrandOption[]>([]);
+  const [brandId, setBrandId] = useState<string>("");
+  const [brandLogo, setBrandLogo] = useState<GdBrandLogo | null>(null);
 
   const active = run ? (run.state === "DONE" ? 4 : stageNum(run.state)) : 1;
   const reviewing = run ? isReview(run.state) : false;
 
-  const loadMeta = useCallback(() => {
-    gdGetConfig().then(setConfig).catch((e) => onToast((e as Error).message));
-    gdGetPrompts()
+  const loadMeta = useCallback((brand?: string) => {
+    gdGetConfig(brand).then(setConfig).catch((e) => onToast((e as Error).message));
+    gdGetPrompts(brand)
       .then((p) => setIntegrityOk(p.prompts.every((x) => x.ok)))
       .catch(() => setIntegrityOk(null));
   }, [onToast]);
 
+  // The brand actually in effect: the run's locked brand once started, otherwise
+  // the start-screen picker selection. This drives the per-brand config + kit.
+  const activeBrand = run?.brand_id ?? (brandId || undefined);
+
   // Wait for the auth token to be restored before the first fetch, otherwise
   // these mount-time calls 401 (e.g. after a dev Fast Refresh resets the token).
+  // Re-fetch config whenever the active brand changes so every stage, the brand
+  // kit panel and prompt integrity reflect the selected brand.
   useEffect(() => {
-    if (ready) loadMeta();
-  }, [ready, loadMeta]);
+    if (ready) loadMeta(activeBrand);
+  }, [ready, activeBrand, loadMeta]);
+
+  // Brand list for the selector (registry packs — the brands the hub can produce).
+  useEffect(() => {
+    if (!ready) return;
+    gdListBrands()
+      .then((d) => {
+        setBrands(d.brands);
+        setBrandId((cur) => cur || d.default);
+      })
+      .catch(() => undefined);
+  }, [ready]);
+
+  // Resolve the run's brand logo so Stage 4 can default to it (upload optional).
+  useEffect(() => {
+    if (!run?.brand_id) {
+      setBrandLogo(null);
+      return;
+    }
+    let alive = true;
+    gdBrandLogo(run.id)
+      .then((b) => alive && setBrandLogo(b))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [run?.id, run?.brand_id]);
 
   // sync local token drafts whenever the run changes
   useEffect(() => {
@@ -399,10 +439,10 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   const start = async () => {
     setBusy(true);
     try {
-      const r = await gdCreateRun();
+      const r = await gdCreateRun(brandId || null);
       setRun(r);
       setPreviewAttempt(null);
-      if (!config) loadMeta(); // ensure config loaded now the token is proven valid
+      loadMeta(r.brand_id ?? undefined); // load the run brand's config + integrity
       onToast("New run started");
     } catch (e) {
       onToast((e as Error).message);
@@ -441,8 +481,11 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
     }
   };
 
+  // A logo source exists if the user uploaded one OR the brand has one on file.
+  const hasLogoSource = !!logoFile || !!brandLogo?.available;
+
   const doStage4 = async () => {
-    if (!run || !logoFile) return;
+    if (!run || !hasLogoSource) return;
     setBusy(true);
     try {
       const { run: r } = await gdStage4(run.id, logoFile, run.config.use_ai_compositor);
@@ -498,6 +541,20 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
             A guided 4-stage pipeline — gradient → photo → text → logo — with brand-locked prompts and
             an approval gate at every step.
           </p>
+          {brands.length > 0 && (
+            <div className="gdfield" style={{ textAlign: "left", marginBottom: 14 }}>
+              <span className="gdfield__label">Brand workspace</span>
+              <select className="gdselect" value={brandId} onChange={(e) => setBrandId(e.target.value)}>
+                {brands.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+              <span className="gdfield__hint">
+                Drives every stage — palette, prompts, font, copy and the Stage-4 logo.
+                Locked once the run starts (start a new run to switch brands).
+              </span>
+            </div>
+          )}
           <Button onClick={start} disabled={busy} size="lg" iconLeft={<Icon name="sparkles" size={16} />}>
             {busy ? "Starting…" : "Start a new ad creative"}
           </Button>
@@ -564,9 +621,19 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
           </div>
         </div>
 
-        {/* Brand kit (read-only) */}
+        {/* Brand kit (read-only) — reflects the run's locked brand */}
         {config && (
           <div>
+            <div className="gdfield" style={{ marginBottom: 10 }}>
+              <span className="gdfield__label">
+                Brand workspace
+                <span className="gdfield__lock"><Icon name="lock" size={11} /> locked</span>
+              </span>
+              <div className="gdlocked" style={{ fontWeight: 600 }}>{config.brand_name}</div>
+              <span className="gdfield__hint" style={{ marginTop: 0 }}>
+                Drives every stage. Start a new run to switch brands.
+              </span>
+            </div>
             <p className="gdsec__title">Brand Kit · locked</p>
             <div className="gdkit__block">{config.brand_kit_block}</div>
             <div className="gdswatches">
@@ -614,7 +681,7 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
             <Button onClick={approve} disabled={busy} iconLeft={<Icon name="check" size={15} />}>
               Approve stage {active}
             </Button>
-            <Button variant="secondary" onClick={active === 4 ? doStage4 : doGenerate} disabled={busy || (active === 4 && !logoFile)} iconLeft={<Icon name="refresh-cw" size={15} />}>
+            <Button variant="secondary" onClick={active === 4 ? doStage4 : doGenerate} disabled={busy || (active === 4 && !hasLogoSource)} iconLeft={<Icon name="refresh-cw" size={15} />}>
               Regenerate
             </Button>
             {active > 1 && (
@@ -624,7 +691,7 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
             )}
             <span className="gdreview__spacer" />
             {run.state === "DONE" && previewObj && (
-              <a className="ens-btn ens-btn--md" href={previewObj.url} download={`legalsoft-creative-${run.id}.png`}>
+              <a className="ens-btn ens-btn--md" href={previewObj.url} download={`${(config?.brand_name ?? "creative").toLowerCase().replace(/\s+/g, "-")}-${run.id}.png`}>
                 <Icon name="download" size={15} /> Export PNG
               </a>
             )}
@@ -696,6 +763,7 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
           setHooks={setHooks}
           logoFile={logoFile}
           setLogoFile={setLogoFile}
+          brandLogo={brandLogo}
           fileRef={fileRef}
           patchConfig={patchConfig}
           doGenerate={doGenerate}
@@ -757,6 +825,7 @@ function StageControls(props: {
   setHooks: (v: GdHookSuggestion | null) => void;
   logoFile: File | null;
   setLogoFile: (f: File | null) => void;
+  brandLogo: GdBrandLogo | null;
   fileRef: React.MutableRefObject<HTMLInputElement | null>;
   patchConfig: (b: Parameters<typeof gdUpdateConfig>[1]) => Promise<void>;
   doGenerate: () => void;
@@ -768,21 +837,32 @@ function StageControls(props: {
     answers, setAnswers, conceptSugg, setConceptSugg, exploreSugg, setExploreSugg, hooks, setHooks,
     gradSugg, setGradSugg, gradSteer, setGradSteer, gradExclude, setGradExclude,
     elemSugg, setElemSugg, elemSteer, setElemSteer, elemExclude, setElemExclude,
-    logoFile, setLogoFile, fileRef, patchConfig, doGenerate, doStage4, onToast,
+    logoFile, setLogoFile, brandLogo, fileRef, patchConfig, doGenerate, doStage4, onToast,
   } = props;
 
-  // Read the uploaded logo's natural size + a preview URL (Stage-4 placement).
+  // Stage-4 logo source: an uploaded file wins (override); otherwise default to
+  // the brand's logo resolved from Firestore. We track the natural size + a
+  // preview URL of whichever is active for the placement preview.
   const [logoDims, setLogoDims] = useState<{ w: number; h: number } | null>(null);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [uploadUrl, setUploadUrl] = useState<string | null>(null);
   useEffect(() => {
-    if (!logoFile) { setLogoDims(null); setLogoUrl(null); return; }
+    if (!logoFile) { setUploadUrl(null); return; }
     const url = URL.createObjectURL(logoFile);
-    setLogoUrl(url);
-    const img = new window.Image();
-    img.onload = () => setLogoDims({ w: img.naturalWidth || 1, h: img.naturalHeight || 1 });
-    img.src = url;
+    setUploadUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [logoFile]);
+
+  const usingBrandLogo = !logoFile && !!brandLogo?.available && !!brandLogo.view_url;
+  const activeLogoUrl = logoFile ? uploadUrl : usingBrandLogo ? brandLogo!.view_url : null;
+
+  useEffect(() => {
+    if (!activeLogoUrl) { setLogoDims(null); return; }
+    let alive = true;
+    const img = new window.Image();
+    img.onload = () => alive && setLogoDims({ w: img.naturalWidth || 1, h: img.naturalHeight || 1 });
+    img.src = activeLogoUrl;
+    return () => { alive = false; };
+  }, [activeLogoUrl]);
 
   if (!config) return null;
 
@@ -1509,16 +1589,35 @@ function StageControls(props: {
           style={{ display: "none" }}
           onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
         />
+        {usingBrandLogo && (
+          <div className="gdsugg" style={{ marginBottom: 10 }}>
+            <span className="gdsugg__hdr">
+              <Icon name="check" size={13} /> Using {brandLogo?.brand_name ?? "brand"} logo
+            </span>
+            <p className="gdsugg__text">
+              Pulled from this brand’s kit{brandLogo?.file_name ? ` (${brandLogo.file_name})` : ""} — no
+              upload needed. Upload below only if you want to override it for this creative.
+            </p>
+          </div>
+        )}
+
         <div className="gddrop" onClick={() => fileRef.current?.click()}>
           {logoFile ? (
             <span><Icon name="image" size={15} /> {logoFile.name}</span>
+          ) : usingBrandLogo ? (
+            <span><Icon name="upload" size={15} /> Upload a different logo (optional)</span>
           ) : (
             <span><Icon name="upload" size={15} /> Upload a logo (PNG, JPG, SVG)</span>
           )}
         </div>
+        {logoFile && usingBrandLogo === false && brandLogo?.available && (
+          <button className="gdminibtn" style={{ marginTop: 6 }} onClick={() => setLogoFile(null)}>
+            <Icon name="x" size={12} /> Use the brand logo instead
+          </button>
+        )}
 
         {/* live placement preview */}
-        {logoUrl && (
+        {activeLogoUrl && (
           <div className="gdmock" style={{ aspectRatio: `${baseW} / ${baseH}`, marginTop: 12 }}>
             {bgPath ? <AuthImage path={bgPath} alt="Stage 3 base" /> : null}
             <div
@@ -1526,12 +1625,12 @@ function StageControls(props: {
               style={{ left: pct(box.x, baseW), top: pct(box.y, baseH), width: pct(box.w, baseW), height: pct(box.h, baseH) }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={logoUrl} alt="logo" />
+              <img src={activeLogoUrl} alt="logo" />
             </div>
           </div>
         )}
 
-        {logoFile && (
+        {activeLogoUrl && (
           <>
             {/* placement guide — 3×3 grid */}
             <div className="gdfield" style={{ marginTop: 12 }}>
@@ -1630,7 +1729,7 @@ function StageControls(props: {
             : "Deterministic compositor — your exact placement & size, base pixels untouched."}
         </p>
 
-        <Button fullWidth onClick={doStage4} disabled={busy || !logoFile} style={{ marginTop: 12 }} iconLeft={<Icon name="sparkles" size={15} />}>
+        <Button fullWidth onClick={doStage4} disabled={busy || !activeLogoUrl} style={{ marginTop: 12 }} iconLeft={<Icon name="sparkles" size={15} />}>
           Composite logo
         </Button>
       </div>
