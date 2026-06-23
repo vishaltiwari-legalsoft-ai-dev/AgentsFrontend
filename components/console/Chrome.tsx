@@ -22,7 +22,7 @@ const NAV2 = [
 
 function Logo() {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <div className="cbrand" style={{ display: "flex", alignItems: "center", gap: 10 }}>
       <svg width="30" height="30" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <linearGradient id="lsnav" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
@@ -38,7 +38,7 @@ function Logo() {
         <path d="M27 10.4 L31 10 L30.6 14 Z" fill="#fff" />
       </svg>
       <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18, letterSpacing: "-0.01em", color: "var(--blue-900)" }}>
-        Legal<span style={{ color: "var(--blue-600)" }}>Soft</span>
+        Agent<span style={{ color: "var(--blue-600)" }}>Hub</span>
       </span>
     </div>
   );
@@ -49,6 +49,7 @@ function NavItem({ item, active, onClick }: { item: { id: string; label: string;
     <button
       className="cnav"
       onClick={onClick}
+      title={item.label}
       style={active ? { background: "var(--brand-subtle)", color: "var(--brand)", fontWeight: 600 } : undefined}
     >
       <Icon name={item.icon} />
@@ -76,22 +77,36 @@ export function Sidebar({
   // the secondary nav so only privileged accounts ever see them.
   let nav2 = NAV2;
   if (isCreator) nav2 = [...nav2, { id: "agentcfg", label: "Agent config", icon: "sliders-horizontal" }];
+  if (isAdmin) nav2 = [...nav2, { id: "database", label: "Database", icon: "database" }];
   if (isAdmin) nav2 = [...nav2, { id: "admin", label: "Admin", icon: "shield" }];
 
+  // Collapsed state is remembered across navigation and reloads.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.localStorage.getItem("sidebar-collapsed") === "1") {
+      setCollapsed(true);
+    }
+  }, []);
+  const toggleCollapsed = () =>
+    setCollapsed((c) => {
+      const next = !c;
+      if (typeof window !== "undefined") window.localStorage.setItem("sidebar-collapsed", next ? "1" : "0");
+      return next;
+    });
+
   return (
-    <aside className="csidebar">
-      <div style={{ padding: "18px 16px 8px" }}>
+    <aside className="csidebar" data-collapsed={collapsed ? "1" : "0"}>
+      <div className="csidehead">
         <Logo />
-      </div>
-      <div className="cworkspace">
-        <Avatar name="AgentOS" size="sm" square color="var(--cat-ads)" />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            Brand workspace
-          </div>
-          <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Marketing workspace</div>
-        </div>
-        <Icon name="chevrons-up-down" style={{ width: 15, height: 15, color: "var(--text-tertiary)" }} />
+        <button
+          type="button"
+          className="csidetoggle"
+          onClick={toggleCollapsed}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <Icon name={collapsed ? "panel-left-open" : "panel-left-close"} />
+        </button>
       </div>
       <nav className="cnavlist">
         {NAV.map((it) => (
@@ -109,13 +124,15 @@ export function Sidebar({
       </nav>
       <div className="cuser">
         <Avatar name={user.name || user.email} src={user.picture} size="sm" color="var(--cat-social)" />
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="cuser__info" style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600 }}>{user.name || user.email}</div>
           <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{user.email}</div>
         </div>
-        <IconButton label="Sign out" size="sm" onClick={onLogout}>
-          <Icon name="log-out" />
-        </IconButton>
+        <span className="cuser__signout">
+          <IconButton label="Sign out" size="sm" onClick={onLogout}>
+            <Icon name="log-out" />
+          </IconButton>
+        </span>
       </div>
     </aside>
   );

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { listConversations } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Sidebar, NewsBar } from "@/components/console/Chrome";
 import { HomeView, AgentsView, TeamsView, SettingsView } from "@/components/console/Views";
@@ -11,6 +10,7 @@ import { AgentChat } from "@/components/console/AgentChat";
 import { GraphicsStudio } from "@/components/console/GraphicsStudio";
 import { LibraryView } from "@/components/console/LibraryView";
 import { AdminView } from "@/components/console/AdminView";
+import { DatabaseView } from "@/components/console/DatabaseView";
 import { AgentConfigView } from "@/components/console/AgentConfigView";
 import { Icon } from "@/lib/kit-ui";
 
@@ -29,10 +29,8 @@ function Toast({ toast }: { toast: { msg: string; k: number } | null }) {
 export default function ConsoleApp() {
   const { user, logout } = useAuth();
   const [nav, setNav] = useState("home");
-  const [mode, setMode] = useState("agents");
   const [added, setAdded] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{ msg: string; k: number } | null>(null);
-  const [convCount, setConvCount] = useState(0);
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -45,12 +43,6 @@ export default function ConsoleApp() {
   useEffect(() => () => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
   }, []);
-
-  useEffect(() => {
-    listConversations()
-      .then((c) => setConvCount(c.length))
-      .catch(() => undefined);
-  }, [nav]);
 
   if (!user) return null;
 
@@ -75,14 +67,11 @@ export default function ConsoleApp() {
         <div className="cscroll" style={nav === "workspace" || nav === "studio" ? { overflow: "hidden" } : undefined}>
           {nav === "home" && (
             <HomeView
-              mode={mode}
-              setMode={setMode}
               onOpenAgents={() => setNav("agents")}
               onOpenAgent={onOpenAgent}
               onAdd={onAdd}
               added={added}
               userName={user.name || user.email}
-              convCount={convCount}
             />
           )}
           {nav === "agents" && <AgentsView onOpenAgent={onOpenAgent} />}
@@ -91,6 +80,7 @@ export default function ConsoleApp() {
           {nav === "studio" && <GraphicsStudio onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "library" && <LibraryView onBack={() => setNav("workspace")} />}
           {nav === "admin" && user.is_admin && <AdminView onBack={() => setNav("home")} />}
+          {nav === "database" && user.is_admin && <DatabaseView onBack={() => setNav("home")} />}
           {nav === "agentcfg" && user.is_creator && <AgentConfigView onBack={() => setNav("home")} />}
           {nav === "settings" && <SettingsView userName={user.name || user.email} userEmail={user.email} />}
           {nav === "integrations" && <IntegrationsView onToast={fire} />}

@@ -33,6 +33,27 @@ const INTEGRATIONS: Integration[] = [
     category: "Messaging",
     description: "Get run notifications and approve or reject creatives right from your team channels.",
   },
+  {
+    id: "google-sheets",
+    name: "Google Sheets",
+    logo: "google-sheets",
+    category: "Data & Spreadsheets",
+    description: "Pull briefs, product data and copy from Sheets, and export campaign results back to a spreadsheet.",
+  },
+  {
+    id: "google-drive",
+    name: "Google Drive",
+    logo: "google-drive",
+    category: "Storage",
+    description: "Save generated creatives and brand assets straight to a shared Drive folder your team can access.",
+  },
+  {
+    id: "figma",
+    name: "Figma",
+    logo: "figma",
+    category: "Design",
+    description: "Import brand frames and components from Figma, and push generated designs back as new frames.",
+  },
 ];
 
 export function IntegrationsView({ onToast }: { onToast?: (msg: string) => void }) {
@@ -66,7 +87,7 @@ export function IntegrationsView({ onToast }: { onToast?: (msg: string) => void 
               <div className="cintg__top">
                 <span className="logotile">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`/logo/${it.logo}.svg`} alt={`${it.name} logo`} width={28} height={28} />
+                  <img src={`/logo/${it.logo}.svg`} alt={`${it.name} logo`} width={28} height={28} style={{ objectFit: "contain" }} />
                 </span>
                 {on ? (
                   <Badge variant="success" dot>

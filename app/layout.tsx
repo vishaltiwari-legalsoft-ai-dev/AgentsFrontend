@@ -14,7 +14,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Apply the saved color theme before first paint to avoid a flash. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var t=localStorage.getItem('app-theme');if(t&&t!=='ocean')document.documentElement.dataset.theme=t;}catch(e){}",
+          }}
+        />
+      </head>
       <body>
         <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" />
         <AuthProvider>{children}</AuthProvider>

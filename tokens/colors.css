@@ -136,3 +136,148 @@
   --glass-blur:      saturate(170%) blur(18px);
   --glass-edge:      inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
+
+/* =========================================================
+   Selectable themes — set `data-theme` on <html> to switch.
+   Each block overrides the brand/accent ramps, key semantic
+   aliases and gradients; the neutral scale, status colors and
+   glass finish are inherited from the default (:root) Ocean theme.
+   ========================================================= */
+
+/* ---- Theme: "Sky & Amber" — aqua blue-green with warm amber/orange pop ---- */
+:root[data-theme="sky"] {
+  --ink:        #023047;
+
+  --blue-50:  #EAF6FA;
+  --blue-100: #D6EDF4;
+  --blue-200: #BCE2EE;
+  --blue-300: #8ECAE6;   /* sky-blue-light */
+  --blue-400: #5FB7D6;
+  --blue-500: #33A7C4;
+  --blue-600: #219EBC;   /* blue-green */
+  --blue-700: #1B7E97;   /* brand main (deeper blue-green) */
+  --blue-800: #0E5468;
+  --blue-900: #023047;   /* deep-space-blue */
+
+  --accent-50:  #FFF6E0;
+  --accent-100: #FFEBB3;
+  --accent-200: #FFD968;
+  --accent-400: #FFC22E;
+  --accent-500: #FFB703;  /* amber-flame */
+  --accent-600: #FB8500;  /* princeton-orange */
+  --accent-700: #D86E00;
+
+  --bg-app:          #DCF0F2;
+  --surface-hover:   #E4F4F8;
+  --surface-active:  #CFE9F1;
+
+  /* Tinted frosted glass — colors the sidebar + news bar */
+  --glass:           rgba(190, 226, 238, 0.55);
+  --glass-strong:    rgba(206, 235, 244, 0.80);
+
+  --text-primary:    #023047;
+  --text-secondary:  #2E6B7E;
+  --text-tertiary:   #5C8C9C;
+  --text-link:       #1B7E97;
+
+  --brand:           #219EBC;
+  --brand-hover:     #1B7E97;
+  --brand-active:    #0E5468;
+  --brand-light:     #8ECAE6;
+  --brand-subtle:    #EAF6FA;
+  --brand-bg:        #EAF6FA;
+  --brand-border:    #BCE2EE;
+  --on-brand:        #FFFFFF;
+
+  --action:          #219EBC;
+  --action-hover:    #1B7E97;
+  --action-active:   #0E5468;
+  --on-action:       #FFFFFF;
+
+  --accent:          #FFB703;
+  --accent-hover:    #FB8500;
+  --accent-active:   #D86E00;
+  --accent-subtle:   #FFEBB3;
+  --on-accent:       #023047;
+
+  --focus-ring:      color-mix(in srgb, #219EBC 50%, transparent);
+  --dot-grid:        rgba(2, 48, 71, 0.10);
+
+  --grad-brand:      linear-gradient(135deg, #219EBC 0%, #1B7E97 50%, #023047 100%);
+  --grad-brand-soft: linear-gradient(135deg, #8ECAE6 0%, #F2F8FB 100%);
+  --grad-duo:        linear-gradient(135deg, #023047 0%, #219EBC 50%, #FFB703 100%);
+  --grad-accent:     linear-gradient(135deg, #FFB703 0%, #FB8500 100%);
+  --grad-warm:       linear-gradient(135deg, #FFE9B0 0%, #FFB703 100%);
+  --grad-hero:       radial-gradient(120% 90% at 85% 0%, #D6EDF4 0%, #F2F8FB 55%, #FFFFFF 100%);
+}
+
+/* ---- Theme: "Midnight Orange" — prussian-blue + orange on grey/white neutrals ---- */
+:root[data-theme="prussian"] {
+  --ink:        #14213D;
+
+  --blue-50:  #EDEFF4;
+  --blue-100: #DDE1EC;
+  --blue-200: #BBC2D6;
+  --blue-300: #8B96B5;
+  --blue-400: #5C6A92;
+  --blue-500: #3A496F;
+  --blue-600: #26345A;
+  --blue-700: #14213D;   /* prussian-blue — brand main */
+  --blue-800: #0D1628;
+  --blue-900: #000000;   /* black */
+
+  --accent-50:  #FFF3DF;
+  --accent-100: #FEE3B0;
+  --accent-200: #FDD080;
+  --accent-400: #FDB94A;
+  --accent-500: #FCA311;  /* orange */
+  --accent-600: #E08800;
+  --accent-700: #B86E00;
+
+  /* Neutrals leaning on alabaster grey / white */
+  --bg-app:          #E3E4EA;
+  --surface-hover:   #EDEEF2;
+  --surface-active:  #DCDDE3;
+  --border-subtle:   #DBDCE1;
+  --border:          #CDCED4;
+  --border-strong:   #BBBCC3;
+
+  /* Tinted frosted glass — colors the sidebar + news bar */
+  --glass:           rgba(20, 33, 61, 0.07);
+  --glass-strong:    rgba(221, 225, 236, 0.84);
+
+  --text-primary:    #14213D;
+  --text-secondary:  #3A4660;
+  --text-tertiary:   #6A7385;
+  --text-link:       #14213D;
+
+  --brand:           #14213D;
+  --brand-hover:     #0D1628;
+  --brand-active:    #000000;
+  --brand-light:     #5C6A92;
+  --brand-subtle:    #EDEFF4;
+  --brand-bg:        #EDEFF4;
+  --brand-border:    #BBC2D6;
+  --on-brand:        #FFFFFF;
+
+  --action:          #14213D;
+  --action-hover:    #0D1628;
+  --action-active:   #000000;
+  --on-action:       #FFFFFF;
+
+  --accent:          #FCA311;
+  --accent-hover:    #E08800;
+  --accent-active:   #B86E00;
+  --accent-subtle:   #FEE3B0;
+  --on-accent:       #14213D;
+
+  --focus-ring:      color-mix(in srgb, #14213D 50%, transparent);
+  --dot-grid:        rgba(20, 33, 61, 0.10);
+
+  --grad-brand:      linear-gradient(135deg, #26345A 0%, #14213D 55%, #0D1628 100%);
+  --grad-brand-soft: linear-gradient(135deg, #8B96B5 0%, #F4F4F5 100%);
+  --grad-duo:        linear-gradient(135deg, #000000 0%, #14213D 55%, #FCA311 100%);
+  --grad-accent:     linear-gradient(135deg, #FCA311 0%, #E08800 100%);
+  --grad-warm:       linear-gradient(135deg, #FEE3B0 0%, #FCA311 100%);
+  --grad-hero:       radial-gradient(120% 90% at 85% 0%, #DDE1EC 0%, #F4F4F5 55%, #FFFFFF 100%);
+}

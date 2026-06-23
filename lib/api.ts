@@ -401,6 +401,44 @@ export function testOpenRouterKey(): Promise<{ ok: boolean; label?: string; is_f
   return postJson("/api/admin/settings/test", {});
 }
 
+/* --------------------------- Database viewer ----------------------------- */
+/* Admin-only, read-only inspection of the Firestore collections, rendered as  */
+/* tables — so the team can see the data really living in the database.        */
+
+export interface DbCollection {
+  name: string;
+  label: string;
+  description: string;
+  // null = the count couldn't be read (database unreachable), not "empty".
+  count: number | null;
+}
+
+export interface DbCollectionsResponse {
+  collections: DbCollection[];
+  connected: boolean;
+  database: string;
+  project: string;
+}
+
+export interface DbCollectionData {
+  name: string;
+  label: string;
+  description: string;
+  count: number | null;
+  returned: number;
+  limit: number;
+  columns: string[];
+  rows: Record<string, unknown>[];
+}
+
+export function getDbCollections(): Promise<DbCollectionsResponse> {
+  return getJson("/api/admin/db/collections");
+}
+
+export function getDbCollection(name: string, limit = 50): Promise<DbCollectionData> {
+  return getJson(`/api/admin/db/collections/${encodeURIComponent(name)}?limit=${limit}`);
+}
+
 /* ----------------------------- Usage dashboard --------------------------- */
 /* Per-user (or creator all-users) activity for the Home panel.               */
 
@@ -858,6 +896,22 @@ export async function gdStage4(
  *  object URL (callers should revoke it on unmount). */
 export async function gdArtifactBlob(path: string): Promise<string> {
   const response = await request(path);
+  if (!response.ok) throw new Error(await parseError(response));
+  return URL.createObjectURL(await response.blob());
+}
+
+/** Live Stage-3 overlay preview: renders the real (deterministic) text overlay
+ *  at a small size and returns an object URL. `tokens`/`subheading_texts` carry
+ *  the unsaved edits so the preview matches what Generate will produce. */
+export async function gdTextPreview(
+  id: string,
+  body: { tokens?: Record<string, string>; subheading_texts?: string[] },
+): Promise<string> {
+  const response = await request(`/api/gd/runs/${id}/text-preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
   if (!response.ok) throw new Error(await parseError(response));
   return URL.createObjectURL(await response.blob());
 }

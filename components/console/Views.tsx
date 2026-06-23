@@ -1,266 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { agents, teams, runSteps, isAgentLive } from "@/lib/console-data";
-import { Icon, Button, IconButton, Avatar, Badge, StatusDot, Tabs, AgentCard, TeamCard } from "@/lib/kit-ui";
-import { GlyphTile, CATEGORY_GLYPH } from "@/lib/glyph";
-import { getUsage, type UsageResponse, type UsageUser } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
-
-function Stat({ icon, iso, label, value, delta, tint }: { icon: string; iso?: string; label: string; value: string; delta?: string; tint: string }) {
-  return (
-    <div className="cstat">
-      {iso ? (
-        <GlyphTile glyph={iso} tint={tint} size={40} glyphSize={21} />
-      ) : (
-        <span className="cstat__ic" style={{ background: `var(--cat-${tint}-bg)`, color: `var(--cat-${tint})` }}>
-          <Icon name={icon} />
-        </span>
-      )}
-      <div>
-        <div className="cstat__val">{value}</div>
-        <div className="cstat__lbl">{label}</div>
-      </div>
-      {delta ? <span className="cstat__delta">{delta}</span> : null}
-    </div>
-  );
-}
-
-function StatRow({ convCount }: { convCount: number }) {
-  return (
-    <div className="cstatrow">
-      <Stat icon="bot" iso="rocket" label="Active agents" value="1" tint="ads" />
-      <Stat icon="users-round" iso="teams" label="Active teams" value="0" tint="social" />
-      <Stat icon="zap" iso="bolt" label="Runs today" value={String(convCount || 0)} tint="seo" />
-      <Stat icon="clock" iso="clock" label="Hours saved" value="124" tint="copy" delta="this week" />
-    </div>
-  );
-}
-
-function RunMini() {
-  return (
-    <div className="crunmini">
-      {runSteps.slice(0, 4).map((s, i) => (
-        <div className="crunmini__row" key={i}>
-          <Avatar name={s.agent} size="xs" color={`var(--cat-${s.cat})`} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {s.agent}
-            </div>
-            <div style={{ fontSize: 11.5, color: "var(--text-tertiary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {s.msg}
-            </div>
-          </div>
-          {s.status === "running" ? (
-            <StatusDot status="running" showLabel={false} />
-          ) : s.status === "success" ? (
-            <Icon name="check" style={{ width: 15, height: 15, color: "var(--success)" }} />
-          ) : (
-            <Icon name="circle-dashed" style={{ width: 15, height: 15, color: "var(--gray-300)" }} />
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-const WINDOWS = [
-  { value: "7", label: "7 days" },
-  { value: "30", label: "30 days" },
-  { value: "90", label: "90 days" },
-];
-
-/** Per-agent usage tile: the headline number is sessions/runs (the chosen
- *  "one use" unit); creatives produced is the secondary line. */
-function AgentUsageTile({ agent }: { agent: UsageResponse["per_agent"][number] }) {
-  return (
-    <div className="cusagetile" data-live={agent.live ? "1" : "0"}>
-      <GlyphTile glyph={CATEGORY_GLYPH[agent.category] ?? "design"} tint={agent.category} size={40} glyphSize={21} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="cusagetile__name" title={agent.name}>{agent.name}</div>
-        <div className="cusagetile__sub">{agent.creatives} creative{agent.creatives === 1 ? "" : "s"}</div>
-      </div>
-      <div className="cusagetile__num">
-        <div className="cusagetile__val">{agent.sessions}</div>
-        <div className="cusagetile__lbl">{agent.live ? "runs" : "soon"}</div>
-      </div>
-    </div>
-  );
-}
-
-/** One ranked row in the leaderboard. Top three ranks get a subtle medal tint. */
-function LeaderRow({ rank, u, metric }: { rank: number; u: UsageUser; metric: "creatives" | "sessions" }) {
-  const value = metric === "creatives" ? u.creatives : u.sessions;
-  return (
-    <div className="clbrow">
-      <div className="clbrow__rank" data-top={rank <= 3 ? rank : undefined}>{rank}</div>
-      <Avatar name={u.name} src={u.picture || undefined} size="sm" />
-      <div className="clbrow__id">
-        <div className="clbrow__name" title={u.name}>{u.name}</div>
-        <div className="clbrow__sub">
-          {u.agents_used} agent{u.agents_used === 1 ? "" : "s"} used
-        </div>
-      </div>
-      <div className="clbrow__num">
-        <div className="clbrow__val">{value}</div>
-        <div className="clbrow__lbl">{metric === "creatives" ? "creatives" : "runs"}</div>
-      </div>
-    </div>
-  );
-}
-
-/** Live, self-refreshing ranking of who has used the agents the most. */
-function Leaderboard({
-  data,
-  metric,
-  setMetric,
-}: {
-  data: UsageResponse | null;
-  metric: "creatives" | "sessions";
-  setMetric: (m: "creatives" | "sessions") => void;
-}) {
-  const board = [...(data?.per_user ?? [])].sort((a, b) =>
-    metric === "creatives" ? b.creatives - a.creatives : b.sessions - a.sessions
-  );
-  return (
-    <section className="ccard">
-      <div className="csechead" style={{ marginBottom: 6 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <h3>Leaderboard</h3>
-          <span className="clblive">
-            <span className="clblive__dot" />
-            Live
-          </span>
-        </div>
-        <Tabs
-          variant="pill"
-          value={metric}
-          onChange={(v) => setMetric(v as "creatives" | "sessions")}
-          items={[
-            { value: "sessions", label: "Runs" },
-            { value: "creatives", label: "Creatives" },
-          ]}
-        />
-      </div>
-      {data ? (
-        board.length ? (
-          <div className="clbboard">
-            {board.map((u, i) => (
-              <LeaderRow key={u.user_id} rank={i + 1} u={u} metric={metric} />
-            ))}
-          </div>
-        ) : (
-          <div className="clbempty">No activity yet — runs will appear here as agents are used.</div>
-        )
-      ) : (
-        <div className="clbempty">Loading…</div>
-      )}
-    </section>
-  );
-}
-
-const USAGE_POLL_MS = 10_000; // keep the leaderboard "live" without a refresh
-
-function UsageDashboard({ userIsCreator }: { userIsCreator: boolean }) {
-  const [days, setDays] = useState("30");
-  const [scope, setScope] = useState<"me" | "all">("me");
-  const [metric, setMetric] = useState<"creatives" | "sessions">("sessions");
-  const [data, setData] = useState<UsageResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setData(null); // show the loading state while the window/scope changes
-    const load = (initial: boolean) => {
-      if (initial) setError(null);
-      getUsage(Number(days), scope)
-        .then((d) => {
-          if (!cancelled) setData(d);
-        })
-        .catch((e: unknown) => {
-          // Only surface errors on the first load; quiet on background polls.
-          if (!cancelled && initial) setError(e instanceof Error ? e.message : "Failed to load usage");
-        });
-    };
-    load(true);
-    const id = setInterval(() => load(false), USAGE_POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [days, scope]);
-
-  const t = data?.totals;
-
-  return (
-    <>
-      {/* Controls: time window, creator scope, and the headline totals */}
-      <div className="cusagebar">
-        <div className="cstatrow" style={{ flex: 1, gridTemplateColumns: "repeat(3, 1fr)" }}>
-          <Stat icon="zap" iso="bolt" label={`Sessions · last ${days}d`} value={String(t?.sessions ?? 0)} tint="ads" />
-          <Stat icon="image" iso="rocket" label="Creatives made" value={String(t?.creatives ?? 0)} tint="seo" />
-          <Stat icon="activity" iso="bolt" label="Active days" value={String(t?.active_days ?? 0)} tint="copy" />
-        </div>
-        <div className="cusagebar__ctrls">
-          {userIsCreator && (
-            <Tabs
-              variant="pill"
-              value={scope}
-              onChange={(v) => setScope(v as "me" | "all")}
-              items={[
-                { value: "me", label: "My usage" },
-                { value: "all", label: "All users" },
-              ]}
-            />
-          )}
-          <Tabs variant="line" value={days} onChange={setDays} items={WINDOWS} />
-        </div>
-      </div>
-
-      {error && (
-        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: 12, borderRadius: "var(--radius-lg)", fontSize: 13 }}>
-          {error}
-        </div>
-      )}
-
-      {/* Live leaderboard — who has used the agents the most */}
-      <Leaderboard data={data} metric={metric} setMetric={setMetric} />
-
-      {/* Per-agent usage tiles */}
-      <section>
-        <div className="csechead">
-          <h3>Usage by agent</h3>
-          <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>runs in the last {days} days</span>
-        </div>
-        <div className="cgrid cgrid--3">
-          {(data?.per_agent ?? []).map((a) => (
-            <AgentUsageTile key={a.agent_id} agent={a} />
-          ))}
-        </div>
-      </section>
-    </>
-  );
-}
+import { agents, isAgentLive } from "@/lib/console-data";
+import { Icon, Button, IconButton, Avatar, Badge, Tabs, AgentCard } from "@/lib/kit-ui";
+import { GlyphTile } from "@/lib/glyph";
 
 export function HomeView({
-  mode,
-  setMode,
   onOpenAgents,
   onOpenAgent,
   onAdd,
   added,
   userName,
 }: {
-  mode: string;
-  setMode: (m: string) => void;
   onOpenAgents: () => void;
   onOpenAgent: (id: string) => void;
   onAdd: (id: string) => void;
   added: Record<string, boolean>;
   userName: string;
-  convCount: number;
 }) {
-  const { user } = useAuth();
   const firstName = userName.split(" ")[0] || "there";
 
   return (
@@ -271,77 +28,37 @@ export function HomeView({
             Welcome back, {firstName}
           </div>
           <div style={{ fontSize: 14, color: "var(--text-secondary)", marginTop: 3 }}>
-            Your activity across every agent, at a glance.
+            Pick a specialist agent to get started.
           </div>
         </div>
       </div>
 
-      <UsageDashboard userIsCreator={!!user?.is_creator} />
-
-      <div className="csechead" style={{ marginTop: 8 }}>
-        <h3>Open an agent</h3>
-        <Tabs
-          variant="pill"
-          value={mode}
-          onChange={setMode}
-          items={[
-            { value: "agents", label: "Agents", icon: <Icon name="bot" /> },
-            { value: "teams", label: "Teams", icon: <Icon name="users-round" /> },
-          ]}
-        />
-      </div>
-
-      {mode === "agents" ? (
-        <section>
-          <div className="csechead">
-            <h3>Your specialists</h3>
-            <Button variant="ghost" size="sm" iconRight={<Icon name="arrow-right" />} onClick={onOpenAgents}>
-              Browse all agents
-            </Button>
-          </div>
-          <div className="cgrid cgrid--3">
-            {agents.slice(0, 6).map((a) => {
-              const live = isAgentLive(a.id);
-              return (
-                <AgentCard
-                  key={a.id}
-                  {...a}
-                  glyph={<Icon name={a.glyph} />}
-                  interactive
-                  comingSoon={!live}
-                  status={live ? "success" : undefined}
-                  onOpen={live ? () => onOpenAgent(a.id) : undefined}
-                  added={live ? !!added[a.id] : undefined}
-                  onAdd={live ? () => onAdd(a.id) : undefined}
-                />
-              );
-            })}
-          </div>
-        </section>
-      ) : (
-        <div className="chome-teams">
-          <section>
-            <div className="csechead">
-              <h3>Active teams</h3>
-              <Button variant="ghost" size="sm" iconRight={<Icon name="arrow-right" />}>
-                Manage
-              </Button>
-            </div>
-            <div className="cgrid cgrid--2">
-              {teams.map((t) => (
-                <TeamCard key={t.id} {...t} comingSoon />
-              ))}
-            </div>
-          </section>
-          <aside className="cactivity-mini">
-            <div className="csechead">
-              <h3>Live now</h3>
-              <StatusDot status="running" />
-            </div>
-            <RunMini />
-          </aside>
+      <section style={{ marginTop: 8 }}>
+        <div className="csechead">
+          <h3>Open an agent</h3>
+          <Button variant="ghost" size="sm" iconRight={<Icon name="arrow-right" />} onClick={onOpenAgents}>
+            Browse all agents
+          </Button>
         </div>
-      )}
+        <div className="cgrid cgrid--3">
+          {agents.slice(0, 6).map((a) => {
+            const live = isAgentLive(a.id);
+            return (
+              <AgentCard
+                key={a.id}
+                {...a}
+                glyph={<Icon name={a.glyph} />}
+                interactive
+                comingSoon={!live}
+                status={live ? "success" : undefined}
+                onOpen={live ? () => onOpenAgent(a.id) : undefined}
+                added={live ? !!added[a.id] : undefined}
+                onAdd={live ? () => onAdd(a.id) : undefined}
+              />
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }
@@ -410,32 +127,15 @@ export function AgentsView({
 export function TeamsView() {
   return (
     <div className="cview">
-      <div className="cgreet">
-        <div>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em" }}>
-            AI teams
-          </div>
-          <div style={{ fontSize: 14, color: "var(--text-secondary)", marginTop: 3 }}>
-            Coordinated workflows assembled from agents — all coming soon.
-          </div>
+      <div className="cplaceholder">
+        <GlyphTile glyph="teams" tint="social" size={64} glyphSize={32} />
+        <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 18, marginTop: 18 }}>AI teams</div>
+        <div style={{ fontSize: 13.5, color: "var(--text-tertiary)", maxWidth: 360, lineHeight: 1.6 }}>
+          Coordinated workflows assembled from your agents. Team building is on the way.
         </div>
-      </div>
-      <div className="cgrid cgrid--2">
-        {teams.map((t) => (
-          <TeamCard key={t.id} {...t} comingSoon />
-        ))}
-        <button className="cbuildcard" style={{ opacity: 0.72, cursor: "default" }} type="button" disabled>
-          <span className="cbuildcard__ic">
-            <Icon name="plus" />
-          </span>
-          <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 16 }}>Build a team</div>
-          <div style={{ fontSize: 13, color: "var(--text-tertiary)", textAlign: "center", maxWidth: 230 }}>
-            Team builder is coming soon.
-          </div>
-          <Badge variant="outline" style={{ marginTop: 8 }}>
-            Coming soon
-          </Badge>
-        </button>
+        <Badge variant="outline" style={{ marginTop: 14 }}>
+          Coming soon
+        </Badge>
       </div>
     </div>
   );
@@ -454,6 +154,60 @@ export function PlaceholderView({ title }: { title: string }) {
           Coming soon
         </Badge>
       </div>
+    </div>
+  );
+}
+
+/** Selectable color themes. `id` matches the `data-theme` value on <html>
+ *  ("ocean" is the default and clears the attribute). */
+const THEMES = [
+  { id: "ocean", label: "Ocean", desc: "Premium blue", swatch: ["#0077B6", "#00B4D8", "#03045E"] },
+  { id: "sky", label: "Sky & Amber", desc: "Aqua & warm amber", swatch: ["#219EBC", "#8ECAE6", "#FFB703", "#FB8500"] },
+  { id: "prussian", label: "Midnight Orange", desc: "Prussian blue & orange", swatch: ["#14213D", "#FCA311", "#E5E5E5"] },
+];
+
+function ThemePicker() {
+  const [theme, setTheme] = useState("ocean");
+
+  // Reflect whatever the no-flash script (or a previous session) already applied.
+  useEffect(() => {
+    setTheme(document.documentElement.dataset.theme || "ocean");
+  }, []);
+
+  const apply = (id: string) => {
+    setTheme(id);
+    if (id === "ocean") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = id;
+    try {
+      window.localStorage.setItem("app-theme", id);
+    } catch {
+      /* ignore storage failures (private mode etc.) */
+    }
+  };
+
+  return (
+    <div className="cthemegrid">
+      {THEMES.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          className="cthemecard"
+          data-active={theme === t.id ? "1" : "0"}
+          onClick={() => apply(t.id)}
+          aria-pressed={theme === t.id}
+        >
+          {theme === t.id && <Icon name="check" />}
+          <span className="cthemecard__sw">
+            {t.swatch.map((c, i) => (
+              <span key={i} style={{ background: c }} />
+            ))}
+          </span>
+          <span className="cthemecard__id">
+            <span className="cthemecard__name">{t.label}</span>
+            <span className="cthemecard__desc">{t.desc}</span>
+          </span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -510,13 +264,6 @@ export function SettingsView({ userName, userEmail }: { userName: string; userEm
             <span className="csrow__val">Brand workspace</span>
           </div>
           <div className="csrow">
-            <span className="csrow__main">
-              <span className="csrow__label">Plan</span>
-              <span className="csrow__desc">Pro trial — 6 days left</span>
-            </span>
-            <Button size="sm" variant="accent">Upgrade</Button>
-          </div>
-          <div className="csrow">
             <span className="csrow__main" style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <Avatar name={userName} size="sm" color="var(--cat-social)" />
               <span>
@@ -553,12 +300,12 @@ export function SettingsView({ userName, userEmail }: { userName: string; userEm
           </div>
         </div>
         <div className="cset__rows">
-          <div className="csrow">
+          <div className="csrow csrow--stack">
             <span className="csrow__main">
               <span className="csrow__label">Theme</span>
-              <span className="csrow__desc">Ocean — premium blue</span>
+              <span className="csrow__desc">Choose the console color palette</span>
             </span>
-            <Badge variant="brand">Active</Badge>
+            <ThemePicker />
           </div>
           <SettingToggleRow on={prefs.reducedMotion} onToggle={() => toggle("reducedMotion")} label="Reduce motion" desc="Minimize animations and transitions across the app." />
         </div>

@@ -14,6 +14,7 @@ import {
   gdListBrands,
   gdStage4,
   gdSuggest,
+  gdTextPreview,
   gdUpdateConfig,
   type GdBrandOption,
   type GdBrandLogo,
@@ -86,29 +87,6 @@ function AuthImage({ path, alt, className }: { path?: string; alt: string; class
   if (!src) return <div className={className} aria-label={alt} />;
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={src} alt={alt} className={className} />;
-}
-
-/* ---- per-element style → CSS (mock preview) ----------------------------- */
-// Most-specific weight names first so "SemiBold"/"ExtraBold" win over "Bold".
-const _WEIGHTS: [string, number][] = [
-  ["ExtraLight", 200], ["ExtraBold", 800], ["SemiBold", 600],
-  ["Medium", 500], ["Regular", 400], ["Thin", 100], ["Light", 300],
-  ["Black", 900], ["Bold", 700],
-];
-function fontCss(name?: string): CSSProperties {
-  if (!name) return {};
-  let weight = 700;
-  for (const [k, w] of _WEIGHTS) if (name.includes(k)) { weight = w; break; }
-  return { fontWeight: weight, fontStyle: /Oblique/.test(name) ? "italic" : "normal" };
-}
-function colorCss(key?: string): CSSProperties {
-  if (key === "white") return { color: "#fff" };
-  if (key === "gradient")
-    return {
-      background: "linear-gradient(90deg,#86affe,#2653ab)",
-      WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
-    };
-  return { color: "#0f0f0f" };
 }
 
 /* ---- Stage-4 logo box (mirrors compositor.logo_placement for the preview) - */
@@ -196,83 +174,72 @@ function PlacementSliders({
   );
 }
 
-/* ---- live HTML/CSS mock of the Stage-3 text overlay (per-element style) -- */
-function MockPreview({
+/* ---- live, server-rendered WYSIWYG preview of the Stage-3 overlay --------
+ * Renders the REAL deterministic overlay (same engine as the final output) at a
+ * small size, so the editor shows exactly where each element lands and whether
+ * it fits — no more guessing. Debounced and keyed on `sig` (a signature of every
+ * render-affecting field) so it refreshes on any edit. */
+function LivePreview({
+  runId,
   tokens,
-  bgPath,
-  styles,
-  subheadings,
-  baseFont,
+  subTexts,
   aspect,
-  baseW = 1080,
+  sig,
 }: {
+  runId: string;
   tokens: Record<string, string>;
-  bgPath?: string;
-  styles?: Record<string, GdElementStyle>;
-  subheadings?: GdSubheading[];
-  baseFont?: string;
+  subTexts: string[];
   aspect?: string;
-  baseW?: number;
+  sig: string;
 }) {
-  const headline = tokens.headline || "";
-  const hl = tokens.highlight || "";
-  const idx = hl ? headline.indexOf(hl) : -1;
-  const before = idx >= 0 ? headline.slice(0, idx) : headline;
-  const after = idx >= 0 ? headline.slice(idx + hl.length) : "";
-  // Mirror the AR so the preview matches the locked canvas (default 4:5).
+  const [src, setSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const srcRef = useRef<string | null>(null);
   const arCss = aspect ? aspect.replace(":", " / ") : "4 / 5";
-  const st = (k: string): GdElementStyle => styles?.[k] ?? {};
-  // Size is a % of canvas width; the mock is a width-based container, so `cqw`
-  // maps 1:1. The pixel nudge is scaled to the same container width.
-  const sizeCss = (sp?: number): CSSProperties => (sp ? { fontSize: `${sp}cqw` } : {});
-  const offCss = (ox = 0, oy = 0): CSSProperties =>
-    ox || oy ? { transform: `translate(${(ox / baseW) * 100}cqw, ${(oy / baseW) * 100}cqw)` } : {};
-  const elStyle = (k: string, fallbackColor?: string): CSSProperties => ({
-    ...fontCss(st(k).font ?? baseFont),
-    ...colorCss(st(k).color ?? fallbackColor),
-    ...sizeCss(st(k).size_pct),
-    ...offCss(st(k).offset_x, st(k).offset_y),
-  });
-  const place = st("headline").placement ?? "left";
-  const cta = st("cta");
-  const ctaPlace = cta.placement ?? "bottom";
-  const subs = subheadings ?? [];
+
+  // Revoke the last object URL on unmount.
+  useEffect(() => () => {
+    if (srcRef.current) URL.revokeObjectURL(srcRef.current);
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    // Debounce so dragging a slider doesn't fire a request per pixel.
+    const t = setTimeout(() => {
+      gdTextPreview(runId, { tokens, subheading_texts: subTexts })
+        .then((url) => {
+          if (!alive) {
+            URL.revokeObjectURL(url);
+            return;
+          }
+          if (srcRef.current) URL.revokeObjectURL(srcRef.current);
+          srcRef.current = url;
+          setSrc(url);
+          setError(false);
+        })
+        .catch(() => {
+          if (alive) setError(true);
+        })
+        .finally(() => {
+          if (alive) setLoading(false);
+        });
+    }, 280);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+    // `sig` captures tokens + subTexts + every persisted style/placement/size.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runId, sig]);
+
   return (
-    <div className="gdmock" style={{ containerType: "inline-size", aspectRatio: arCss }}>
-      {bgPath ? <AuthImage path={bgPath} alt="Stage 2 base" /> : null}
-      <div className={`gdmock__overlay gdmock__overlay--${place}`}>
-        <div className="gdmock__headline" style={elStyle("headline", "dark")}>
-          {before}
-          {idx >= 0 && (
-            <span style={{ ...fontCss(st("highlight").font ?? baseFont), ...colorCss(st("highlight").color ?? "gradient") }}>
-              {hl}
-            </span>
-          )}
-          {after}
-        </div>
-        <div className="gdmock__sub">
-          {subs.map((sh, i) => (
-            <span
-              className="gdmock__subline"
-              key={i}
-              style={{
-                ...fontCss(sh.font ?? baseFont),
-                ...colorCss(sh.color ?? "dark"),
-                ...sizeCss(sh.size_pct),
-                ...offCss(sh.offset_x, sh.offset_y),
-              }}
-            >
-              <span className="gdmock__dot" />{sh.text}
-            </span>
-          ))}
-        </div>
-        <span
-          className={`gdmock__cta gdmock__cta--${ctaPlace}`}
-          style={{ ...fontCss(cta.font ?? baseFont), ...sizeCss(cta.size_pct), ...offCss(cta.offset_x, cta.offset_y) }}
-        >
-          {tokens.cta} →
-        </span>
-      </div>
+    <div className="gdmock gdmock--live" style={{ aspectRatio: arCss }}>
+      {src && <img src={src} alt="Live Stage 3 preview" />}
+      {!src && !error && <div className="gdmock__ph">Rendering preview…</div>}
+      {error && <div className="gdmock__ph gdmock__ph--err">Preview unavailable</div>}
+      {loading && src && <span className="gdmock__updating">updating…</span>}
     </div>
   );
 }
@@ -524,25 +491,17 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   if (!run) {
     return (
       <div className="gdwrap gdwrap--idle">
-        <div className="gdcard" style={{ maxWidth: 460, textAlign: "center", padding: 32 }}>
-          <div
-            style={{
-              width: 60, height: 60, borderRadius: 16, margin: "0 auto 16px",
-              background: "linear-gradient(135deg, #00B4D8, #03045E)", display: "flex",
-              alignItems: "center", justifyContent: "center", color: "#fff",
-            }}
-          >
-            <Icon name="palette" size={28} />
+        <div className="gdlaunch">
+          <span className="gdlaunch__eyebrow">
+            <Icon name="sparkles" size={12} /> AI Creative Studio
+          </span>
+          <div className="gdlaunch__icon">
+            <Icon name="palette" size={30} />
           </div>
-          <h2 style={{ fontFamily: "var(--font-display)", fontSize: 22, color: "var(--text-primary)", margin: "0 0 6px" }}>
-            Graphic Designer Studio
-          </h2>
-          <p style={{ color: "var(--text-secondary)", fontSize: 14, lineHeight: 1.6, margin: "0 0 20px" }}>
-            A guided 4-stage pipeline — gradient → photo → text → logo — with brand-locked prompts and
-            an approval gate at every step.
-          </p>
+          <h2 className="gdlaunch__title">Graphic Designer Studio</h2>
+
           {brands.length > 0 && (
-            <div className="gdfield" style={{ textAlign: "left", marginBottom: 14 }}>
+            <div className="gdfield gdlaunch__field">
               <span className="gdfield__label">Brand workspace</span>
               <select className="gdselect" value={brandId} onChange={(e) => setBrandId(e.target.value)}>
                 {brands.map((b) => (
@@ -555,17 +514,19 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
               </span>
             </div>
           )}
-          <Button onClick={start} disabled={busy} size="lg" iconLeft={<Icon name="sparkles" size={16} />}>
+
+          <Button onClick={start} disabled={busy} size="lg" variant="brand" fullWidth iconLeft={<Icon name="sparkles" size={16} />}>
             {busy ? "Starting…" : "Start a new ad creative"}
           </Button>
+
           {integrityOk !== null && (
-            <div className="gdintegrity" style={{ justifyContent: "center", marginTop: 16 }}>
+            <div className="gdintegrity gdlaunch__integrity">
               <Icon name={integrityOk ? "shield-check" : "shield-alert"} size={14} />
               <span>{integrityOk ? "Canonical prompts verified" : "Prompt integrity check failed"}</span>
             </div>
           )}
           {onBack && (
-            <button className="gdminibtn" style={{ marginTop: 14 }} onClick={onBack}>
+            <button className="gdminibtn gdlaunch__back" onClick={onBack}>
               ← Back to agents
             </button>
           )}
@@ -575,6 +536,18 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   }
 
   /* ------------------------------ STUDIO --------------------------------- */
+  // Shared props for the two halves of the stage panel: the agent/AI boxes
+  // ("ai") live in the right rail; the option cards + settings ("options")
+  // render in the center, just below the preview.
+  const stageProps = {
+    run, config, active, reviewing, busy, sel1, setSel1, sel2, setSel2, tokens, setTokens,
+    subTexts, setSubTexts, answers, setAnswers, conceptSugg, setConceptSugg, exploreSugg, setExploreSugg,
+    gradSugg, setGradSugg, gradSteer, setGradSteer, gradExclude, setGradExclude,
+    elemSugg, setElemSugg, elemSteer, setElemSteer, elemExclude, setElemExclude,
+    hooks, setHooks, logoFile, setLogoFile, brandLogo, fileRef,
+    patchConfig, doGenerate, doStage4, onToast,
+  };
+
   return (
     <div className="gdwrap">
       {/* LEFT RAIL */}
@@ -624,18 +597,13 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
         {/* Brand kit (read-only) — reflects the run's locked brand */}
         {config && (
           <div>
-            <div className="gdfield" style={{ marginBottom: 10 }}>
-              <span className="gdfield__label">
+            <div className="gdbrand">
+              <span className="gdbrand__label">
                 Brand workspace
                 <span className="gdfield__lock"><Icon name="lock" size={11} /> locked</span>
               </span>
-              <div className="gdlocked" style={{ fontWeight: 600 }}>{config.brand_name}</div>
-              <span className="gdfield__hint" style={{ marginTop: 0 }}>
-                Drives every stage. Start a new run to switch brands.
-              </span>
+              <div className="gdbrand__name" title="Start a new run to switch brands">{config.brand_name}</div>
             </div>
-            <p className="gdsec__title">Brand Kit · locked</p>
-            <div className="gdkit__block">{config.brand_kit_block}</div>
             <div className="gdswatches">
               {config.locked_colors.gradient.map((c) => (
                 <span key={c} className="gdswatch" title={c} style={{ background: c }} />
@@ -674,6 +642,9 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
             </div>
           )}
         </div>
+
+        {/* stage options + settings — moved here, just below the preview */}
+        <StageControls {...stageProps} slot="options" />
 
         {/* review controls */}
         {attempts.length > 0 && (
@@ -727,49 +698,7 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
 
       {/* RIGHT RAIL */}
       <aside className="gdaside">
-        <StageControls
-          run={run}
-          config={config}
-          active={active}
-          reviewing={reviewing}
-          busy={busy}
-          sel1={sel1}
-          setSel1={setSel1}
-          sel2={sel2}
-          setSel2={setSel2}
-          tokens={tokens}
-          setTokens={setTokens}
-          subTexts={subTexts}
-          setSubTexts={setSubTexts}
-          answers={answers}
-          setAnswers={setAnswers}
-          conceptSugg={conceptSugg}
-          setConceptSugg={setConceptSugg}
-          exploreSugg={exploreSugg}
-          setExploreSugg={setExploreSugg}
-          gradSugg={gradSugg}
-          setGradSugg={setGradSugg}
-          gradSteer={gradSteer}
-          setGradSteer={setGradSteer}
-          gradExclude={gradExclude}
-          setGradExclude={setGradExclude}
-          elemSugg={elemSugg}
-          setElemSugg={setElemSugg}
-          elemSteer={elemSteer}
-          setElemSteer={setElemSteer}
-          elemExclude={elemExclude}
-          setElemExclude={setElemExclude}
-          hooks={hooks}
-          setHooks={setHooks}
-          logoFile={logoFile}
-          setLogoFile={setLogoFile}
-          brandLogo={brandLogo}
-          fileRef={fileRef}
-          patchConfig={patchConfig}
-          doGenerate={doGenerate}
-          doStage4={doStage4}
-          onToast={onToast}
-        />
+        <StageControls {...stageProps} slot="ai" />
 
         {/* prompt audit */}
         <div className="gdcard">
@@ -831,14 +760,20 @@ function StageControls(props: {
   doGenerate: () => void;
   doStage4: () => void;
   onToast: (m: string) => void;
+  /** Which half of the stage panel to render: the agent/AI suggestion boxes
+   *  ("ai", shown in the side rail) or the selectable options + settings
+   *  ("options", shown in the center under the preview). */
+  slot: "ai" | "options";
 }) {
   const {
     run, config, active, busy, sel1, setSel1, sel2, setSel2, tokens, setTokens, subTexts, setSubTexts,
     answers, setAnswers, conceptSugg, setConceptSugg, exploreSugg, setExploreSugg, hooks, setHooks,
     gradSugg, setGradSugg, gradSteer, setGradSteer, gradExclude, setGradExclude,
     elemSugg, setElemSugg, elemSteer, setElemSteer, elemExclude, setElemExclude,
-    logoFile, setLogoFile, brandLogo, fileRef, patchConfig, doGenerate, doStage4, onToast,
+    logoFile, setLogoFile, brandLogo, fileRef, patchConfig, doGenerate, doStage4, onToast, slot,
   } = props;
+  const ai = slot === "ai";
+  const opt = slot === "options";
 
   // Stage-4 logo source: an uploaded file wins (override); otherwise default to
   // the brand's logo resolved from Firestore. We track the natural size + a
@@ -865,6 +800,10 @@ function StageControls(props: {
   }, [activeLogoUrl]);
 
   if (!config) return null;
+
+  // Only Stage 1 keeps its AI box in the side rail; Stages 2–4 render everything
+  // (agent boxes + options) in the center, so the side slot has nothing to show.
+  if (ai && active !== 1) return null;
 
   /* ---- STAGE 1 ---- */
   if (active === 1) {
@@ -896,84 +835,90 @@ function StageControls(props: {
 
     return (
       <div className="gdcard">
-        <p className="gdsec__title">Stage 1 · Gradient base</p>
+        {opt && <p className="gdsec__title">Stage 1 · Gradient base</p>}
 
         {/* AI gradient — agent invents a fresh, on-brand gradient for THIS creative */}
-        <div className="gdsugg" style={{ marginBottom: 10 }}>
-          <span className="gdexplore__hdr">
-            <Icon name="sparkles" size={12} /> AI gradient
-          </span>
-          <p className="gdsugg__text">
-            Let the agent study the brand gradients and invent a fresh one — used only for
-            this creative, never saved to the library.
-          </p>
-          <input
-            className="gdselect"
-            value={gradSteer}
-            onChange={(e) => setGradSteer(e.target.value)}
-            placeholder="Optional steer — e.g. warmer, more minimal"
-          />
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={suggestGradient}
-            disabled={busy}
-            iconLeft={<Icon name="sparkles" size={13} />}
-          >
-            {aiGrad ? "Regenerate AI gradient" : "Generate AI gradient"}
-          </Button>
-        </div>
-
-        <div className="gdvariants">
-          {aiGrad && (
-            <button
-              key="AI"
-              className={`gdvariant gdvariant--explore${sel1 === "AI" ? " gdvariant--sel" : ""}`}
-              onClick={selectAiGradient}
+        {ai && (
+          <div className="gdsugg">
+            <span className="gdexplore__hdr">
+              <Icon name="sparkles" size={12} /> AI gradient
+            </span>
+            <p className="gdsugg__text">
+              Let the agent study the brand gradients and invent a fresh one — used only for
+              this creative, never saved to the library.
+            </p>
+            <input
+              className="gdselect"
+              value={gradSteer}
+              onChange={(e) => setGradSteer(e.target.value)}
+              placeholder="Optional steer — e.g. warmer, more minimal"
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={suggestGradient}
+              disabled={busy}
+              iconLeft={<Icon name="sparkles" size={13} />}
             >
-              <span className="gdvariant__chip" style={{ background: aiGrad.css_gradient }} />
-              <span className="gdvariant__body">
-                <span className="gdvariant__title">
-                  {aiGrad.title} <span className="gdfield__lock">AI · temporary</span>
-                </span>
-                <span className="gdvariant__desc">{aiGrad.desc}</span>
-              </span>
-            </button>
-          )}
-          {config.stage1_variants.map((v) => (
-            <button key={v.id} className={`gdvariant${sel1 === v.id ? " gdvariant--sel" : ""}`} onClick={() => setSel1(v.id)}>
-              <span className="gdvariant__chip" style={{ background: v.css_gradient }} />
-              <span className="gdvariant__body">
-                <span className="gdvariant__title">{v.title}</span>
-                <span className="gdvariant__desc">{v.desc}</span>
-              </span>
-            </button>
-          ))}
-        </div>
+              {aiGrad ? "Regenerate AI gradient" : "Generate AI gradient"}
+            </Button>
+          </div>
+        )}
 
-        {/* aspect ratio — chosen here, locked for stages 2–4 */}
-        <div className="gdfield" style={{ marginTop: 12 }}>
-          <span className="gdfield__label">Aspect ratio</span>
-          <select
-            className="gdselect"
-            value={run.config.aspect_ratio}
-            onChange={(e) => patchConfig({ aspect_ratio: e.target.value })}
-          >
-            {config.aspect_ratios.map((a) => (
-              <option key={a.ar} value={a.ar}>
-                {a.label} · {a.dimensions} ({a.ar})
-              </option>
-            ))}
-          </select>
-          <span className="gdfield__hint">
-            Sets the canvas for stages 2–4 and locks once you approve this stage. The gradient base itself always renders 16:9.
-          </span>
-        </div>
+        {opt && (
+          <>
+            <div className="gdvariants gdvariants--grid">
+              {aiGrad && (
+                <button
+                  key="AI"
+                  className={`gdvariant gdvariant--explore${sel1 === "AI" ? " gdvariant--sel" : ""}`}
+                  onClick={selectAiGradient}
+                >
+                  <span className="gdvariant__chip" style={{ background: aiGrad.css_gradient }} />
+                  <span className="gdvariant__body">
+                    <span className="gdvariant__title">
+                      {aiGrad.title} <span className="gdfield__lock">AI · temporary</span>
+                    </span>
+                    <span className="gdvariant__desc">{aiGrad.desc}</span>
+                  </span>
+                </button>
+              )}
+              {config.stage1_variants.map((v) => (
+                <button key={v.id} className={`gdvariant${sel1 === v.id ? " gdvariant--sel" : ""}`} onClick={() => setSel1(v.id)}>
+                  <span className="gdvariant__chip" style={{ background: v.css_gradient }} />
+                  <span className="gdvariant__body">
+                    <span className="gdvariant__title">{v.title}</span>
+                    <span className="gdvariant__desc">{v.desc}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
 
-        <Button fullWidth onClick={doGenerate} disabled={busy} style={{ marginTop: 12 }} iconLeft={<Icon name="sparkles" size={15} />}>
-          Generate gradient
-        </Button>
-        <p className="gdstep__meta" style={{ marginTop: 8 }}>{config.stage1_source_note}</p>
+            {/* aspect ratio — chosen here, locked for stages 2–4 */}
+            <div className="gdfield" style={{ marginTop: 12 }}>
+              <span className="gdfield__label">Aspect ratio</span>
+              <select
+                className="gdselect"
+                value={run.config.aspect_ratio}
+                onChange={(e) => patchConfig({ aspect_ratio: e.target.value })}
+              >
+                {config.aspect_ratios.map((a) => (
+                  <option key={a.ar} value={a.ar}>
+                    {a.label} · {a.dimensions} ({a.ar})
+                  </option>
+                ))}
+              </select>
+              <span className="gdfield__hint">
+                Sets the canvas for stages 2–4 and locks once you approve this stage. The gradient base itself always renders 16:9.
+              </span>
+            </div>
+
+            <Button fullWidth onClick={doGenerate} disabled={busy} style={{ marginTop: 12 }} iconLeft={<Icon name="sparkles" size={15} />}>
+              Generate gradient
+            </Button>
+            <p className="gdstep__meta" style={{ marginTop: 8 }}>{config.stage1_source_note}</p>
+          </>
+        )}
       </div>
     );
   }
@@ -1060,9 +1005,10 @@ function StageControls(props: {
 
     return (
       <div className="gdcard">
-        <p className="gdsec__title">Stage 2 · Photo element</p>
+        {opt && <p className="gdsec__title">Stage 2 · Photo element</p>}
 
         {/* agent: onboarding → concept recommendation + element explorer */}
+        {opt && (<>
         <div className="gdsugg" style={{ marginBottom: 12 }}>
           <span className="gdsugg__hdr"><Icon name="bot" size={13} /> Creative strategist</span>
           {config.onboarding_questions.map((q) => (
@@ -1150,7 +1096,9 @@ function StageControls(props: {
             {aiElem ? "Regenerate AI element" : "Generate AI element"}
           </Button>
         </div>
+        </>)}
 
+        {opt && (<>
         {aiElem && (
           <div className="gdgroup">
             <span className="gdgroup__label">AI element (temporary)</span>
@@ -1199,6 +1147,7 @@ function StageControls(props: {
         <Button fullWidth onClick={doGenerate} disabled={busy} style={{ marginTop: 12 }} iconLeft={<Icon name="sparkles" size={15} />}>
           Generate photo composite
         </Button>
+        </>)}
       </div>
     );
   }
@@ -1488,20 +1437,30 @@ function StageControls(props: {
 
     return (
       <div className="gdcard">
-        <p className="gdsec__title">Stage 3 · Text overlay</p>
+        {opt && <p className="gdsec__title">Stage 3 · Text overlay</p>}
 
-        {/* live mock */}
-        <MockPreview
+        {/* live WYSIWYG preview — the real overlay, rendered server-side */}
+        {opt && (
+        <LivePreview
+          runId={run.id}
           tokens={tokens}
-          bgPath={run.stages["2"].approved?.url}
-          styles={run.config.element_styles}
-          subheadings={subsWithDrafts()}
-          baseFont={run.config.font}
+          subTexts={subTexts}
           aspect={run.config.aspect_ratio}
-          baseW={baseW}
+          sig={JSON.stringify({
+            h: tokens.headline ?? "",
+            hl: tokens.highlight ?? "",
+            c: tokens.cta ?? "",
+            s: subTexts,
+            es: run.config.element_styles,
+            sh: run.config.subheadings,
+            f: run.config.font,
+            ar: run.config.aspect_ratio,
+          })}
         />
+        )}
 
         {/* agent hooks */}
+        {opt && (
         <div className="gdsugg" style={{ margin: "12px 0" }}>
           <span className="gdsugg__hdr"><Icon name="bot" size={13} /> Hook ideas · concept {concept}</span>
           <Button size="sm" variant="secondary" onClick={fetchHooks} disabled={busy}>
@@ -1525,7 +1484,9 @@ function StageControls(props: {
             </div>
           )}
         </div>
+        )}
 
+        {opt && (<>
         {tokenField("headline", "Headline")}
         {tokenField("highlight", "Highlight phrase")}
         {tokenField("cta", "CTA")}
@@ -1559,12 +1520,14 @@ function StageControls(props: {
         >
           {run.tokens_ready ? "Generate text overlay" : "Approve all tokens to generate"}
         </Button>
+        </>)}
       </div>
     );
   }
 
   /* ---- STAGE 4 ---- */
   {
+    if (ai) return null; // Stage 4 (logo upload/composite) has no agent-suggestion box.
     const layout: GdLogoLayout = { ...LOGO_LAYOUT_DEFAULT, ...(run.config.logo_layout ?? {}) };
     const setLayout = (patch: Partial<GdLogoLayout>) => patchConfig({ logo_layout: patch });
     const canvas =
