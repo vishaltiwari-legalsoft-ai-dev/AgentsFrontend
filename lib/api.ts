@@ -237,10 +237,18 @@ export interface Analytics {
 export async function googleLogin(
   credential: string,
 ): Promise<{ token: string; user: User }> {
+  // Send the browser's timezone so the backend can stamp run rows with local
+  // time (falls back to UTC server-side if unavailable).
+  let timezone = "";
+  try {
+    timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch {
+    timezone = "";
+  }
   const response = await fetch(`${API_URL}/api/auth/google`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ credential }),
+    body: JSON.stringify({ credential, timezone }),
   });
   if (!response.ok) throw new Error(await parseError(response));
   return (await response.json()) as { token: string; user: User };
@@ -437,6 +445,15 @@ export function getDbCollections(): Promise<DbCollectionsResponse> {
 
 export function getDbCollection(name: string, limit = 50): Promise<DbCollectionData> {
   return getJson(`/api/admin/db/collections/${encodeURIComponent(name)}?limit=${limit}`);
+}
+
+// Delete the superseded telemetry collections (creative_events, sessions,
+// requests, conversations). Requires confirm === "DELETE". Operational data is
+// never touched.
+export function purgeTelemetry(
+  confirm: string,
+): Promise<{ deleted: Record<string, number>; kept: string }> {
+  return postJson("/api/admin/db/purge-telemetry", { confirm });
 }
 
 /* ----------------------------- Usage dashboard --------------------------- */

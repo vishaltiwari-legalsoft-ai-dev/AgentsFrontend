@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   getDbCollections,
   getDbCollection,
+  purgeTelemetry,
   type DbCollection,
   type DbCollectionData,
 } from "@/lib/api";
@@ -65,23 +66,48 @@ export function DatabaseView({ onBack }: { onBack: () => void }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load the collection list (with counts) once on mount; pick the first.
-  useEffect(() => {
-    let cancelled = false;
-    getDbCollections()
+  // Load the collection list (with counts); pick the first if none active yet.
+  const loadCollections = useCallback(() => {
+    return getDbCollections()
       .then((res) => {
-        if (cancelled) return;
         setCollections(res.collections);
         setConn({ connected: res.connected, database: res.database, project: res.project });
-        if (res.collections.length) setActive(res.collections[0].name);
+        setActive((cur) => cur ?? (res.collections[0]?.name ?? null));
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load");
+        setError(err instanceof Error ? err.message : "Failed to load");
       });
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    loadCollections();
+  }, [loadCollections]);
+
+  // "Clean up old tables" — delete the superseded telemetry collections.
+  const onPurge = useCallback(() => {
+    const answer = window.prompt(
+      "This deletes the OLD telemetry tables (creative_events, sessions, " +
+        "requests, conversations). Your accounts, settings, brands and assets " +
+        "are kept. Type DELETE to confirm.",
+    );
+    if (answer === null) return;
+    if (answer !== "DELETE") {
+      setError("Cleanup cancelled — you must type DELETE exactly.");
+      return;
+    }
+    setError(null);
+    purgeTelemetry("DELETE")
+      .then((res) => {
+        const summary = Object.entries(res.deleted)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(", ");
+        setError(`Cleaned up — ${summary}. Kept: ${res.kept}.`);
+        return loadCollections();
+      })
+      .catch((err: unknown) =>
+        setError(err instanceof Error ? err.message : "Purge failed"),
+      );
+  }, [loadCollections]);
 
   const load = useCallback(
     (name: string, lim: number) => {
@@ -128,9 +154,14 @@ export function DatabaseView({ onBack }: { onBack: () => void }) {
             Live, read-only view of every record in the cloud database — proof of exactly what the platform is storing.
           </div>
         </div>
-        <Button variant="secondary" size="sm" onClick={onBack}>
-          Back
-        </Button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button variant="secondary" size="sm" onClick={onPurge}>
+            <Icon name="trash-2" size={14} /> Clean up old tables
+          </Button>
+          <Button variant="secondary" size="sm" onClick={onBack}>
+            Back
+          </Button>
+        </div>
       </div>
 
       {error && (
