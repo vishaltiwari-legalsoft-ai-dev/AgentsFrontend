@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button, Badge } from "@/lib/kit-ui";
+import { gdRefSyncDrive } from "@/lib/api";
 
 interface Integration {
   id: string;
@@ -59,6 +60,7 @@ const INTEGRATIONS: Integration[] = [
 export function IntegrationsView({ onToast }: { onToast?: (msg: string) => void }) {
   // Google starts "connected" to mirror the Google sign-in already used for auth.
   const [connected, setConnected] = useState<Record<string, boolean>>({ google: true });
+  const [syncing, setSyncing] = useState(false);
 
   function toggle(id: string, name: string) {
     setConnected((prev) => {
@@ -66,6 +68,28 @@ export function IntegrationsView({ onToast }: { onToast?: (msg: string) => void 
       onToast?.(next ? `${name} connected` : `${name} disconnected`);
       return { ...prev, [id]: next };
     });
+  }
+
+  // Pull the shared Drive folder of on-brand references into the agent's library.
+  async function syncDrive() {
+    if (syncing) return;
+    setSyncing(true);
+    onToast?.("Syncing reference creatives from Google Drive…");
+    try {
+      const r = await gdRefSyncDrive();
+      const types = Object.entries(r.by_type)
+        .map(([t, n]) => `${n} ${t}`)
+        .join(", ");
+      onToast?.(
+        `Drive sync complete — ingested ${r.ingested} reference${r.ingested === 1 ? "" : "s"}` +
+          (types ? ` (${types})` : "") +
+          (r.skipped_folders.length ? `. Skipped: ${r.skipped_folders.join(", ")}` : ""),
+      );
+    } catch (e) {
+      onToast?.(`Drive sync failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSyncing(false);
+    }
   }
 
   return (
@@ -103,10 +127,20 @@ export function IntegrationsView({ onToast }: { onToast?: (msg: string) => void 
               </div>
               <p className="cintg__desc">{it.description}</p>
               <div className="cintg__foot">
-                <Button size="sm" variant={on ? "secondary" : "brand"} onClick={() => toggle(it.id, it.name)}>
-                  {on ? "Disconnect" : "Connect"}
-                </Button>
-                {on ? (
+                {it.id === "google-drive" ? (
+                  <Button size="sm" variant="brand" onClick={syncDrive} disabled={syncing}>
+                    {syncing ? "Syncing…" : "Sync references"}
+                  </Button>
+                ) : (
+                  <Button size="sm" variant={on ? "secondary" : "brand"} onClick={() => toggle(it.id, it.name)}>
+                    {on ? "Disconnect" : "Connect"}
+                  </Button>
+                )}
+                {it.id === "google-drive" ? (
+                  <span className="cintg__cat" style={{ alignSelf: "center" }}>
+                    Pulls on-brand reference creatives into the agent
+                  </span>
+                ) : on ? (
                   <button type="button" className="cintg__manage" onClick={() => onToast?.(`${it.name} settings — coming soon`)}>
                     Manage
                   </button>

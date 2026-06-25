@@ -621,11 +621,16 @@ export interface GdRun {
     aspect_ratio: string;
     text_placement?: string;
     cta_placement?: string;
+    element_placement?: string;
     element_styles?: Record<string, GdElementStyle>;
     subheadings?: GdSubheading[];
+    // Stage-3 free-drag coordinates per element id (headline / subheading-N / cta).
+    layout?: Record<string, GdLayoutEntry>;
+    shapes?: GdShape[];
     logo_layout?: GdLogoLayout;
     custom_gradient?: GdCustomGradient | null;
     custom_element?: GdCustomElement | null;
+    creative_brief?: Record<string, string>;
     use_ai_compositor: boolean;
     tokens: Record<string, string>;
     tokens_approved: Record<string, boolean>;
@@ -650,6 +655,34 @@ export interface GdElementStyle {
   size_pct?: number;
   offset_x?: number;
   offset_y?: number;
+}
+
+// Stage-3 free-drag coordinate for one element. x/y ∈ [0,1] place the element's
+// `anchor` point on the canvas; w ∈ (0,1] is its max width as a fraction of width.
+export interface GdLayoutEntry {
+  x: number;
+  y: number;
+  w: number;
+  anchor: string;
+}
+
+// One Stage-3 shape / infographic element (rect, circle, triangle, arrow,
+// divider, callout, or a named icon). Positioned by absolute coords like text.
+export interface GdShape {
+  id: string;
+  kind: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  anchor: string;
+  fill: string;
+  stroke: string | null;
+  stroke_w: number;
+  radius: number;
+  icon: string | null;
+  text: string;
+  z: number;
 }
 
 // One Stage-3 sub-heading line (the dynamic 1–5 list, replacing the old fixed
@@ -776,6 +809,51 @@ export interface GdQuestion {
   options: { id: string; label: string }[];
 }
 
+// One turn of the pre-generation discovery conversation (Steps 1–2). `kind`
+// drives rendering: "choice" = chips only, "text" = free text only,
+// "choice_text" = chips with a free-text override.
+export interface GdDiscoveryQuestion {
+  id: string;
+  group: "intent" | "context";
+  kind: "choice" | "text" | "choice_text";
+  prompt: string;
+  options?: { id: string; label: string }[];
+  placeholder?: string;
+  optional?: boolean;
+}
+
+// One message in the strategist conversation (agent ⇄ user).
+export interface GdChatMessage {
+  role: "agent" | "user";
+  text: string;
+}
+
+// One agent turn returned by the conversational strategist (kind:"chat").
+export interface GdChatTurn {
+  type: "chat";
+  state: string;
+  source: string;
+  reply: string;
+  brief: Record<string, string>;
+  done: boolean;
+  direction: GdDirection | null;
+}
+
+// The synthesized creative direction returned after the discovery conversation.
+export interface GdDirection {
+  type: "direction";
+  state: string;
+  source: string;
+  summary: string;
+  concept: string;
+  concept_title: string;
+  concept_rationale: string;
+  tone: string;
+  palette_hint: string;
+  copy_angle: string;
+  highlights: string[];
+}
+
 export interface GdBrandOption {
   id: string;
   name: string;
@@ -787,6 +865,7 @@ export interface GdConfig {
   stage1_variants: GdVariant[];
   stage2_variants: GdVariant[];
   stage2_categories: string[];
+  stage2_placements: { key: string; label: string; row: number; col: number }[];
   fonts: string[];
   font_family: string;
   font_variants: { name: string; weight: number; style: string; file: string }[];
@@ -800,6 +879,9 @@ export interface GdConfig {
   text_offset_px_range: number;
   subheading_min: number;
   subheading_max: number;
+  anchors: string[];
+  shape_kinds: string[];
+  icon_keys: string[];
   logo_positions: { key: string; label: string; row: number; col: number }[];
   logo_size_pct_min: number;
   logo_size_pct_max: number;
@@ -815,6 +897,7 @@ export interface GdConfig {
   };
   stage1_source_note: string;
   onboarding_questions: GdQuestion[];
+  discovery_questions: GdDiscoveryQuestion[];
   content_tokens: string[];
 }
 
@@ -849,6 +932,86 @@ export const gdGetPrompts = (brand?: string | null) =>
 export const gdCreateRun = (brandId?: string | null) =>
   postJson<GdRun>("/api/gd/runs", { brand_id: brandId ?? null });
 
+/* ---------------- Brand Reference Library (ingestion + retrieval) --------- */
+// Test/debug surface so a human can SEE which reference creatives the agent
+// picks up for a given brand + creative type + brief. Backed by /api/ref-library.
+
+export interface RefCreativeType {
+  key: string;
+  label: string;
+  aspect_ratio: string;
+  orientation: string;
+  multi_frame: boolean;
+  notes: string;
+}
+
+export interface RefRecord {
+  id: string;
+  brand_id: string;
+  brand_name: string;
+  creative_type: string;
+  file_name: string;
+  width: number;
+  height: number;
+  aspect_ratio: string;
+  orientation: string;
+  format_match: boolean;
+  palette: string[];
+  tags: string[];
+  summary: string;
+  source: string;
+  _score?: number;
+  _why?: string[];
+}
+
+export const gdRefTypes = () =>
+  getJson<{ types: RefCreativeType[] }>("/api/ref-library/types");
+
+export const gdRefIngest = (useLlm = false) =>
+  postJson<{ ingested: number; source: string; by_brand: Record<string, Record<string, number>> }>(
+    `/api/ref-library/ingest?use_llm=${useLlm}`,
+    {},
+  );
+
+export interface RefDriveSyncResult {
+  source: string;
+  folder_id: string;
+  downloaded: number;
+  ingested: number;
+  mirrored_to_gcs: number;
+  by_type: Record<string, number>;
+  skipped_folders: string[];
+}
+
+/** Pull on-brand reference creatives from the shared Google Drive folder into
+ *  the library (admin/creator only). Backed by POST /api/ref-library/sync-drive. */
+export const gdRefSyncDrive = (useLlm = false) =>
+  postJson<RefDriveSyncResult>(`/api/ref-library/sync-drive?use_llm=${useLlm}`, {});
+
+/** Reference images need the Bearer header, so fetch as a blob and hand back an
+ *  object URL (callers should revoke it on unmount). */
+export async function gdRefAssetBlob(recordId: string): Promise<string> {
+  const response = await request(`/api/ref-library/asset/${encodeURIComponent(recordId)}`);
+  if (!response.ok) throw new Error(await parseError(response));
+  return URL.createObjectURL(await response.blob());
+}
+
+export const gdRefRetrieve = (
+  brief: string,
+  brand?: string | null,
+  type?: string | null,
+  k = 5,
+) => {
+  const p = new URLSearchParams();
+  if (brief) p.set("brief", brief);
+  if (brand) p.set("brand", brand);
+  if (type) p.set("type", type);
+  p.set("k", String(k));
+  return getJson<{ count: number; results: RefRecord[]; prompt_block: string }>(
+    `/api/ref-library/retrieve?${p.toString()}`,
+  );
+};
+
 export const gdGetRun = (id: string) => getJson<GdRun>(`/api/gd/runs/${id}`);
 
 export const gdUpdateConfig = (
@@ -858,11 +1021,15 @@ export const gdUpdateConfig = (
     aspect_ratio?: string;
     text_placement?: string;
     cta_placement?: string;
+    element_placement?: string;
     element_styles?: Record<string, GdElementStyle>;
     subheadings?: GdSubheading[];
+    layout?: Record<string, GdLayoutEntry | null>;
+    shapes?: GdShape[];
     logo_layout?: Partial<GdLogoLayout>;
     custom_gradient?: GdCustomGradient | null;
     custom_element?: GdCustomElement | null;
+    creative_brief?: Record<string, string>;
     use_ai_compositor?: boolean;
     tokens?: Record<string, string>;
     token_approvals?: Record<string, { approved: boolean; source?: string; original_suggestion?: string }>;
@@ -871,6 +1038,14 @@ export const gdUpdateConfig = (
 
 export const gdGenerate = (id: string, stage: number, variant?: string) =>
   postJson<{ attempt: GdAttempt; run: GdRun }>(`/api/gd/runs/${id}/generate`, { stage, variant });
+
+// AI Suggest Placement — returns a proposed Stage-3 layout (and optional shapes);
+// the caller applies it via gdUpdateConfig or discards. Does not persist server-side.
+export const gdSuggestPlacement = (id: string) =>
+  postJson<{ layout: Record<string, GdLayoutEntry>; shapes?: GdShape[] }>(
+    `/api/gd/runs/${id}/suggest-placement`,
+    {},
+  );
 
 export const gdApprove = (id: string, stage: number, attempt?: number) =>
   postJson<GdRun>(`/api/gd/runs/${id}/approve`, { stage, attempt });
@@ -929,6 +1104,134 @@ export async function gdTextPreview(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  if (!response.ok) throw new Error(await parseError(response));
+  return URL.createObjectURL(await response.blob());
+}
+
+/* ---------------- Creative Agent (brochures / decks / carousels / blogs) --- */
+// Standard social posts use the Graphics Studio editor (gd* above). Everything
+// else routes to the dedicated Creative Agent: plan → review → generate a real
+// PDF / PPTX / image set, manually or autonomously. Backed by /api/creative.
+
+export interface CreativeTypeMeta {
+  key: string;
+  label: string;
+  aspect_ratio: string;
+  orientation: string;
+  multi_frame: boolean;
+  output_format: "image" | "image_set" | "pdf" | "pptx";
+  notes: string;
+  unit: string;
+  default_count: number;
+  min_count: number;
+  max_count: number;
+}
+
+export interface CreativeStep {
+  key: string;
+  label: string;
+  detail: string;
+}
+
+export interface CreativeDecision {
+  step: string;
+  decision: string;
+  rationale: string;
+  source: "agent" | "user";
+  timestamp: string;
+}
+
+export interface CreativeArtifact {
+  name: string;
+  mime: string;
+  ref: string;
+  bytes: number;
+  url: string;
+}
+
+export interface CreativePlan {
+  creative_type: string;
+  count: number;
+  source: string;
+  grounded: boolean;
+  rationale: string;
+  decisions: CreativeDecision[];
+  frames?: { index: number; role: string; headline: string; body: string; visual: string }[];
+  slides?: { index: number; title: string; bullets: string[]; notes: string }[];
+  sections?: { heading: string; body: string; bullets: string[] }[];
+  cover?: { title: string; subtitle?: string; visual?: string };
+  inline?: { caption: string; visual: string }[];
+  contact?: { line: string };
+}
+
+export interface CreativeRun {
+  id: string;
+  user_id: string;
+  brand_id: string;
+  brand_name: string;
+  creative_type: string;
+  output_format: string;
+  autonomous: boolean;
+  autonomous_ack: boolean;
+  state: "INTENT" | "STRATEGY" | "LAYOUT" | "OUTPUT" | "DONE";
+  brief: string;
+  intent: Record<string, unknown>;
+  plan: CreativePlan | null;
+  plan_approved: boolean;
+  references: RefRecord[];
+  grounding: string;
+  decision_log: CreativeDecision[];
+  artifacts: CreativeArtifact[];
+  /** Live generation progress (present while/after Step 4 runs). */
+  progress?: { done: number; total: number; state?: string };
+}
+
+export const creativeTypes = () =>
+  getJson<{
+    types: CreativeTypeMeta[];
+    steps: CreativeStep[];
+    autonomous_warning: string;
+    engines: Record<string, boolean>;
+  }>("/api/creative/types");
+
+export const creativeCreate = (body: {
+  creative_type: string;
+  brand_id?: string | null;
+  brief?: string;
+  autonomous?: boolean;
+}) => postJson<CreativeRun>("/api/creative/runs", body);
+
+export const creativeGet = (id: string) => getJson<CreativeRun>(`/api/creative/runs/${id}`);
+
+export const creativeIntent = (
+  id: string,
+  body: { brief?: string; answers?: Record<string, unknown> },
+) => postJson<CreativeRun>(`/api/creative/runs/${id}/intent`, body);
+
+export const creativeAcknowledge = (id: string) =>
+  postJson<CreativeRun>(`/api/creative/runs/${id}/acknowledge`, {});
+
+export const creativePlan = (id: string, body: { count?: number | null; use_llm?: boolean } = {}) =>
+  postJson<CreativeRun>(`/api/creative/runs/${id}/plan`, body);
+
+export const creativeApprove = (id: string) =>
+  postJson<CreativeRun>(`/api/creative/runs/${id}/plan/approve`, {});
+
+export const creativeGenerate = (id: string) =>
+  postJson<CreativeRun>(`/api/creative/runs/${id}/generate`, {});
+
+export const creativeAutonomous = (
+  id: string,
+  body: { count?: number | null; use_llm?: boolean } = {},
+) => postJson<CreativeRun>(`/api/creative/runs/${id}/autonomous`, body);
+
+export const creativeOverride = (id: string) =>
+  postJson<CreativeRun>(`/api/creative/runs/${id}/override`, {});
+
+/** Download a produced artifact (PDF/PPTX/PNG/zip) with the auth header, as an
+ *  object URL (callers should revoke it after triggering the download). */
+export async function creativeArtifactBlob(url: string): Promise<string> {
+  const response = await request(url);
   if (!response.ok) throw new Error(await parseError(response));
   return URL.createObjectURL(await response.blob());
 }

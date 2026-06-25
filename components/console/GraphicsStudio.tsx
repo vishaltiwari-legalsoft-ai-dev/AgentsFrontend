@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { AiArrangeButton } from "./stage3/AiArrangeButton";
+import { DragCanvas, type DragMarker } from "./stage3/DragCanvas";
+import { ShapePanel } from "./stage3/ShapePanel";
 import {
   gdApprove,
   gdArtifactBlob,
@@ -22,15 +25,22 @@ import {
   type GdElementStyle,
   type GdSubheading,
   type GdLogoLayout,
+  type GdChatMessage,
+  type GdChatTurn,
+  type GdDirection,
   type GdExplore,
   type GdGradientSuggestion,
   type GdElementSuggestion,
   type GdHookSuggestion,
   type GdPromptBuild,
   type GdRun,
+  creativeTypes,
+  type CreativeTypeMeta,
 } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
 import { useAuth } from "@/lib/auth";
+import { ReferenceProbe } from "./ReferenceProbe";
+import { CreativeAgent } from "./CreativeAgent";
 
 /* --------------------------------------------------------------------------
    Graphic Designer Studio — drives the 4-stage human-in-the-loop pipeline.
@@ -110,6 +120,42 @@ function computeLogoBox(baseW: number, baseH: number, lw: number, lh: number, la
   x = Math.min(Math.max(x, 0), Math.max(0, baseW - w));
   y = Math.min(Math.max(y, 0), Math.max(0, baseH - h));
   return { x, y, w, h };
+}
+
+/* ---- per-element colour: named brand swatches + a full custom hex picker ----
+   `value` is a named token (dark/gradient/white/cta) or a #RRGGBB hex. */
+function ColorRow({
+  colors,
+  value,
+  onPick,
+}: {
+  colors: { key: string; label: string; swatch: string }[];
+  value: string;
+  onPick: (c: string) => void;
+}) {
+  const isHex = value.startsWith("#");
+  return (
+    <div className="gdswatches">
+      {colors.map((c) => (
+        <button
+          key={c.key}
+          type="button"
+          className={`gdcolor${value === c.key ? " gdcolor--on" : ""}`}
+          style={{ background: c.swatch }}
+          title={c.label}
+          aria-label={c.label}
+          onClick={() => onPick(c.key)}
+        />
+      ))}
+      <label className={`gdcolor gdcolor--hex${isHex ? " gdcolor--on" : ""}`} title="Custom colour" style={isHex ? { background: value } : undefined}>
+        <input
+          type="color"
+          value={isHex ? value : "#0F0F0F"}
+          onChange={(e) => onPick(e.target.value.toUpperCase())}
+        />
+      </label>
+    </div>
+  );
 }
 
 /* ---- drag-bar placement: horizontal (L↔R) + vertical (T↔B) ---------------
@@ -244,6 +290,144 @@ function LivePreview({
   );
 }
 
+/* ---- pre-generation discovery (the micro-conversation, Steps 1–2) --------
+ * Walks the user through a short, conversational brief — feeling/outcome,
+ * audience, tone, style, then event/campaign context — BEFORE any suggestion is
+ * surfaced, so the agent designs for intent instead of a generic template. Each
+ * answer is persisted to the run's `creative_brief` and folded into every
+ * downstream suggestion. When the conversation is done, one click synthesizes a
+ * creative direction (which concept, tone, palette and copy angle to carry). */
+function StrategistChat({
+  runId,
+  brief,
+  busy,
+  direction,
+  onBrief,
+  onDirection,
+  onApplyConcept,
+  onToast,
+}: {
+  runId: string;
+  brief: Record<string, string>;
+  busy: boolean;
+  direction: GdDirection | null;
+  onBrief: (b: Record<string, string>) => void;
+  onDirection: (d: GdDirection | null) => void;
+  onApplyConcept: (concept: string) => void;
+  onToast: (m: string) => void;
+}) {
+  const [messages, setMessages] = useState<GdChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const startedRef = useRef(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  // Always send the freshest brief without re-subscribing the effects.
+  const briefRef = useRef(brief);
+  briefRef.current = brief;
+
+  const applyTurn = (history: GdChatMessage[], turn: GdChatTurn) => {
+    setMessages([...history, { role: "agent", text: turn.reply }]);
+    if (turn.brief) onBrief(turn.brief);
+    if (turn.direction) onDirection(turn.direction);
+  };
+
+  // Open the conversation once per run — the agent speaks first.
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    setSending(true);
+    gdSuggest(runId, { kind: "chat", history: [], brief: briefRef.current })
+      .then((t) => applyTurn([], t as unknown as GdChatTurn))
+      .catch((e) => onToast(e instanceof Error ? e.message : "Couldn't start the chat"))
+      .finally(() => setSending(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runId]);
+
+  // Keep the latest message in view.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, sending, direction]);
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text || sending) return;
+    const history = [...messages, { role: "user" as const, text }];
+    setMessages(history);
+    setInput("");
+    setSending(true);
+    try {
+      const t = (await gdSuggest(runId, { kind: "chat", history, brief: briefRef.current })) as unknown as GdChatTurn;
+      applyTurn(history, t);
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "The strategist didn't respond");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="gdchat">
+      <span className="gdsugg__hdr"><Icon name="messages-square" size={13} /> Creative strategist</span>
+      <p className="gdchat__hint">
+        Tell me what you’re going for — I’ll ask a couple of things, then propose a direction.
+      </p>
+      <div className="gdchat__thread" ref={scrollRef}>
+        {messages.map((m, i) => (
+          <div key={i} className={`gdmsg gdmsg--${m.role}`}>{m.text}</div>
+        ))}
+        {sending && (
+          <div className="gdmsg gdmsg--agent gdmsg--typing"><span /><span /><span /></div>
+        )}
+
+        {direction && (
+          <div className="gddir">
+            <span className="gddir__hdr">
+              <Icon name="sparkles" size={12} /> Creative direction
+              {direction.source.includes("llm") && <span className="gdfield__lock">AI</span>}
+            </span>
+            <p className="gddir__summary">{direction.summary}</p>
+            <div className="gddir__grid">
+              <div><b>Concept</b><span>{direction.concept} · {direction.concept_title}</span></div>
+              {direction.tone && <div><b>Tone</b><span>{direction.tone}</span></div>}
+              <div><b>Palette</b><span>{direction.palette_hint}</span></div>
+              <div><b>Copy angle</b><span>{direction.copy_angle}</span></div>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => onApplyConcept(direction.concept)}
+              disabled={busy}
+              iconLeft={<Icon name="check" size={13} />}
+            >
+              Use concept {direction.concept}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div className="gdchat__input">
+        <input
+          value={input}
+          placeholder="Type your reply…"
+          disabled={busy}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void send();
+          }}
+        />
+        <button
+          className="gdminibtn gdminibtn--primary"
+          onClick={() => void send()}
+          disabled={busy || sending || !input.trim()}
+          title="Send"
+        >
+          <Icon name="arrow-right" size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ---- prompt audit: highlight substituted values ------------------------- */
 function AuditPrompt({ build }: { build: GdPromptBuild | null }) {
   if (!build) return <p className="gdstep__meta">Generate or select a stage to preview its prompt.</p>;
@@ -307,6 +491,8 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
 
   // suggestions
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  // Synthesized creative direction from the discovery conversation (Steps 1–2).
+  const [direction, setDirection] = useState<GdDirection | null>(null);
   const [conceptSugg, setConceptSugg] = useState<{ recommended: string; rationale: string } | null>(null);
   const [exploreSugg, setExploreSugg] = useState<GdExplore | null>(null);
   const [hooks, setHooks] = useState<GdHookSuggestion | null>(null);
@@ -326,6 +512,12 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   const [brands, setBrands] = useState<GdBrandOption[]>([]);
   const [brandId, setBrandId] = useState<string>("");
   const [brandLogo, setBrandLogo] = useState<GdBrandLogo | null>(null);
+
+  // Creative type routing: "" = standard social post (this 4-stage editor);
+  // any other key routes to the dedicated Creative Agent (brochure/deck/etc.).
+  const [creaTypes, setCreaTypes] = useState<CreativeTypeMeta[]>([]);
+  const [creaType, setCreaType] = useState<string>("");
+  const [launchedCreative, setLaunchedCreative] = useState(false);
 
   const active = run ? (run.state === "DONE" ? 4 : stageNum(run.state)) : 1;
   const reviewing = run ? isReview(run.state) : false;
@@ -348,6 +540,15 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   useEffect(() => {
     if (ready) loadMeta(activeBrand);
   }, [ready, activeBrand, loadMeta]);
+
+  // Creative-Agent types for the start-screen picker (additive; failure is silent
+  // so the social editor still works if the new rail isn't reachable).
+  useEffect(() => {
+    if (!ready) return;
+    creativeTypes()
+      .then((d) => setCreaTypes(d.types))
+      .catch(() => undefined);
+  }, [ready]);
 
   // Brand list for the selector (registry packs — the brands the hub can produce).
   useEffect(() => {
@@ -379,6 +580,12 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   useEffect(() => {
     if (run) setTokens({ ...run.config.tokens });
   }, [run?.id, run?.config.tokens]);
+
+  // Seed the discovery brief from the run's persisted answers (survives reload /
+  // run switch). Keyed on run id so it never clobbers an in-progress edit.
+  useEffect(() => {
+    if (run) setAnswers({ ...(run.config.creative_brief ?? {}) });
+  }, [run?.id]);
 
   // sync sub-heading text drafts when the run or the list length changes
   const subCount = run?.config.subheadings?.length ?? 0;
@@ -487,8 +694,25 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   const previewWarnings: string[] =
     previewObj && "warnings" in previewObj && Array.isArray(previewObj.warnings) ? previewObj.warnings : [];
 
+  /* ------------------ Creative Agent route (non-social types) ------------- */
+  if (launchedCreative && creaType) {
+    return (
+      <CreativeAgent
+        brandId={brandId || null}
+        brandName={brands.find((b) => b.id === brandId)?.name}
+        creativeType={creaType}
+        onToast={onToast}
+        onBack={() => {
+          setLaunchedCreative(false);
+          setCreaType("");
+        }}
+      />
+    );
+  }
+
   /* ---------------------------- IDLE / START ----------------------------- */
   if (!run) {
+    const isSocial = creaType === "";
     return (
       <div className="gdwrap gdwrap--idle">
         <div className="gdlaunch">
@@ -515,9 +739,51 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
             </div>
           )}
 
-          <Button onClick={start} disabled={busy} size="lg" variant="brand" fullWidth iconLeft={<Icon name="sparkles" size={16} />}>
-            {busy ? "Starting…" : "Start a new ad creative"}
-          </Button>
+          {/* Creative type — standard social post stays in this editor; brochures,
+              decks, carousels and blog visuals route to the Creative Agent. */}
+          <div className="gdfield gdlaunch__field">
+            <span className="gdfield__label">What are you creating?</span>
+            <div className="gdtypegrid">
+              <button
+                type="button"
+                className={"gdtype" + (isSocial ? " is-active" : "")}
+                onClick={() => setCreaType("")}
+              >
+                <span className="gdtype__label">Social post</span>
+                <span className="gdtype__meta">Standard editor · image</span>
+              </button>
+              {creaTypes.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  className={"gdtype" + (creaType === t.key ? " is-active" : "")}
+                  onClick={() => setCreaType(t.key)}
+                >
+                  <span className="gdtype__label">{t.label}</span>
+                  <span className="gdtype__meta">
+                    Creative Agent · {t.output_format.toUpperCase()}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {isSocial && (
+            <ReferenceProbe
+              brandName={brands.find((b) => b.id === brandId)?.name}
+              onToast={onToast}
+            />
+          )}
+
+          {isSocial ? (
+            <Button onClick={start} disabled={busy} size="lg" variant="brand" fullWidth iconLeft={<Icon name="sparkles" size={16} />}>
+              {busy ? "Starting…" : "Start a new ad creative"}
+            </Button>
+          ) : (
+            <Button onClick={() => setLaunchedCreative(true)} size="lg" variant="brand" fullWidth iconLeft={<Icon name="sparkles" size={16} />}>
+              Open the Creative Agent →
+            </Button>
+          )}
 
           {integrityOk !== null && (
             <div className="gdintegrity gdlaunch__integrity">
@@ -541,7 +807,8 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   // render in the center, just below the preview.
   const stageProps = {
     run, config, active, reviewing, busy, sel1, setSel1, sel2, setSel2, tokens, setTokens,
-    subTexts, setSubTexts, answers, setAnswers, conceptSugg, setConceptSugg, exploreSugg, setExploreSugg,
+    subTexts, setSubTexts, answers, setAnswers, direction, setDirection,
+    conceptSugg, setConceptSugg, exploreSugg, setExploreSugg,
     gradSugg, setGradSugg, gradSteer, setGradSteer, gradExclude, setGradExclude,
     elemSugg, setElemSugg, elemSteer, setElemSteer, elemExclude, setElemExclude,
     hooks, setHooks, logoFile, setLogoFile, brandLogo, fileRef,
@@ -734,6 +1001,8 @@ function StageControls(props: {
   setSubTexts: (v: string[]) => void;
   answers: Record<string, string>;
   setAnswers: (v: Record<string, string>) => void;
+  direction: GdDirection | null;
+  setDirection: (v: GdDirection | null) => void;
   conceptSugg: { recommended: string; rationale: string } | null;
   setConceptSugg: (v: { recommended: string; rationale: string } | null) => void;
   exploreSugg: GdExplore | null;
@@ -767,7 +1036,7 @@ function StageControls(props: {
 }) {
   const {
     run, config, active, busy, sel1, setSel1, sel2, setSel2, tokens, setTokens, subTexts, setSubTexts,
-    answers, setAnswers, conceptSugg, setConceptSugg, exploreSugg, setExploreSugg, hooks, setHooks,
+    answers, setAnswers, direction, setDirection, conceptSugg, setConceptSugg, exploreSugg, setExploreSugg, hooks, setHooks,
     gradSugg, setGradSugg, gradSteer, setGradSteer, gradExclude, setGradExclude,
     elemSugg, setElemSugg, elemSteer, setElemSteer, elemExclude, setElemExclude,
     logoFile, setLogoFile, brandLogo, fileRef, patchConfig, doGenerate, doStage4, onToast, slot,
@@ -801,9 +1070,10 @@ function StageControls(props: {
 
   if (!config) return null;
 
-  // Only Stage 1 keeps its AI box in the side rail; Stages 2–4 render everything
-  // (agent boxes + options) in the center, so the side slot has nothing to show.
-  if (ai && active !== 1) return null;
+  // The right-rail "AI" slot holds Stage 1's gradient box and Stage 2's strategist
+  // conversation; Stages 3–4 render everything in the center, so their side slot
+  // is empty.
+  if (ai && active !== 1 && active !== 2) return null;
 
   /* ---- STAGE 1 ---- */
   if (active === 1) {
@@ -925,6 +1195,13 @@ function StageControls(props: {
 
   /* ---- STAGE 2 ---- */
   if (active === 2) {
+    // The strategist conversation (right rail) persists the accumulated brief to
+    // the run's creative_brief and mirrors it into `answers`, which the concept /
+    // explore / element suggestions consume — so the chat steers all of them.
+    const onBrief = (b: Record<string, string>) => {
+      setAnswers(b);
+      void patchConfig({ creative_brief: b });
+    };
     const recommend = async () => {
       try {
         const r = (await gdSuggest(run.id, { kind: "concept", answers })) as {
@@ -1007,26 +1284,27 @@ function StageControls(props: {
       <div className="gdcard">
         {opt && <p className="gdsec__title">Stage 2 · Photo element</p>}
 
-        {/* agent: onboarding → concept recommendation + element explorer */}
+        {/* RIGHT RAIL · the strategist conversation (Steps 1–2 — agent talks WITH you) */}
+        {ai && (
+          <StrategistChat
+            runId={run.id}
+            brief={answers}
+            busy={busy}
+            direction={direction}
+            onBrief={onBrief}
+            onDirection={setDirection}
+            onApplyConcept={(c) => setSel2(c)}
+            onToast={onToast}
+          />
+        )}
+
+        {/* CENTER · concept picks (the chat steers these, or jump straight in) */}
         {opt && (<>
         <div className="gdsugg" style={{ marginBottom: 12 }}>
-          <span className="gdsugg__hdr"><Icon name="bot" size={13} /> Creative strategist</span>
-          {config.onboarding_questions.map((q) => (
-            <div key={q.id} className="gdfield" style={{ marginBottom: 4 }}>
-              <span className="gdfield__label">{q.question}</span>
-              <div className="gdrow" style={{ flexWrap: "wrap" }}>
-                {q.options.map((o) => (
-                  <button
-                    key={o.id}
-                    className={`gdminibtn${answers[q.id] === o.id ? " gdminibtn--primary" : ""}`}
-                    onClick={() => setAnswers({ ...answers, [q.id]: o.id })}
-                  >
-                    {o.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+          <span className="gdsugg__hdr"><Icon name="bot" size={13} /> Concept picks</span>
+          <p className="gdsugg__text">
+            Chat with the strategist on the right for a tailored direction — or jump straight in:
+          </p>
           <div className="gdrow" style={{ flexWrap: "wrap", gap: 6 }}>
             <Button size="sm" variant="secondary" onClick={recommend} disabled={busy}>
               Recommend a concept
@@ -1144,6 +1422,55 @@ function StageControls(props: {
           );
         })()}
 
+        {/* subject placement — prompt-steered. Auto keeps each element's built-in
+            framing; picking a cell steers where the subject sits on regenerate. */}
+        {(() => {
+          const placements = config.stage2_placements ?? [];
+          if (!placements.length) return null;
+          const current = run.config.element_placement ?? "auto";
+          const cells = placements.filter((p) => p.key !== "auto");
+          const label = placements.find((p) => p.key === current)?.label ?? "Auto";
+          const setPlacement = (key: string) => patchConfig({ element_placement: key });
+          return (
+            <div className="gdfield" style={{ marginTop: 12 }}>
+              <span className="gdfield__label">
+                Subject placement
+                <span className="gdfield__lock" style={{ background: "none", color: "var(--text-tertiary)" }}>
+                  {label}
+                </span>
+              </span>
+              <button
+                type="button"
+                className={`gdminibtn${current === "auto" ? " gdminibtn--primary" : ""}`}
+                style={{ alignSelf: "flex-start", marginBottom: 6 }}
+                onClick={() => setPlacement("auto")}
+                disabled={busy}
+              >
+                Auto (keep natural framing)
+              </button>
+              <div className="gdgrid3">
+                {cells.map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    className={`gdgrid3__cell${current === p.key ? " gdgrid3__cell--on" : ""}`}
+                    title={p.label}
+                    aria-label={p.label}
+                    onClick={() => setPlacement(p.key)}
+                    disabled={busy}
+                  >
+                    <span className="gdgrid3__dot" />
+                  </button>
+                ))}
+              </div>
+              <span className="gdfield__hint">
+                Steers where the subject sits in the frame — the photo regenerates with that
+                position. The exact spot is AI-guided, not pixel-locked.
+              </span>
+            </div>
+          );
+        })()}
+
         <Button fullWidth onClick={doGenerate} disabled={busy} style={{ marginTop: 12 }} iconLeft={<Icon name="sparkles" size={15} />}>
           Generate photo composite
         </Button>
@@ -1207,8 +1534,10 @@ function StageControls(props: {
     };
 
     const DEFAULT_COLOR: Record<string, string> = {
-      headline: "dark", highlight: "gradient",
+      headline: "dark", highlight: "gradient", cta: "cta",
     };
+    // The brand CTA gradient as a pickable swatch (named "cta" token).
+    const CTA_BRAND_SWATCH = { key: "cta", label: "Brand orange", swatch: "linear-gradient(135deg,#FF8A3D,#F26A1A)" };
     const styleOf = (key: string): GdElementStyle => run.config.element_styles?.[key] ?? {};
     const setStyle = (key: string, patch: GdElementStyle) =>
       patchConfig({ element_styles: { [key]: patch } });
@@ -1283,22 +1612,12 @@ function StageControls(props: {
         <div className="gdelem" key={el.key}>
           <div className="gdelem__head">
             <span className="gdelem__name">{el.label}</span>
-            {el.colorable ? (
-              <div className="gdswatches">
-                {config.text_colors.map((c) => (
-                  <button
-                    key={c.key}
-                    type="button"
-                    className={`gdcolor${curColor === c.key ? " gdcolor--on" : ""}`}
-                    style={{ background: c.swatch }}
-                    title={`${c.label} — ${c.phrase}`}
-                    aria-label={c.label}
-                    onClick={() => setStyle(el.key, { color: c.key })}
-                  />
-                ))}
-              </div>
-            ) : (
-              <span className="gdelem__locked"><Icon name="lock" size={10} /> orange CTA</span>
+            {el.colorable && (
+              <ColorRow
+                colors={el.key === "cta" ? [CTA_BRAND_SWATCH, ...config.text_colors] : config.text_colors}
+                value={curColor}
+                onPick={(c) => setStyle(el.key, { color: c })}
+              />
             )}
           </div>
           <select
@@ -1394,19 +1713,7 @@ function StageControls(props: {
                   placeholder={`Sub-heading line ${i + 1}`}
                   onChange={(e) => setSubTexts(subTexts.map((t, j) => (j === i ? e.target.value : t)))}
                 />
-                <div className="gdswatches">
-                  {config.text_colors.map((c) => (
-                    <button
-                      key={c.key}
-                      type="button"
-                      className={`gdcolor${curColor === c.key ? " gdcolor--on" : ""}`}
-                      style={{ background: c.swatch }}
-                      title={`${c.label} — ${c.phrase}`}
-                      aria-label={c.label}
-                      onClick={() => patchSub(i, { color: c.key })}
-                    />
-                  ))}
-                </div>
+                <ColorRow colors={config.text_colors} value={curColor} onPick={(c) => patchSub(i, { color: c })} />
                 <select
                   className="gdselect gdselect--sm"
                   value={curFont}
@@ -1439,24 +1746,86 @@ function StageControls(props: {
       <div className="gdcard">
         {opt && <p className="gdsec__title">Stage 3 · Text overlay</p>}
 
-        {/* live WYSIWYG preview — the real overlay, rendered server-side */}
+        {/* live WYSIWYG preview + free-drag canvas — drag a handle to place an
+            element anywhere; the server re-renders the overlay authoritatively. */}
+        {opt && (() => {
+          const DEFAULT_W = 0.42;
+          const markerPoint = (id: string, place?: string) => {
+            const p = place || (id === "cta" ? "bottom" : "left");
+            if (p === "right") return { x: 0.73, y: 0.5 };
+            if (p === "center") return { x: 0.5, y: 0.5 };
+            if (p === "top") return { x: 0.5, y: 0.1 };
+            if (p === "bottom") return { x: 0.5, y: 0.9 };
+            return { x: 0.27, y: 0.5 }; // left
+          };
+          const lay = run.config.layout ?? {};
+          const es = run.config.element_styles ?? {};
+          const markers: DragMarker[] = [];
+          if ((tokens.headline ?? "").trim())
+            markers.push({ id: "headline", label: "Headline", ...(lay.headline ?? markerPoint("headline", es.headline?.placement)) });
+          subTexts.forEach((t, i) => {
+            if ((t ?? "").trim()) {
+              const id = `subheading-${i}`;
+              markers.push({ id, label: `Sub ${i + 1}`, ...(lay[id] ?? markerPoint(id, run.config.subheadings?.[i]?.placement)) });
+            }
+          });
+          if ((tokens.cta ?? "").trim())
+            markers.push({ id: "cta", label: "CTA", ...(lay.cta ?? markerPoint("cta", es.cta?.placement)) });
+          (["venue", "website"] as const).forEach((fid) => {
+            if ((tokens[fid] ?? "").trim()) {
+              const dc = fid === "venue" ? { x: 0.06, y: 0.965 } : { x: 0.94, y: 0.965 };
+              markers.push({ id: fid, label: fid === "venue" ? "Venue" : "Website", ...(lay[fid] ?? dc) });
+            }
+          });
+          (run.config.shapes ?? []).forEach((sp) => {
+            markers.push({ id: sp.id, label: sp.kind === "icon" ? (sp.icon ?? "icon") : sp.kind, x: sp.x, y: sp.y });
+          });
+
+          const onMove = (id: string, x: number, y: number) => {
+            if (id.startsWith("shape-")) {
+              const shapes = (run.config.shapes ?? []).map((s) => (s.id === id ? { ...s, x, y, anchor: "mc" } : s));
+              void patchConfig({ shapes });
+            } else {
+              const prev = (run.config.layout ?? {})[id];
+              void patchConfig({ layout: { [id]: { x, y, w: prev?.w ?? DEFAULT_W, anchor: "mc" } } });
+            }
+          };
+
+          return (
+            <DragCanvas markers={markers} onMove={onMove}>
+              <LivePreview
+                runId={run.id}
+                tokens={tokens}
+                subTexts={subTexts}
+                aspect={run.config.aspect_ratio}
+                sig={JSON.stringify({
+                  h: tokens.headline ?? "",
+                  hl: tokens.highlight ?? "",
+                  c: tokens.cta ?? "",
+                  s: subTexts,
+                  es: run.config.element_styles,
+                  sh: run.config.subheadings,
+                  f: run.config.font,
+                  ar: run.config.aspect_ratio,
+                  l: run.config.layout,
+                  shp: run.config.shapes,
+                  vn: tokens.venue ?? "",
+                  wb: tokens.website ?? "",
+                })}
+              />
+            </DragCanvas>
+          );
+        })()}
+
+        {/* one-click AI arrange — a refinement over the live preview, not the default */}
         {opt && (
-        <LivePreview
-          runId={run.id}
-          tokens={tokens}
-          subTexts={subTexts}
-          aspect={run.config.aspect_ratio}
-          sig={JSON.stringify({
-            h: tokens.headline ?? "",
-            hl: tokens.highlight ?? "",
-            c: tokens.cta ?? "",
-            s: subTexts,
-            es: run.config.element_styles,
-            sh: run.config.subheadings,
-            f: run.config.font,
-            ar: run.config.aspect_ratio,
-          })}
-        />
+          <AiArrangeButton
+            runId={run.id}
+            currentLayout={run.config.layout ?? {}}
+            disabled={busy || !((tokens.headline ?? "").trim() && (tokens.cta ?? "").trim())}
+            onApply={(layout) => patchConfig({ layout })}
+            onError={onToast}
+          />
         )}
 
         {/* agent hooks */}
@@ -1491,6 +1860,26 @@ function StageControls(props: {
         {tokenField("highlight", "Highlight phrase")}
         {tokenField("cta", "CTA")}
 
+        {/* optional detail fields — appear on the canvas (draggable) only when filled */}
+        <div className="gdfield">
+          <span className="gdfield__label">Optional details</span>
+          <input
+            className="gdselect"
+            placeholder="Venue (optional)"
+            value={tokens.venue ?? ""}
+            onChange={(e) => setTokens({ ...tokens, venue: e.target.value })}
+            onBlur={() => void patchConfig({ tokens: { venue: tokens.venue ?? "" } })}
+          />
+          <input
+            className="gdselect"
+            placeholder="Website URL (optional)"
+            value={tokens.website ?? ""}
+            onChange={(e) => setTokens({ ...tokens, website: e.target.value })}
+            onBlur={() => void patchConfig({ tokens: { website: tokens.website ?? "" } })}
+            style={{ marginTop: 6 }}
+          />
+        </div>
+
         {/* dynamic sub-heading lines (replaces the old fixed subtext1/subtext2) */}
         {subheadingEditor()}
 
@@ -1510,6 +1899,21 @@ function StageControls(props: {
           <div className="gdelems">
             {config.stage3_elements.map((el) => elementStyleBar(el))}
           </div>
+        </div>
+
+        {/* shapes + infographic elements — add, colour & size here; drag to place */}
+        <div className="gdfield">
+          <span className="gdfield__label">Shapes & infographic elements</span>
+          <span className="gdfield__hint" style={{ marginTop: 0 }}>
+            Add rectangles, circles, arrows, dividers, callout boxes or icons. Each appears on the
+            canvas with a handle — drag it to position. Shapes sit behind the text.
+          </span>
+          <ShapePanel
+            shapes={run.config.shapes ?? []}
+            shapeKinds={config.shape_kinds}
+            iconKeys={config.icon_keys}
+            onChange={(s) => patchConfig({ shapes: s })}
+          />
         </div>
 
         <Button
