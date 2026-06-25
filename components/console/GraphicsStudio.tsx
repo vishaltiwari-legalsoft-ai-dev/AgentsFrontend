@@ -1778,7 +1778,11 @@ function StageControls(props: {
             }
           });
           (run.config.shapes ?? []).forEach((sp) => {
-            markers.push({ id: sp.id, label: sp.kind === "icon" ? (sp.icon ?? "icon") : sp.kind, x: sp.x, y: sp.y });
+            markers.push({
+              id: sp.id,
+              label: sp.kind === "icon" ? (sp.icon ?? "icon") : sp.kind,
+              x: sp.x, y: sp.y, w: sp.w, h: sp.h,
+            });
           });
 
           const onMove = (id: string, x: number, y: number) => {

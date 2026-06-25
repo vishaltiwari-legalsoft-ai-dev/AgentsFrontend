@@ -363,8 +363,22 @@
   transition: opacity var(--dur-fast), box-shadow var(--dur-fast);
 }
 .gddrag__chip:hover { opacity: 1; }
-.gddrag__chip--sel { outline: 2px solid #fff; outline-offset: 1px; }
-.gddrag__chip--drag { cursor: grabbing; opacity: 1; box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4); }
+.gddrag__chip.is-sel { outline: 2px solid #fff; outline-offset: 1px; }
+.gddrag__chip.is-drag { cursor: grabbing; opacity: 1; box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4); }
+/* Shapes: a draggable bounding box you can grab anywhere. */
+.gddrag__box {
+  position: absolute; z-index: 4; cursor: grab; box-sizing: border-box;
+  border: 1.5px dashed color-mix(in srgb, var(--brand) 70%, #fff);
+  border-radius: 4px; background: color-mix(in srgb, var(--brand) 10%, transparent);
+}
+.gddrag__box:hover { background: color-mix(in srgb, var(--brand) 18%, transparent); }
+.gddrag__box.is-sel { border-style: solid; }
+.gddrag__box.is-drag { cursor: grabbing; border-style: solid; background: color-mix(in srgb, var(--brand) 22%, transparent); }
+.gddrag__boxlabel {
+  position: absolute; top: -9px; left: 6px; font-size: 10px; font-weight: 700;
+  line-height: 1; padding: 2px 6px; border-radius: var(--radius-pill);
+  background: var(--brand); color: #fff; white-space: nowrap; pointer-events: none;
+}
 /* Stage-3 shapes panel */
 .gdshapes { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .gdshapes__bar { display: flex; flex-wrap: wrap; gap: 5px; }

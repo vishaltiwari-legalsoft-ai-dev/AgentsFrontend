@@ -56,7 +56,14 @@ export function ShapePanel({
 }) {
   const kinds = shapeKinds?.length ? shapeKinds : FALLBACK_SHAPE_KINDS;
   const icons = iconKeys?.length ? iconKeys : FALLBACK_ICON_KEYS;
-  const add = (kind: string) => onChange([...shapes, makeShape(kind, icons)]);
+  const add = (kind: string) => {
+    const s = makeShape(kind, icons);
+    // Stagger so successive shapes don't stack exactly on top of each other.
+    const n = shapes.length % 5;
+    s.x = 0.35 + n * 0.07;
+    s.y = 0.35 + n * 0.07;
+    onChange([...shapes, s]);
+  };
   const update = (id: string, patch: Partial<GdShape>) =>
     onChange(shapes.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   const remove = (id: string) => onChange(shapes.filter((s) => s.id !== id));
