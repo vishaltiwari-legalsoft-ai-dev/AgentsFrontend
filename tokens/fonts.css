@@ -1,6 +1,8 @@
 /* Ensemble Design System — Webfonts
-   Primary typeface: Poppins (modern geometric sans-serif with excellent readability)
-   Weights: 300 (Light), 400 (Regular), 500 (Medium), 600 (Semibold), 700 (Bold)
-   Mono: JetBrains Mono for technical detail.
+   Display: Space Grotesk — a distinctive grotesk for headings, names & figures
+            (carries the brand personality; used with restraint).
+   Body:    Poppins (modern geometric sans-serif with excellent readability)
+            Weights: 300 (Light), 400 (Regular), 500 (Medium), 600 (Semibold), 700 (Bold)
+   Mono:    JetBrains Mono for technical detail.
 */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');

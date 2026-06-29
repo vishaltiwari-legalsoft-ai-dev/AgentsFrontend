@@ -1171,6 +1171,8 @@ export interface CreativeRun {
   brand_name: string;
   creative_type: string;
   output_format: string;
+  /** Carousel only: "text" (per-slide copy) or "images_only" (image + logo). */
+  text_mode?: "text" | "images_only";
   autonomous: boolean;
   autonomous_ack: boolean;
   state: "INTENT" | "STRATEGY" | "LAYOUT" | "OUTPUT" | "DONE";
@@ -1199,6 +1201,7 @@ export const creativeCreate = (body: {
   brand_id?: string | null;
   brief?: string;
   autonomous?: boolean;
+  text_mode?: "text" | "images_only";
 }) => postJson<CreativeRun>("/api/creative/runs", body);
 
 export const creativeGet = (id: string) => getJson<CreativeRun>(`/api/creative/runs/${id}`);
@@ -1213,6 +1216,13 @@ export const creativeAcknowledge = (id: string) =>
 
 export const creativePlan = (id: string, body: { count?: number | null; use_llm?: boolean } = {}) =>
   postJson<CreativeRun>(`/api/creative/runs/${id}/plan`, body);
+
+/** Carousel text mode: push the user's exact per-slide headline/sub-text into the
+ *  plan before generation. */
+export const creativeUpdatePlanText = (
+  id: string,
+  frames: { index: number; headline?: string; body?: string }[],
+) => postJson<CreativeRun>(`/api/creative/runs/${id}/plan/text`, { frames });
 
 export const creativeApprove = (id: string) =>
   postJson<CreativeRun>(`/api/creative/runs/${id}/plan/approve`, {});

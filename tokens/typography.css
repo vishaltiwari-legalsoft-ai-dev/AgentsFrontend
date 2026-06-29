@@ -1,9 +1,13 @@
-/* Ensemble Design System — Typography tokens (Poppins for modern UX) */
+/* Ensemble Design System — Typography tokens
+   Display = Space Grotesk (personality, headings & figures); Body = Poppins. */
 :root {
   /* ---- Families ---- */
-  --font-display: 'Poppins', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: 'Space Grotesk', 'Poppins', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-sans:    'Poppins', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Lining, tabular figures for any numeric display (stats, leaderboards, data). */
+  --fvn-tabular: tabular-nums lining-nums;
 
   /* ---- Weights ---- */
   --fw-regular:  400; /* @kind font */

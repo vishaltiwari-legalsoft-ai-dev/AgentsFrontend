@@ -47,10 +47,10 @@ function Logo() {
 function NavItem({ item, active, onClick }: { item: { id: string; label: string; icon: string }; active: boolean; onClick: () => void }) {
   return (
     <button
-      className="cnav"
+      className={active ? "cnav cnav--active" : "cnav"}
       onClick={onClick}
       title={item.label}
-      style={active ? { background: "var(--brand-subtle)", color: "var(--brand)", fontWeight: 600 } : undefined}
+      aria-current={active ? "page" : undefined}
     >
       <Icon name={item.icon} />
       <span>{item.label}</span>

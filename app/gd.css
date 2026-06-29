@@ -594,6 +594,20 @@
 .crea-rationale { font-size: 12px; line-height: 1.5; color: var(--text-secondary); margin: 0 0 12px; }
 .crea-hint { font-size: 11px; color: var(--text-tertiary); margin: 8px 0 0; }
 
+/* Carousel content-mode choice (setup) */
+.crea-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.crea-choice__opt { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 11px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; }
+.crea-choice__opt:hover { border-color: var(--brand); }
+.crea-choice__opt.is-active { border-color: var(--brand); background: var(--brand-subtle); }
+.crea-choice__t { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
+.crea-choice__d { font-size: 11px; line-height: 1.4; color: var(--text-tertiary); }
+@media (max-width: 520px) { .crea-choice { grid-template-columns: 1fr; } }
+
+/* Carousel per-slide copy editor (plan review, text mode) */
+.crea-copy { display: flex; flex-direction: column; gap: 4px; }
+.crea-copy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin-top: 8px; }
+.crea-copy-card { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; background: var(--surface-sunken, var(--surface)); }
+
 /* References */
 .crea-refs { display: flex; flex-wrap: wrap; gap: 6px; }
 .crea-ref { font-size: 11px; padding: 3px 9px; border-radius: var(--radius-pill); background: var(--brand-subtle); color: var(--brand); }

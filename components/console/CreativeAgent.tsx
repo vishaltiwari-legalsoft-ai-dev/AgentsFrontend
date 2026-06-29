@@ -12,6 +12,7 @@ import {
   creativeOverride,
   creativePlan,
   creativeTypes,
+  creativeUpdatePlanText,
   type CreativeArtifact,
   type CreativePlan,
   type CreativeRun,
@@ -21,6 +22,7 @@ import {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 import { Button, Icon } from "@/lib/kit-ui";
+import { useReportWork } from "@/lib/work";
 
 /* --------------------------------------------------------------------------
    Creative Agent — the dedicated rail for brochures, decks, carousels & blog
@@ -68,8 +70,16 @@ export function CreativeAgent({
   const [brief, setBrief] = useState("");
   const [autonomous, setAutonomous] = useState(false);
   const [count, setCount] = useState<number | null>(null);
+  // Carousel only: whether each slide carries copy ("text") or is the on-brand
+  // image with just the brand logo ("images_only").
+  const [textMode, setTextMode] = useState<"text" | "images_only">("text");
+  // Per-slide copy the user edits before generation (text mode), keyed by frame index.
+  const [frameEdits, setFrameEdits] = useState<Record<number, { headline: string; body: string }>>(
+    {},
+  );
   const [busy, setBusy] = useState(false);
   const [generating, setGenerating] = useState(false);
+  useReportWork(busy || generating);
   const [showWarning, setShowWarning] = useState(false);
   const [showLog, setShowLog] = useState(true);
   const mounted = useRef(true);
@@ -128,6 +138,20 @@ export function CreativeAgent({
   const typeMeta = meta?.types.find((t) => t.key === creativeType);
   const engineReady = meta ? meta.engines[creativeType] !== false : true;
   const activeStep = run ? STEP_BY_STATE[run.state] ?? 0 : -1;
+  const isCarousel = creativeType === "carousel";
+  // Whether the user is editing per-slide copy (carousel in text mode, plan ready).
+  const editingCopy = isCarousel && run?.text_mode !== "images_only";
+
+  // Seed the editable per-slide fields whenever a fresh plan arrives (initial plan
+  // or a regenerate). User keystrokes update frameEdits only, not run.plan, so this
+  // effect does not fight typing — it re-fires solely when the server plan changes.
+  useEffect(() => {
+    const frames = run?.plan?.frames;
+    if (!frames) return;
+    const seed: Record<number, { headline: string; body: string }> = {};
+    for (const f of frames) seed[f.index] = { headline: f.headline ?? "", body: f.body ?? "" };
+    setFrameEdits(seed);
+  }, [run?.plan]);
 
   const wrap = useCallback(
     async (fn: () => Promise<CreativeRun>, toast?: string) => {
@@ -153,7 +177,14 @@ export function CreativeAgent({
       setShowWarning(true);
       return;
     }
-    const r = await wrap(() => creativeCreate({ creative_type: creativeType, brand_id: brandId, brief }));
+    const r = await wrap(() =>
+      creativeCreate({
+        creative_type: creativeType,
+        brand_id: brandId,
+        brief,
+        text_mode: isCarousel ? textMode : "text",
+      }),
+    );
     if (r) await wrap(() => creativePlan(r.id, { count }), "Plan ready — review it below");
   };
 
@@ -161,7 +192,13 @@ export function CreativeAgent({
   const confirmAutonomous = async () => {
     setShowWarning(false);
     const r = await wrap(() =>
-      creativeCreate({ creative_type: creativeType, brand_id: brandId, brief, autonomous: true }),
+      creativeCreate({
+        creative_type: creativeType,
+        brand_id: brandId,
+        brief,
+        autonomous: true,
+        text_mode: isCarousel ? textMode : "text",
+      }),
     );
     if (!r) return;
     const acked = await wrap(() => creativeAcknowledge(r.id));
@@ -178,6 +215,17 @@ export function CreativeAgent({
   const regenerate = () => run && wrap(() => creativePlan(run.id, { count }), "Plan regenerated");
   const approveAndGenerate = async () => {
     if (!run) return;
+    // Carousel text mode: push the user's exact per-slide copy into the plan first,
+    // so the rendered slides carry the headlines/sub-text they typed.
+    if (editingCopy && run.plan?.frames) {
+      const frames = run.plan.frames.map((f) => ({
+        index: f.index,
+        headline: frameEdits[f.index]?.headline ?? f.headline,
+        body: frameEdits[f.index]?.body ?? f.body,
+      }));
+      const updated = await wrap(() => creativeUpdatePlanText(run.id, frames));
+      if (!updated) return;
+    }
     const a = await wrap(() => creativeApprove(run.id));
     if (a) await runWithProgress(a.id, () => creativeGenerate(a.id), "Creative generated");
   };
@@ -237,6 +285,40 @@ export function CreativeAgent({
               onChange={(e) => setBrief(e.target.value)}
             />
           </div>
+
+          {isCarousel && (
+            <div className="gdfield gdlaunch__field">
+              <span className="gdfield__label">What goes on each slide?</span>
+              <div className="crea-choice" role="radiogroup" aria-label="Carousel content mode">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={textMode === "text"}
+                  className={"crea-choice__opt" + (textMode === "text" ? " is-active" : "")}
+                  onClick={() => setTextMode("text")}
+                >
+                  <Icon name="type" size={15} />
+                  <span className="crea-choice__t">Text on images</span>
+                  <span className="crea-choice__d">
+                    Add a headline &amp; sub-text to each slide — you’ll set the exact wording next.
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={textMode === "images_only"}
+                  className={"crea-choice__opt" + (textMode === "images_only" ? " is-active" : "")}
+                  onClick={() => setTextMode("images_only")}
+                >
+                  <Icon name="image" size={15} />
+                  <span className="crea-choice__t">Images with brand logo only</span>
+                  <span className="crea-choice__d">
+                    On-brand images with just the logo — no headline or body copy.
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {typeMeta && (
             <div className="gdfield gdlaunch__field">
@@ -356,7 +438,23 @@ export function CreativeAgent({
                 </span>
               </h3>
               <p className="crea-rationale">{run.plan.rationale}</p>
-              <PlanView plan={run.plan} />
+              {editingCopy && run.plan.frames && run.state !== "DONE" && !generating ? (
+                <CarouselTextEditor
+                  frames={run.plan.frames}
+                  edits={frameEdits}
+                  disabled={busy}
+                  onChange={(index, field, value) =>
+                    setFrameEdits((prev) => ({
+                      ...prev,
+                      [index]: { ...(prev[index] ?? { headline: "", body: "" }), [field]: value },
+                    }))
+                  }
+                />
+              ) : isCarousel && run.text_mode === "images_only" && run.plan.frames ? (
+                <ImagesOnlyPlanView frames={run.plan.frames} />
+              ) : (
+                <PlanView plan={run.plan} />
+              )}
 
               {run.state !== "DONE" && !run.autonomous && !generating && (
                 <div className="crea-actions">
@@ -593,6 +691,84 @@ function PlanView({ plan }: { plan: CreativePlan }) {
     );
   }
   return null;
+}
+
+/* ------------------- Carousel per-slide copy editor --------------------- */
+/* Text mode: the agent drafts a headline + sub-text per slide; the user sets the
+   EXACT wording here before generation. Empty fields simply render no text. */
+function CarouselTextEditor({
+  frames,
+  edits,
+  disabled,
+  onChange,
+}: {
+  frames: NonNullable<CreativePlan["frames"]>;
+  edits: Record<number, { headline: string; body: string }>;
+  disabled: boolean;
+  onChange: (index: number, field: "headline" | "body", value: string) => void;
+}) {
+  return (
+    <div className="crea-copy">
+      <p className="crea-hint">
+        Set the exact text for each slide. The agent drafted a starting point — edit it
+        freely. Leave a field blank to omit that line.
+      </p>
+      <div className="crea-copy-grid">
+        {frames.map((f) => {
+          const e = edits[f.index] ?? { headline: f.headline ?? "", body: f.body ?? "" };
+          return (
+            <div key={f.index} className="crea-copy-card">
+              <div className="crea-frame__role">
+                Slide {f.index} · {f.role}
+              </div>
+              <label className="gdfield">
+                <span className="gdfield__label">Headline</span>
+                <input
+                  className="gdselect"
+                  value={e.headline}
+                  disabled={disabled}
+                  placeholder="Slide headline"
+                  onChange={(ev) => onChange(f.index, "headline", ev.target.value)}
+                />
+              </label>
+              <label className="gdfield">
+                <span className="gdfield__label">Sub-text</span>
+                <textarea
+                  className="gdselect crea-textarea"
+                  rows={2}
+                  value={e.body}
+                  disabled={disabled}
+                  placeholder="Supporting line (optional)"
+                  onChange={(ev) => onChange(f.index, "body", ev.target.value)}
+                />
+              </label>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* Images-only carousel: no copy is drawn, so preview each slide's subject + the
+   single shared element (brand logo). */
+function ImagesOnlyPlanView({ frames }: { frames: NonNullable<CreativePlan["frames"]> }) {
+  return (
+    <div className="crea-copy">
+      <p className="crea-hint">
+        <Icon name="image" size={13} /> Images-only mode — each slide is an on-brand image with
+        just the brand logo. No headline or body copy is added.
+      </p>
+      <div className="crea-plan-grid">
+        {frames.map((f) => (
+          <div key={f.index} className="crea-frame">
+            <div className="crea-frame__role">Slide {f.index}</div>
+            <div className="crea-frame__visual">{f.visual}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /* -------------------------- Autonomous warning -------------------------- */
