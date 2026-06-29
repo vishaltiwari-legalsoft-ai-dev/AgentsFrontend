@@ -1103,9 +1103,31 @@ function StageControls(props: {
       setSel1("AI");
     };
 
+    // Same as Stage 2: persist the conversation's accumulated brief to the run's
+    // creative_brief and mirror it into `answers` so every suggestion is grounded.
+    const onBrief = (b: Record<string, string>) => {
+      setAnswers(b);
+      void patchConfig({ creative_brief: b });
+    };
+
     return (
       <div className="gdcard">
         {opt && <p className="gdsec__title">Stage 1 · Gradient base</p>}
+
+        {/* RIGHT RAIL · the strategist conversation — its own thread on Stage 1,
+            independent of Stage 2's, sharing the run's persisted brief. */}
+        {ai && (
+          <StrategistChat
+            runId={run.id}
+            brief={answers}
+            busy={busy}
+            direction={direction}
+            onBrief={onBrief}
+            onDirection={setDirection}
+            onApplyConcept={(c) => setSel2(c)}
+            onToast={onToast}
+          />
+        )}
 
         {/* AI gradient — agent invents a fresh, on-brand gradient for THIS creative */}
         {ai && (
