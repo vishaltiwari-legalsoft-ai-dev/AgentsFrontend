@@ -20,6 +20,7 @@ import {
   type AgentSettingsValues,
 } from "@/lib/agent-settings";
 import { graphicDesignerAgent } from "@/lib/console-data";
+import { useReportWork } from "@/lib/work";
 import { Icon, Button, IconButton, Avatar, Badge, StatusDot } from "@/lib/kit-ui";
 import { GlyphTile } from "@/lib/glyph";
 import { AgentSettingsPanel } from "@/components/console/AgentSettingsPanel";
@@ -69,6 +70,7 @@ export function AgentChat({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  useReportWork(busy);
   const [files, setFiles] = useState<File[]>([]);
   const [settingsConfig, setSettingsConfig] = useState<AgentSettingsConfigResponse | null>(null);
   const [agentSettings, setAgentSettings] = useState<AgentSettingsValues | null>(null);

@@ -39,6 +39,7 @@ import {
 } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
 import { useAuth } from "@/lib/auth";
+import { useReportWork } from "@/lib/work";
 import { ReferenceProbe } from "./ReferenceProbe";
 import { CreativeAgent } from "./CreativeAgent";
 
@@ -319,6 +320,7 @@ function StrategistChat({
   const [messages, setMessages] = useState<GdChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  useReportWork(sending);
   const startedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   // Always send the freshest brief without re-subscribing the effects.
@@ -476,6 +478,7 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   const [config, setConfig] = useState<GdConfig | null>(null);
   const [run, setRun] = useState<GdRun | null>(null);
   const [busy, setBusy] = useState(false);
+  useReportWork(busy);
   const [integrityOk, setIntegrityOk] = useState<boolean | null>(null);
 
   // local drafts

@@ -21,6 +21,7 @@ import {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 import { Button, Icon } from "@/lib/kit-ui";
+import { useReportWork } from "@/lib/work";
 
 /* --------------------------------------------------------------------------
    Creative Agent — the dedicated rail for brochures, decks, carousels & blog
@@ -70,6 +71,7 @@ export function CreativeAgent({
   const [count, setCount] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [generating, setGenerating] = useState(false);
+  useReportWork(busy || generating);
   const [showWarning, setShowWarning] = useState(false);
   const [showLog, setShowLog] = useState(true);
   const mounted = useRef(true);

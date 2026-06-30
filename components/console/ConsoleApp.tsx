@@ -13,6 +13,17 @@ import { AdminView } from "@/components/console/AdminView";
 import { DatabaseView } from "@/components/console/DatabaseView";
 import { AgentConfigView } from "@/components/console/AgentConfigView";
 import { Icon } from "@/lib/kit-ui";
+import { WorkProvider, useIsWorking } from "@/lib/work";
+
+function WorkBar() {
+  const working = useIsWorking();
+  return (
+    <div className={`cworkbar${working ? " cworkbar--on" : ""}`} role="status" aria-live="polite" aria-hidden={!working}>
+      <Icon name="loader-circle" size={15} className="cworkbar__spin" />
+      <span>Working…</span>
+    </div>
+  );
+}
 
 function Toast({ toast }: { toast: { msg: string; k: number } | null }) {
   if (!toast) return null;
@@ -60,9 +71,11 @@ export default function ConsoleApp() {
   };
 
   return (
+    <WorkProvider>
     <div className="capp">
       <Sidebar nav={nav} setNav={setNav} user={user} isAdmin={user.is_admin} isCreator={user.is_creator} onLogout={logout} />
       <div className="cmain">
+        <WorkBar />
         {nav !== "workspace" && nav !== "studio" && <NewsBar />}
         <div className="cscroll" style={nav === "workspace" || nav === "studio" ? { overflow: "hidden" } : undefined}>
           {nav === "home" && (
@@ -88,5 +101,6 @@ export default function ConsoleApp() {
       </div>
       <Toast toast={toast} />
     </div>
+    </WorkProvider>
   );
 }
