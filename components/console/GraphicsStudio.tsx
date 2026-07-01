@@ -4,11 +4,15 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { AiArrangeButton } from "./stage3/AiArrangeButton";
 import { DragCanvas, type DragMarker } from "./stage3/DragCanvas";
 import { ShapePanel } from "./stage3/ShapePanel";
+import { ElementPicker } from "./stage3/ElementPicker";
+import { CanvasEditor } from "./stage3/CanvasEditor";
+import { LayersPanel } from "./stage3/LayersPanel";
 import {
   gdApprove,
   gdArtifactBlob,
   gdBack,
   gdBrandLogo,
+  gdBrandLogos,
   gdCreateRun,
   gdGenerate,
   gdGetConfig,
@@ -21,7 +25,9 @@ import {
   gdUpdateConfig,
   type GdBrandOption,
   type GdBrandLogo,
+  type GdBrandLogoVariant,
   type GdConfig,
+  type GdElement,
   type GdElementStyle,
   type GdSubheading,
   type GdLogoLayout,
@@ -489,6 +495,10 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   // Local draft of the Stage-3 sub-heading text (smooth typing); structural
   // edits + approval persist the full list through patchConfig.
   const [subTexts, setSubTexts] = useState<string[]>([]);
+  // Canva-style Stage-3 free elements (emoji/icon/sticker/uploaded image) +
+  // the currently selected one (shared by the canvas and the layers panel).
+  const [elements, setElements] = useState<GdElement[]>([]);
+  const [selEl, setSelEl] = useState<string | null>(null);
   const [build, setBuild] = useState<GdPromptBuild | null>(null);
   const [showAudit, setShowAudit] = useState(true);
 
@@ -515,6 +525,8 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   const [brands, setBrands] = useState<GdBrandOption[]>([]);
   const [brandId, setBrandId] = useState<string>("");
   const [brandLogo, setBrandLogo] = useState<GdBrandLogo | null>(null);
+  const [logoLib, setLogoLib] = useState<GdBrandLogoVariant[]>([]);
+  const [selLogoId, setSelLogoId] = useState<string | null>(null);
 
   // Creative type routing: "" = standard social post (this 4-stage editor);
   // any other key routes to the dedicated Creative Agent (brochure/deck/etc.).
@@ -568,11 +580,22 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   useEffect(() => {
     if (!run?.brand_id) {
       setBrandLogo(null);
+      setLogoLib([]);
+      setSelLogoId(null);
       return;
     }
     let alive = true;
     gdBrandLogo(run.id)
       .then((b) => alive && setBrandLogo(b))
+      .catch(() => undefined);
+    // The pick-a-logo library (all on-brand variants). Pre-select the first so
+    // Stage 4 has a logo ready without forcing an upload.
+    gdBrandLogos(run.id)
+      .then((r) => {
+        if (!alive) return;
+        setLogoLib(r.logos);
+        setSelLogoId((cur) => cur ?? r.logos[0]?.id ?? null);
+      })
       .catch(() => undefined);
     return () => {
       alive = false;
@@ -595,6 +618,11 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   useEffect(() => {
     if (run) setSubTexts((run.config.subheadings ?? []).map((s) => s.text));
   }, [run?.id, subCount]);
+
+  // seed the Stage-3 free elements from the run whenever the run switches
+  useEffect(() => {
+    if (run) setElements(run.config.elements ?? []);
+  }, [run?.id]);
 
   const refreshBuild = useCallback(
     async (r: GdRun) => {
@@ -659,13 +687,13 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   };
 
   // A logo source exists if the user uploaded one OR the brand has one on file.
-  const hasLogoSource = !!logoFile || !!brandLogo?.available;
+  const hasLogoSource = !!logoFile || !!selLogoId || !!brandLogo?.available;
 
   const doStage4 = async () => {
     if (!run || !hasLogoSource) return;
     setBusy(true);
     try {
-      const { run: r } = await gdStage4(run.id, logoFile, run.config.use_ai_compositor);
+      const { run: r } = await gdStage4(run.id, logoFile, run.config.use_ai_compositor, selLogoId);
       setRun(r);
       const atts = r.stages["4"].attempts;
       setPreviewAttempt(atts.length ? atts[atts.length - 1].attempt : null);
@@ -673,6 +701,25 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
       onToast((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  // Export the finished PNG. The artifact endpoint needs the Bearer token, so a
+  // plain <a href download> gets a 401 ("file not present"); fetch it as an
+  // authenticated blob and trigger the download from an object URL instead.
+  const exportPng = async () => {
+    if (!run || !previewObj) return;
+    try {
+      const url = await gdArtifactBlob(previewObj.url);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(config?.brand_name ?? "creative").toLowerCase().replace(/\s+/g, "-")}-${run.id}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) {
+      onToast((e as Error).message || "Couldn't download the image.");
     }
   };
 
@@ -688,6 +735,18 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
       onToast((e as Error).message);
     }
   };
+
+  // Stage-3 free elements — debounced persist so dragging/resizing doesn't
+  // fire a request per pointer move; the server then re-renders the
+  // authoritative preview once edits settle.
+  useEffect(() => {
+    if (!run) return;
+    const t = setTimeout(() => {
+      void patchConfig({ elements });
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elements, run?.id]);
 
   // current stage data
   const curStage = run?.stages[String(active)];
@@ -810,11 +869,11 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   // render in the center, just below the preview.
   const stageProps = {
     run, config, active, reviewing, busy, sel1, setSel1, sel2, setSel2, tokens, setTokens,
-    subTexts, setSubTexts, answers, setAnswers, direction, setDirection,
+    subTexts, setSubTexts, elements, setElements, selEl, setSelEl, answers, setAnswers, direction, setDirection,
     conceptSugg, setConceptSugg, exploreSugg, setExploreSugg,
     gradSugg, setGradSugg, gradSteer, setGradSteer, gradExclude, setGradExclude,
     elemSugg, setElemSugg, elemSteer, setElemSteer, elemExclude, setElemExclude,
-    hooks, setHooks, logoFile, setLogoFile, brandLogo, fileRef,
+    hooks, setHooks, logoFile, setLogoFile, brandLogo, logoLib, selLogoId, setSelLogoId, fileRef,
     patchConfig, doGenerate, doStage4, onToast,
   };
 
@@ -896,6 +955,9 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
 
       {/* CENTER */}
       <main className="gdmain">
+        {/* Stage 3 uses its own live editable canvas (below) as the hero preview,
+            so the static generated-image box is hidden there. */}
+        {active !== 3 && (
         <div className="gdcanvas">
           {previewObj ? (
             <AuthImage path={previewObj.url} alt={`Stage ${active} preview`} />
@@ -912,6 +974,7 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
             </div>
           )}
         </div>
+        )}
 
         {/* stage options + settings — moved here, just below the preview */}
         <StageControls {...stageProps} slot="options" />
@@ -932,9 +995,9 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
             )}
             <span className="gdreview__spacer" />
             {run.state === "DONE" && previewObj && (
-              <a className="ens-btn ens-btn--md" href={previewObj.url} download={`${(config?.brand_name ?? "creative").toLowerCase().replace(/\s+/g, "-")}-${run.id}.png`}>
+              <button type="button" className="ens-btn ens-btn--md" onClick={exportPng}>
                 <Icon name="download" size={15} /> Export PNG
-              </a>
+              </button>
             )}
           </div>
         )}
@@ -970,7 +1033,8 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
       <aside className="gdaside">
         <StageControls {...stageProps} slot="ai" />
 
-        {/* prompt audit */}
+        {/* prompt audit — hidden on Stage 3, where the right rail shows the live preview */}
+        {active !== 3 && (
         <div className="gdcard">
           <button
             className="gdrow"
@@ -982,6 +1046,7 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
           </button>
           {showAudit && <div style={{ marginTop: 10 }}><AuditPrompt build={build} /></div>}
         </div>
+        )}
       </aside>
     </div>
   );
@@ -1002,6 +1067,10 @@ function StageControls(props: {
   setTokens: (v: Record<string, string>) => void;
   subTexts: string[];
   setSubTexts: (v: string[]) => void;
+  elements: GdElement[];
+  setElements: (v: GdElement[] | ((cur: GdElement[]) => GdElement[])) => void;
+  selEl: string | null;
+  setSelEl: (v: string | null) => void;
   answers: Record<string, string>;
   setAnswers: (v: Record<string, string>) => void;
   direction: GdDirection | null;
@@ -1027,6 +1096,9 @@ function StageControls(props: {
   logoFile: File | null;
   setLogoFile: (f: File | null) => void;
   brandLogo: GdBrandLogo | null;
+  logoLib: GdBrandLogoVariant[];
+  selLogoId: string | null;
+  setSelLogoId: (v: string | null) => void;
   fileRef: React.MutableRefObject<HTMLInputElement | null>;
   patchConfig: (b: Parameters<typeof gdUpdateConfig>[1]) => Promise<void>;
   doGenerate: () => void;
@@ -1039,10 +1111,11 @@ function StageControls(props: {
 }) {
   const {
     run, config, active, busy, sel1, setSel1, sel2, setSel2, tokens, setTokens, subTexts, setSubTexts,
+    elements, setElements, selEl, setSelEl,
     answers, setAnswers, direction, setDirection, conceptSugg, setConceptSugg, exploreSugg, setExploreSugg, hooks, setHooks,
     gradSugg, setGradSugg, gradSteer, setGradSteer, gradExclude, setGradExclude,
     elemSugg, setElemSugg, elemSteer, setElemSteer, elemExclude, setElemExclude,
-    logoFile, setLogoFile, brandLogo, fileRef, patchConfig, doGenerate, doStage4, onToast, slot,
+    logoFile, setLogoFile, brandLogo, logoLib, selLogoId, setSelLogoId, fileRef, patchConfig, doGenerate, doStage4, onToast, slot,
   } = props;
   const ai = slot === "ai";
   const opt = slot === "options";
@@ -1059,8 +1132,11 @@ function StageControls(props: {
     return () => URL.revokeObjectURL(url);
   }, [logoFile]);
 
-  const usingBrandLogo = !logoFile && !!brandLogo?.available && !!brandLogo.view_url;
-  const activeLogoUrl = logoFile ? uploadUrl : usingBrandLogo ? brandLogo!.view_url : null;
+  // The user's pick from the brand logo library (if any) drives the preview and
+  // the composite; falls back to the single resolved brand logo.
+  const selLogo = logoLib.find((l) => l.id === selLogoId) ?? null;
+  const usingBrandLogo = !logoFile && (!!selLogo || (!!brandLogo?.available && !!brandLogo.view_url));
+  const activeLogoUrl = logoFile ? uploadUrl : selLogo ? selLogo.thumb : brandLogo?.view_url ?? null;
 
   useEffect(() => {
     if (!activeLogoUrl) { setLogoDims(null); return; }
@@ -1073,10 +1149,10 @@ function StageControls(props: {
 
   if (!config) return null;
 
-  // The right-rail "AI" slot holds Stage 1's gradient box and Stage 2's strategist
-  // conversation; Stages 3–4 render everything in the center, so their side slot
-  // is empty.
-  if (ai && active !== 1 && active !== 2) return null;
+  // The right-rail "AI" slot holds Stage 1's gradient box, Stage 2's strategist
+  // conversation, and Stage 3's live preview (the picker/controls live in the
+  // centre). Stage 4 renders everything in the centre, so its side slot is empty.
+  if (ai && active !== 1 && active !== 2 && active !== 3) return null;
 
   /* ---- STAGE 1 ---- */
   if (active === 1) {
@@ -1770,10 +1846,16 @@ function StageControls(props: {
     return (
       <div className="gdcard">
         {opt && <p className="gdsec__title">Stage 3 · Text overlay</p>}
+        {ai && <p className="gdsec__title">Add elements</p>}
 
+        {opt && (
+        <div className="gdstep3__canvas">
         {/* live WYSIWYG preview + free-drag canvas — drag a handle to place an
-            element anywhere; the server re-renders the overlay authoritatively. */}
-        {opt && (() => {
+            element anywhere; the server re-renders the overlay authoritatively.
+            The CanvasEditor wraps it to add a second, Canva-style layer of free
+            elements (emoji/icon/sticker/uploaded image) on top — the existing
+            headline/subheading/CTA/shape drag markers are unchanged. */}
+        {(() => {
           const DEFAULT_W = 0.42;
           const markerPoint = (id: string, place?: string) => {
             const p = place || (id === "cta" ? "bottom" : "left");
@@ -1821,42 +1903,60 @@ function StageControls(props: {
           };
 
           return (
-            <DragCanvas markers={markers} onMove={onMove}>
-              <LivePreview
-                runId={run.id}
-                tokens={tokens}
-                subTexts={subTexts}
-                aspect={run.config.aspect_ratio}
-                sig={JSON.stringify({
-                  h: tokens.headline ?? "",
-                  hl: tokens.highlight ?? "",
-                  c: tokens.cta ?? "",
-                  s: subTexts,
-                  es: run.config.element_styles,
-                  sh: run.config.subheadings,
-                  f: run.config.font,
-                  ar: run.config.aspect_ratio,
-                  l: run.config.layout,
-                  shp: run.config.shapes,
-                  vn: tokens.venue ?? "",
-                  wb: tokens.website ?? "",
-                })}
-              />
-            </DragCanvas>
+            <CanvasEditor
+              elements={elements}
+              onElementsChange={setElements}
+              selectedId={selEl}
+              onSelect={setSelEl}
+            >
+              <DragCanvas markers={markers} onMove={onMove}>
+                <LivePreview
+                  runId={run.id}
+                  tokens={tokens}
+                  subTexts={subTexts}
+                  aspect={run.config.aspect_ratio}
+                  sig={JSON.stringify({
+                    h: tokens.headline ?? "",
+                    hl: tokens.highlight ?? "",
+                    c: tokens.cta ?? "",
+                    s: subTexts,
+                    es: run.config.element_styles,
+                    sh: run.config.subheadings,
+                    f: run.config.font,
+                    ar: run.config.aspect_ratio,
+                    l: run.config.layout,
+                    shp: run.config.shapes,
+                    vn: tokens.venue ?? "",
+                    wb: tokens.website ?? "",
+                  })}
+                />
+              </DragCanvas>
+            </CanvasEditor>
           );
         })()}
 
         {/* one-click AI arrange — a refinement over the live preview, not the default */}
-        {opt && (
-          <AiArrangeButton
+        <AiArrangeButton
             runId={run.id}
             currentLayout={run.config.layout ?? {}}
             disabled={busy || !((tokens.headline ?? "").trim() && (tokens.cta ?? "").trim())}
             onApply={(layout) => patchConfig({ layout })}
             onError={onToast}
           />
+        </div>
         )}
 
+        {/* RIGHT RAIL: Canva-style element picker + layers — add emoji/icon/
+            sticker/image, then manage z-order, opacity, rotation and (icon) fill. */}
+        {ai && (
+          <>
+            <ElementPicker runId={run.id} onAdd={(el) => setElements((cur) => [...cur, el])} />
+            <LayersPanel elements={elements} onChange={setElements} selectedId={selEl} onSelect={setSelEl} />
+          </>
+        )}
+
+        {opt && (
+        <div className="gdstep3__side">
         {/* agent hooks */}
         {opt && (
         <div className="gdsugg" style={{ margin: "12px 0" }}>
@@ -1944,16 +2044,21 @@ function StageControls(props: {
             onChange={(s) => patchConfig({ shapes: s })}
           />
         </div>
-
-        <Button
-          fullWidth
-          onClick={doGenerate}
-          disabled={busy || !run.tokens_ready}
-          iconLeft={<Icon name="sparkles" size={15} />}
-        >
-          {run.tokens_ready ? "Generate text overlay" : "Approve all tokens to generate"}
-        </Button>
         </>)}
+        </div>
+        )}
+
+        {opt && (
+          <Button
+            fullWidth
+            onClick={doGenerate}
+            disabled={busy || !run.tokens_ready}
+            iconLeft={<Icon name="sparkles" size={15} />}
+            style={{ marginTop: 16 }}
+          >
+            {run.tokens_ready ? "Generate text overlay" : "Approve all tokens to generate"}
+          </Button>
+        )}
       </div>
     );
   }
@@ -1985,7 +2090,35 @@ function StageControls(props: {
           style={{ display: "none" }}
           onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
         />
-        {usingBrandLogo && (
+
+        {/* Pick-a-logo library — every on-brand variant; the user chooses the one
+            they like (or uploads their own below). */}
+        {logoLib.length > 0 && (
+          <div className="gdfield" style={{ marginBottom: 6 }}>
+            <span className="gdfield__label">Pick a brand logo</span>
+            <span className="gdfield__hint" style={{ marginTop: 0 }}>
+              Choose the variant you like — it’s composited at your exact placement & size.
+              Or upload your own below.
+            </span>
+            <div className="gdlogolib">
+              {logoLib.map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  title={l.name}
+                  className={`gdlogolib__tile${!logoFile && selLogoId === l.id ? " is-sel" : ""}`}
+                  onClick={() => { setSelLogoId(l.id); setLogoFile(null); }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={l.thumb} alt={l.name} />
+                  <span className="gdlogolib__name">{l.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {usingBrandLogo && logoLib.length === 0 && (
           <div className="gdsugg" style={{ marginBottom: 10 }}>
             <span className="gdsugg__hdr">
               <Icon name="check" size={13} /> Using {brandLogo?.brand_name ?? "brand"} logo

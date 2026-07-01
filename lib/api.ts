@@ -627,6 +627,8 @@ export interface GdRun {
     // Stage-3 free-drag coordinates per element id (headline / subheading-N / cta).
     layout?: Record<string, GdLayoutEntry>;
     shapes?: GdShape[];
+    // Canva-style free elements (emoji / icon / sticker / uploaded image).
+    elements?: GdElement[];
     logo_layout?: GdLogoLayout;
     custom_gradient?: GdCustomGradient | null;
     custom_element?: GdCustomElement | null;
@@ -696,6 +698,32 @@ export interface GdSubheading {
   offset_x?: number;
   offset_y?: number;
   approved?: boolean;
+}
+
+// One row of the emoji catalogue served by GET /api/gd/elements.
+export interface EmojiRow {
+  char: string;
+  name: string;
+  category: string;
+  file: string;
+}
+
+// One Stage-3 free element (emoji / icon / sticker / uploaded image). Positioned
+// by absolute coords like shapes; `ref` identifies the asset (emoji char, icon
+// key, sticker key, or an uploaded-image ref from gdElementUpload).
+export interface GdElement {
+  id: string;
+  kind: "emoji" | "icon" | "sticker" | "image";
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  anchor: string;
+  z: number;
+  rotation: number;
+  opacity: number;
+  ref: string;
+  fill: string;
 }
 
 // Stage-4 logo placement controls (deterministic compositor).
@@ -1026,6 +1054,7 @@ export const gdUpdateConfig = (
     subheadings?: GdSubheading[];
     layout?: Record<string, GdLayoutEntry | null>;
     shapes?: GdShape[];
+    elements?: GdElement[];
     logo_layout?: Partial<GdLogoLayout>;
     custom_gradient?: GdCustomGradient | null;
     custom_element?: GdCustomElement | null;
@@ -1070,15 +1099,29 @@ export interface GdBrandLogo {
 export const gdBrandLogo = (id: string) =>
   getJson<GdBrandLogo>(`/api/gd/runs/${id}/brand-logo`);
 
+export interface GdBrandLogoVariant {
+  id: string;
+  name: string;
+  thumb: string; // data-URL thumbnail
+}
+
+export async function gdBrandLogos(id: string) {
+  return getJson<{ logos: GdBrandLogoVariant[]; brand_name: string }>(
+    `/api/gd/runs/${id}/brand-logos`,
+  );
+}
+
 export async function gdStage4(
   id: string,
   logo: File | null,
   useAi: boolean,
+  logoId?: string | null,
 ): Promise<{ attempt: GdAttempt; run: GdRun }> {
   const form = new FormData();
-  // Omitting the file makes the backend fall back to the brand's logo.
+  // Omitting the file makes the backend fall back to the picked/brand logo.
   if (logo) form.append("logo", logo);
   form.append("use_ai", String(useAi));
+  if (!logo && logoId) form.append("logo_id", logoId);
   const response = await request(`/api/gd/runs/${id}/stage4`, { method: "POST", body: form });
   if (!response.ok) throw new Error(await parseError(response));
   return (await response.json()) as { attempt: GdAttempt; run: GdRun };
@@ -1106,6 +1149,26 @@ export async function gdTextPreview(
   });
   if (!response.ok) throw new Error(await parseError(response));
   return URL.createObjectURL(await response.blob());
+}
+
+/** Stage-3 element catalogue (emoji / icon / sticker keys + the per-run cap). */
+export const gdElements = () =>
+  getJson<{ emoji: EmojiRow[]; icons: string[]; stickers: string[]; max_elements: number }>(
+    "/api/gd/elements",
+  );
+
+/** Upload a custom image element for one run; returns a `ref` to use in a
+ *  GdElement with kind "image". Multipart — no JSON Content-Type so the
+ *  browser sets the boundary; auth header still comes from `request()`. */
+export async function gdElementUpload(runId: string, file: File): Promise<{ ref: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await request(`/api/gd/runs/${runId}/elements/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as { ref: string };
 }
 
 /* ---------------- Creative Agent (brochures / decks / carousels / blogs) --- */
@@ -1171,6 +1234,8 @@ export interface CreativeRun {
   brand_name: string;
   creative_type: string;
   output_format: string;
+  /** Carousel only: "text" (per-slide copy) or "images_only" (image + logo). */
+  text_mode?: "text" | "images_only";
   autonomous: boolean;
   autonomous_ack: boolean;
   state: "INTENT" | "STRATEGY" | "LAYOUT" | "OUTPUT" | "DONE";
@@ -1199,6 +1264,7 @@ export const creativeCreate = (body: {
   brand_id?: string | null;
   brief?: string;
   autonomous?: boolean;
+  text_mode?: "text" | "images_only";
 }) => postJson<CreativeRun>("/api/creative/runs", body);
 
 export const creativeGet = (id: string) => getJson<CreativeRun>(`/api/creative/runs/${id}`);
@@ -1213,6 +1279,13 @@ export const creativeAcknowledge = (id: string) =>
 
 export const creativePlan = (id: string, body: { count?: number | null; use_llm?: boolean } = {}) =>
   postJson<CreativeRun>(`/api/creative/runs/${id}/plan`, body);
+
+/** Carousel text mode: push the user's exact per-slide headline/sub-text into the
+ *  plan before generation. */
+export const creativeUpdatePlanText = (
+  id: string,
+  frames: { index: number; headline?: string; body?: string }[],
+) => postJson<CreativeRun>(`/api/creative/runs/${id}/plan/text`, { frames });
 
 export const creativeApprove = (id: string) =>
   postJson<CreativeRun>(`/api/creative/runs/${id}/plan/approve`, {});
@@ -1235,3 +1308,147 @@ export async function creativeArtifactBlob(url: string): Promise<string> {
   if (!response.ok) throw new Error(await parseError(response));
   return URL.createObjectURL(await response.blob());
 }
+
+/* ----------------------- Marketing Research agent ------------------------ */
+// Backed by /api/mr. Data enters via CSV export upload; reports render as HTML.
+
+export type MrPlatform = "google_ads" | "meta" | "hubspot";
+
+export const MR_REPORT_KINDS = [
+  "daily_summary",
+  "weekly_summary",
+  "threshold_alert",
+  "competitor_digest",
+  "opportunity_report",
+  "utm_attribution",
+  "icp_signal",
+] as const;
+export type MrReportKind = (typeof MR_REPORT_KINDS)[number];
+
+export interface MrDataGap {
+  source: string;
+  message: string;
+}
+
+export interface MrIngestResult {
+  dataset_id: string;
+  platform: MrPlatform;
+  metrics: number;
+  leads: number;
+  gaps: MrDataGap[];
+}
+
+export interface MrDataset {
+  id: string;
+  platform: string;
+  generated_at?: string | null;
+  metrics: number;
+  leads: number;
+  gaps: MrDataGap[];
+}
+
+export interface MrConnector {
+  key: string;
+  label: string;
+  logo: string | null;
+  category: string;
+  status: "connected" | "needs_setup" | "available";
+  detail: string;
+}
+
+export interface MrConfig {
+  spreadsheet_id: string;
+  spreadsheet_url: string;
+  year: number;
+  competitors: { name: string; url: string }[];
+  schedule: { report: string; cadence: string }[];
+  thresholds: Record<string, number>;
+}
+
+export interface MrReport {
+  id: string;
+  kind: MrReportKind;
+  generated_at: string;
+  user_id: string;
+  agent_id: string;
+  structured: Record<string, unknown>;
+  markdown: string;
+  html: string;
+}
+
+export interface MrRunSummary {
+  id: string;
+  kind: MrReportKind;
+  generated_at: string;
+}
+
+/** Upload one platform's CSV export and normalize it into a dataset. */
+export async function mrIngest(file: File, platform: MrPlatform): Promise<MrIngestResult> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("platform", platform);
+  const response = await request("/api/mr/ingest", { method: "POST", body: form });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as MrIngestResult;
+}
+
+export interface MrSheetTabResult {
+  tab: string;
+  dataset_id?: string;
+  metrics?: number;
+  gaps?: MrDataGap[];
+  error?: string;
+}
+export interface MrSheetIngestResult {
+  spreadsheet_id: string;
+  year: number;
+  tabs: MrSheetTabResult[];
+}
+
+/** Pull Legal Soft's live Google-Sheets performance tracker (brand tabs). */
+export const mrIngestSheet = (body: { gid?: string; brand?: string; year?: number } = {}) =>
+  postJson<MrSheetIngestResult>("/api/mr/ingest-sheet", body);
+
+export const mrDatasets = () => getJson<MrDataset[]>("/api/mr/datasets");
+
+export const mrConnectors = () => getJson<MrConnector[]>("/api/mr/connectors");
+
+export const mrConfig = () => getJson<MrConfig>("/api/mr/config");
+
+export interface MrTabProfile {
+  title: string;
+  gid: number;
+  kind: string;
+  granularity: string;
+  date_range: string | null;
+  platforms: string[];
+  metrics: string[];
+  summary: string;
+  useful: boolean;
+  hidden: boolean;
+}
+
+export interface MrAskAnswer {
+  question: string;
+  timeframe: string | null;
+  answer: string;
+  used_tabs: string[];
+}
+
+export const mrWorkbook = () => getJson<{ tabs: MrTabProfile[]; count: number }>("/api/mr/workbook");
+
+export const mrWorkbookScan = () =>
+  postJson<{ tabs: MrTabProfile[]; count: number }>("/api/mr/workbook/scan", {});
+
+export const mrAsk = (question: string, timeframe?: string) =>
+  postJson<MrAskAnswer>("/api/mr/ask", { question, timeframe });
+
+export const mrBuildReport = (kind: MrReportKind) =>
+  postJson<MrReport>(`/api/mr/reports/${kind}`, {});
+
+export const mrListRuns = () => getJson<MrRunSummary[]>("/api/mr/runs");
+
+export const mrGetRun = (id: string) => getJson<MrReport>(`/api/mr/runs/${id}`);
+
+export const mrSchedule = (period: "daily" | "weekly" | "biweekly" | "monthly") =>
+  postJson<MrReport>(`/api/mr/schedule/${period}`, {});

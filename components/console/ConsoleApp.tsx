@@ -5,9 +5,10 @@ import { useAuth } from "@/lib/auth";
 import { Sidebar, NewsBar } from "@/components/console/Chrome";
 import { HomeView, AgentsView, TeamsView, SettingsView } from "@/components/console/Views";
 import { IntegrationsView } from "@/components/console/IntegrationsView";
-import { isAgentLive } from "@/lib/console-data";
+import { isAgentLive, LIVE_AGENTS } from "@/lib/console-data";
 import { AgentChat } from "@/components/console/AgentChat";
 import { GraphicsStudio } from "@/components/console/GraphicsStudio";
+import { MarketingResearch } from "@/components/console/MarketingResearch";
 import { LibraryView } from "@/components/console/LibraryView";
 import { AdminView } from "@/components/console/AdminView";
 import { DatabaseView } from "@/components/console/DatabaseView";
@@ -67,7 +68,7 @@ export default function ConsoleApp() {
       fire("This agent is coming soon.");
       return;
     }
-    setNav("studio");
+    setNav(LIVE_AGENTS[id]);
   };
 
   return (
@@ -91,6 +92,7 @@ export default function ConsoleApp() {
           {nav === "teams" && <TeamsView />}
           {nav === "workspace" && <AgentChat onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "studio" && <GraphicsStudio onToast={fire} onBack={() => setNav("agents")} />}
+          {nav === "marketing" && <MarketingResearch onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "library" && <LibraryView onBack={() => setNav("workspace")} />}
           {nav === "admin" && user.is_admin && <AdminView onBack={() => setNav("home")} />}
           {nav === "database" && user.is_admin && <DatabaseView onBack={() => setNav("home")} />}

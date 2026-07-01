@@ -9,11 +9,19 @@ export interface AgentItem {
   description: string;
 }
 
-/** The only agent wired to the live backend today. */
+/** Graphic Designer — the first agent wired to the live backend. */
 export const LIVE_AGENT_ID = "a1";
+/** Marketing Research agent (backed by /api/mr). Uses the "Market Researcher" slot. */
+export const MARKETING_AGENT_ID = "a6";
+
+/** Agents wired to a live backend, mapped to the console nav key they open. */
+export const LIVE_AGENTS: Record<string, string> = {
+  [LIVE_AGENT_ID]: "studio",
+  [MARKETING_AGENT_ID]: "marketing",
+};
 
 export function isAgentLive(id: string): boolean {
-  return id === LIVE_AGENT_ID;
+  return id in LIVE_AGENTS;
 }
 
 export interface TeamMember {
@@ -49,7 +57,7 @@ export const agents: AgentItem[] = [
   { id: "a3", name: "Copywriter", role: "Words that convert", category: "copy", glyph: "pen-line", description: "Drafts landing copy, emails, and posts in your brand voice." },
   { id: "a4", name: "Social Scheduler", role: "Posts & calendars", category: "social", glyph: "megaphone", description: "Plans and queues content across channels at the best times." },
   { id: "a5", name: "Ads Optimizer", role: "Paid performance", category: "ads", glyph: "target", description: "Tunes budgets, bids, and creatives to hit your CPA target." },
-  { id: "a6", name: "Market Researcher", role: "Insights & trends", category: "data", glyph: "bar-chart-3", description: "Summarizes competitors, audiences, and category trends." },
+  { id: "a6", name: "Marketing Research", role: "Campaigns, competitors & funnel", category: "data", glyph: "bar-chart-3", description: "Aggregates campaign performance, tracks competitors, analyzes the lead funnel, and surfaces media opportunities." },
   { id: "a7", name: "Email Marketer", role: "Lifecycle & nurture", category: "copy", glyph: "mail", description: "Builds sequences and writes nurture flows that re-engage leads." },
   { id: "a8", name: "Brand Strategist", role: "Positioning & messaging", category: "design", glyph: "compass", description: "Shapes positioning, tone, and messaging pillars for campaigns." },
 ];

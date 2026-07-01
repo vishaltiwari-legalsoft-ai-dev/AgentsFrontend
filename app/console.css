@@ -62,11 +62,22 @@
   .csidebar[data-collapsed="1"] .cuser{ justify-content:center; padding:14px 0; }
   .csidebar[data-collapsed="1"] .cuser__info,
   .csidebar[data-collapsed="1"] .cuser__signout{ display:none; }
-  .cnav{ display:flex; align-items:center; gap:11px; width:100%; padding:8px 10px; border:0; background:transparent; border-radius:var(--radius-md);
+  .cnav{ position:relative; display:flex; align-items:center; gap:11px; width:100%; padding:8px 10px; border:0; background:transparent; border-radius:var(--radius-md);
     font-family:var(--font-sans); font-size:13.5px; font-weight:500; color:var(--text-secondary); cursor:pointer; text-align:left;
     transition:background var(--dur-fast), color var(--dur-fast); }
   .cnav svg{ width:17px; height:17px; opacity:.85; }
   .cnav:hover{ background:var(--surface-hover); color:var(--text-primary); }
+  /* Active item: brand wash, brand text, and a gradient rail anchored to the left. */
+  .cnav--active{ background:var(--brand-subtle); color:var(--brand); font-weight:600; }
+  .cnav--active svg{ opacity:1; }
+  .cnav--active::before{ content:""; position:absolute; left:-6px; top:50%; width:3.5px; height:20px;
+    border-radius:var(--radius-pill); background:var(--grad-brand); box-shadow:0 1px 4px -1px color-mix(in srgb, var(--brand) 60%, transparent);
+    transform:translateY(-50%); transform-origin:center; }
+  @media (prefers-reduced-motion: no-preference){
+    .cnav--active::before{ animation:cnav-rail var(--dur-base, .22s) var(--ease-spring) both; }
+  }
+  @keyframes cnav-rail{ from{ transform:translateY(-50%) scaleY(.2); opacity:0; } to{ transform:translateY(-50%) scaleY(1); opacity:1; } }
+  .csidebar[data-collapsed="1"] .cnav--active::before{ left:-4px; height:24px; }
   .cnavdiv{ height:1px; background:var(--border-subtle); margin:12px 8px; }
   .cupgrade{ flex:none; margin:8px 14px 14px; padding:14px 15px; background:linear-gradient(140deg, var(--brand-subtle) 0%, var(--surface) 100%); border:1px solid var(--brand-border); border-radius:var(--radius-xl); box-shadow:var(--shadow-xs); }
   .cuser{ display:flex; align-items:center; gap:10px; padding:14px 16px; border-top:1px solid var(--border-subtle); }
@@ -107,11 +118,30 @@
   /* Views */
   .cview{ padding:36px clamp(28px, 4vw, 52px) 56px; display:flex; flex-direction:column; gap:32px; max-width:1320px; margin-inline:auto; width:100%; }
   .cgreet{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
-  .csechead{ display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
-  .csechead h3{ font-family:var(--font-display); font-size:16px; font-weight:600; letter-spacing:-0.01em; margin:0; }
+  .csechead{ display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+  /* Section heads carry a small gradient accent bar — one consistent structural
+     signal repeated across every view. */
+  .csechead h3{ display:flex; align-items:center; gap:11px; font-family:var(--font-display); font-size:18px; font-weight:600; letter-spacing:-0.018em; margin:0; }
+  .csechead h3::before{ content:""; flex:none; width:3.5px; height:18px; border-radius:var(--radius-pill); background:var(--grad-brand); box-shadow:0 1px 3px -1px color-mix(in srgb, var(--brand) 55%, transparent); }
   .cgrid{ display:grid; gap:20px; }
   .cgrid--3{ grid-template-columns:repeat(3,1fr); }
   .cgrid--2{ grid-template-columns:repeat(2,1fr); }
+
+  /* ---- View entrance choreography ----
+     When a view mounts, its sections rise and settle in a short stagger — one
+     orchestrated load moment per page. Guarded so reduced-motion users get the
+     content immediately with no transform. */
+  @media (prefers-reduced-motion: no-preference){
+    .cview > *{ animation:cview-rise var(--dur-slow, .35s) var(--ease-out) both; }
+    .cview > *:nth-child(1){ animation-delay:.02s; }
+    .cview > *:nth-child(2){ animation-delay:.07s; }
+    .cview > *:nth-child(3){ animation-delay:.12s; }
+    .cview > *:nth-child(4){ animation-delay:.17s; }
+    .cview > *:nth-child(5){ animation-delay:.22s; }
+    .cview > *:nth-child(6){ animation-delay:.27s; }
+    .cview > *:nth-child(n+7){ animation-delay:.31s; }
+  }
+  @keyframes cview-rise{ from{ opacity:0; transform:translateY(15px); } to{ opacity:1; transform:none; } }
 
   /* Library — compact, minimal asset tiles (many per row) */
   .clibgrid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 150px)); gap:14px; justify-content:start; }
@@ -123,7 +153,7 @@
   .cstat{ display:flex; align-items:center; gap:12px; padding:16px; background:var(--glass); -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); border:1px solid var(--border-subtle); border-radius:var(--radius-xl); box-shadow:var(--shadow-sm), var(--glass-edge); position:relative; }
   .cstat__ic{ width:38px; height:38px; border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; flex:none; }
   .cstat__ic svg{ width:19px; height:19px; }
-  .cstat__val{ font-family:var(--font-display); font-size:22px; font-weight:700; letter-spacing:-0.02em; line-height:1; }
+  .cstat__val{ font-family:var(--font-display); font-size:23px; font-weight:700; letter-spacing:-0.02em; line-height:1; font-variant-numeric:var(--fvn-tabular); }
   .cstat__lbl{ font-size:12px; color:var(--text-tertiary); margin-top:4px; }
   .cstat__delta{ position:absolute; top:14px; right:14px; font-family:var(--font-mono); font-size:10.5px; color:var(--text-tertiary); }
 
@@ -140,7 +170,7 @@
   .cusagetile__name{ font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .cusagetile__sub{ font-size:11.5px; color:var(--text-tertiary); margin-top:1px; }
   .cusagetile__num{ text-align:right; flex:none; }
-  .cusagetile__val{ font-family:var(--font-display); font-size:22px; font-weight:700; letter-spacing:-0.02em; line-height:1; }
+  .cusagetile__val{ font-family:var(--font-display); font-size:22px; font-weight:700; letter-spacing:-0.02em; line-height:1; font-variant-numeric:var(--fvn-tabular); }
   .cusagetile__lbl{ font-size:10px; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:0.05em; margin-top:3px; }
 
   /* Leaderboard (Home) — sleek, self-refreshing ranking */
@@ -161,7 +191,7 @@
   .clbrow__name{ font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .clbrow__sub{ font-size:11.5px; color:var(--text-tertiary); margin-top:1px; }
   .clbrow__num{ text-align:right; flex:none; }
-  .clbrow__val{ font-family:var(--font-display); font-size:20px; font-weight:700; letter-spacing:-0.02em; line-height:1; }
+  .clbrow__val{ font-family:var(--font-display); font-size:20px; font-weight:700; letter-spacing:-0.02em; line-height:1; font-variant-numeric:var(--fvn-tabular); }
   .clbrow__lbl{ font-size:10px; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:0.05em; margin-top:3px; }
   .clbempty{ padding:34px 12px; text-align:center; color:var(--text-tertiary); font-size:13px; }
 

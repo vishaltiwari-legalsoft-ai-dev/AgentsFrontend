@@ -5,7 +5,7 @@
 
 .gdwrap {
   display: grid;
-  grid-template-columns: 264px minmax(0, 1fr) 360px;
+  grid-template-columns: 264px minmax(0, 1fr) 440px;
   height: 100%;
   min-height: 0;
   background: transparent;
@@ -355,14 +355,16 @@
 .gddrag { position: relative; width: 100%; touch-action: none; user-select: none; }
 .gddrag__chip {
   position: absolute; transform: translate(-50%, -50%); z-index: 5;
-  font-size: 11px; font-weight: 700; letter-spacing: 0.01em; line-height: 1;
-  padding: 4px 9px; border-radius: var(--radius-pill);
-  border: 1px solid var(--brand); background: color-mix(in srgb, var(--brand) 88%, #000 0%);
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.01em; line-height: 1;
+  padding: 2px 6px; border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--brand) 55%, transparent);
+  background: color-mix(in srgb, var(--brand) 55%, transparent);
   color: #fff; cursor: grab; white-space: nowrap;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.28); opacity: 0.92;
-  transition: opacity var(--dur-fast), box-shadow var(--dur-fast);
+  box-shadow: none; opacity: 0.45;
+  transition: opacity var(--dur-fast), box-shadow var(--dur-fast), background var(--dur-fast);
 }
-.gddrag__chip:hover { opacity: 1; }
+.gddrag:hover .gddrag__chip { opacity: 0.7; }
+.gddrag__chip:hover { opacity: 1; background: var(--brand); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
 .gddrag__chip.is-sel { outline: 2px solid #fff; outline-offset: 1px; }
 .gddrag__chip.is-drag { cursor: grabbing; opacity: 1; box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4); }
 /* Shapes: a draggable bounding box you can grab anywhere. */
@@ -429,8 +431,22 @@
 .gddrop { border: 1.5px dashed var(--border-strong); border-radius: var(--radius-lg); padding: 22px; text-align: center; color: var(--text-tertiary); font-size: 13px; cursor: pointer; }
 .gddrop:hover { border-color: var(--brand); color: var(--brand); }
 
+/* Stage-4 pick-a-logo library — a gallery of on-brand logo variants. Tiles use a
+   checkered backdrop so both light and dark logos read clearly. */
+.gdlogolib { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+.gdlogolib__tile {
+  display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 6px 6px;
+  border: 1.5px solid var(--border); border-radius: var(--radius-md); cursor: pointer;
+  background: repeating-conic-gradient(#eef3f7 0% 25%, #ffffff 0% 50%) 50% / 14px 14px;
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+.gdlogolib__tile:hover { border-color: color-mix(in srgb, var(--brand) 55%, var(--border)); }
+.gdlogolib__tile.is-sel { border-color: var(--brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 30%, transparent); }
+.gdlogolib__tile img { width: 100%; height: 54px; object-fit: contain; }
+.gdlogolib__name { font-size: 10.5px; color: var(--text-secondary); text-align: center; line-height: 1.2; }
+
 @media (max-width: 1180px) {
-  .gdwrap { grid-template-columns: 220px minmax(0, 1fr) 320px; }
+  .gdwrap { grid-template-columns: 220px minmax(0, 1fr) 380px; }
 }
 
 /* ── Reference probe (test window) ─────────────────────────────────────── */
@@ -594,6 +610,20 @@
 .crea-rationale { font-size: 12px; line-height: 1.5; color: var(--text-secondary); margin: 0 0 12px; }
 .crea-hint { font-size: 11px; color: var(--text-tertiary); margin: 8px 0 0; }
 
+/* Carousel content-mode choice (setup) */
+.crea-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.crea-choice__opt { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 11px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; }
+.crea-choice__opt:hover { border-color: var(--brand); }
+.crea-choice__opt.is-active { border-color: var(--brand); background: var(--brand-subtle); }
+.crea-choice__t { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
+.crea-choice__d { font-size: 11px; line-height: 1.4; color: var(--text-tertiary); }
+@media (max-width: 520px) { .crea-choice { grid-template-columns: 1fr; } }
+
+/* Carousel per-slide copy editor (plan review, text mode) */
+.crea-copy { display: flex; flex-direction: column; gap: 4px; }
+.crea-copy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin-top: 8px; }
+.crea-copy-card { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; background: var(--surface-sunken, var(--surface)); }
+
 /* References */
 .crea-refs { display: flex; flex-wrap: wrap; gap: 6px; }
 .crea-ref { font-size: 11px; padding: 3px 9px; border-radius: var(--radius-pill); background: var(--brand-subtle); color: var(--brand); }
@@ -654,5 +684,83 @@
 .crea-modal__h { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: var(--cat-copy, #c2570f); margin: 0 0 12px; }
 .crea-modal__text { font-size: 13px; line-height: 1.55; color: var(--text-secondary); margin: 0 0 18px; }
 .crea-modal__actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+/* ============================================================================
+   Stage-3 Canva-style layout — sticky canvas (left/centre) + element picker,
+   layers and the existing text/CTA controls (right). Additive: does not touch
+   the unrelated Stage 1/2/4 `.gdcanvas` review strip in `.gdmain`.
+   ========================================================================== */
+/* Stage 3 layout: the live editable preview (`.gdstep3__canvas`) is the hero,
+   rendered big + centred at the TOP of the centre column (the static
+   generated-image box is hidden on Stage 3). The element picker + layers live in
+   the right rail; the text controls (`.gdstep3__side`) sit below the preview.
+   Prompt-audit is hidden on Stage 3. */
+.gdstep3__canvas { display: flex; justify-content: center; margin-bottom: 8px; }
+.gdstep3__side { display: flex; flex-direction: column; gap: 14px; }
+
+/* Free-element canvas (Task 10's CanvasEditor) — sits inside `.gdstep3__canvas`,
+   wrapping the existing DragCanvas + LivePreview as `children`; adds a second
+   drag/resize/rotate layer for emoji/icon/sticker/uploaded images. Capped to a
+   sensible hero width and centred; the drag layer + element boxes are all sized
+   relative to this box so the fractional coordinates stay exact. */
+.gdstep3__canvas .gdcanvas {
+  position: relative; width: 100%; max-width: 360px; min-height: 0;
+  background: none; border: none; box-shadow: none; overflow: visible;
+}
+.gdstep3__canvas .gddrag { width: 100%; }
+.gdstep3__canvas .gdmock--live { border-radius: var(--radius-md); overflow: hidden; }
+/* `.gdcanvas__base` (CanvasEditor's own `previewSrc` img) is unused in this
+   integration — the base media comes from the nested LivePreview/DragCanvas
+   children instead — but is styled here in case a future caller passes
+   `previewSrc` directly. */
+.gdcanvas__base { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.gdcanvas__el {
+  position: absolute; cursor: grab; touch-action: none; box-sizing: border-box;
+  outline: 1px dashed transparent; transition: outline-color var(--dur-fast, 120ms);
+}
+.gdcanvas__el:hover { outline-color: color-mix(in srgb, var(--brand) 45%, transparent); }
+.gdcanvas__el.is-sel { outline: 2px solid var(--brand); outline-offset: 1px; z-index: 20; }
+.gdcanvas__el.is-sel:active { cursor: grabbing; }
+/* Dragging: no position transition (instant tracking), grabbing cursor, lifted. */
+.gdcanvas__el.is-drag { cursor: grabbing; outline: 2px solid var(--brand); outline-offset: 1px; transition: none; }
+.gdstep3__canvas .gdcanvas { touch-action: none; }
+.gdcanvas__handle {
+  position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--brand); border: 2px solid #fff;
+  box-shadow: var(--shadow-xs); cursor: nwse-resize; touch-action: none;
+}
+
+/* Element picker */
+.gdpicker { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 10px; }
+.gdpicker__help { font-size: 11.5px; line-height: 1.45; color: var(--text-secondary); margin: 0 2px 2px; }
+.gdpicker__help strong { color: var(--text-primary); font-weight: 700; }
+.gdpicker__tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.gdpicker__tabs .gdminibtn.is-active { background: var(--brand); color: var(--on-brand, #fff); border-color: var(--brand); }
+.gdpicker__search { width: 100%; }
+.gdpicker__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(36px, 1fr)); gap: 6px; max-height: 220px; overflow-y: auto; padding: 2px; }
+.gdpicker__tile {
+  display: flex; align-items: center; justify-content: center; aspect-ratio: 1 / 1;
+  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-hover, var(--surface));
+  cursor: pointer; padding: 4px; transition: border-color var(--dur-fast, 120ms), background var(--dur-fast, 120ms);
+}
+.gdpicker__tile:hover { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, transparent); }
+.gdpicker__tile img { max-width: 100%; max-height: 100%; }
+.gdpicker__empty, .gdpicker__hint { font-size: 11px; color: var(--text-tertiary); padding: 6px 2px; }
+
+/* Layers panel */
+.gdlayers { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 10px; }
+.gdlayers__list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+.gdlayers__row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 8px; border-radius: var(--radius-md); font-size: 12px; color: var(--text-secondary);
+  cursor: pointer; border: 1px solid transparent;
+}
+.gdlayers__row:hover { background: var(--surface-hover, var(--surface-sunken)); }
+.gdlayers__row.is-sel { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, transparent); color: var(--text-primary); }
+.gdlayers__ops { display: flex; gap: 4px; }
+.gdlayers__inspect { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--border-subtle); padding-top: 10px; }
+.gdlayers__inspect label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text-tertiary); }
+.gdlayers__inspect input[type="range"] { width: 100%; }
+.gdlayers__inspect input[type="color"] { width: 40px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 
 @media (max-width: 880px) { .crea-grid { grid-template-columns: 1fr; } .gdtypegrid { grid-template-columns: 1fr; } }
