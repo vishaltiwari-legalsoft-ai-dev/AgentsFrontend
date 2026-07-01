@@ -1245,3 +1245,147 @@ export async function creativeArtifactBlob(url: string): Promise<string> {
   if (!response.ok) throw new Error(await parseError(response));
   return URL.createObjectURL(await response.blob());
 }
+
+/* ----------------------- Marketing Research agent ------------------------ */
+// Backed by /api/mr. Data enters via CSV export upload; reports render as HTML.
+
+export type MrPlatform = "google_ads" | "meta" | "hubspot";
+
+export const MR_REPORT_KINDS = [
+  "daily_summary",
+  "weekly_summary",
+  "threshold_alert",
+  "competitor_digest",
+  "opportunity_report",
+  "utm_attribution",
+  "icp_signal",
+] as const;
+export type MrReportKind = (typeof MR_REPORT_KINDS)[number];
+
+export interface MrDataGap {
+  source: string;
+  message: string;
+}
+
+export interface MrIngestResult {
+  dataset_id: string;
+  platform: MrPlatform;
+  metrics: number;
+  leads: number;
+  gaps: MrDataGap[];
+}
+
+export interface MrDataset {
+  id: string;
+  platform: string;
+  generated_at?: string | null;
+  metrics: number;
+  leads: number;
+  gaps: MrDataGap[];
+}
+
+export interface MrConnector {
+  key: string;
+  label: string;
+  logo: string | null;
+  category: string;
+  status: "connected" | "needs_setup" | "available";
+  detail: string;
+}
+
+export interface MrConfig {
+  spreadsheet_id: string;
+  spreadsheet_url: string;
+  year: number;
+  competitors: { name: string; url: string }[];
+  schedule: { report: string; cadence: string }[];
+  thresholds: Record<string, number>;
+}
+
+export interface MrReport {
+  id: string;
+  kind: MrReportKind;
+  generated_at: string;
+  user_id: string;
+  agent_id: string;
+  structured: Record<string, unknown>;
+  markdown: string;
+  html: string;
+}
+
+export interface MrRunSummary {
+  id: string;
+  kind: MrReportKind;
+  generated_at: string;
+}
+
+/** Upload one platform's CSV export and normalize it into a dataset. */
+export async function mrIngest(file: File, platform: MrPlatform): Promise<MrIngestResult> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("platform", platform);
+  const response = await request("/api/mr/ingest", { method: "POST", body: form });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as MrIngestResult;
+}
+
+export interface MrSheetTabResult {
+  tab: string;
+  dataset_id?: string;
+  metrics?: number;
+  gaps?: MrDataGap[];
+  error?: string;
+}
+export interface MrSheetIngestResult {
+  spreadsheet_id: string;
+  year: number;
+  tabs: MrSheetTabResult[];
+}
+
+/** Pull Legal Soft's live Google-Sheets performance tracker (brand tabs). */
+export const mrIngestSheet = (body: { gid?: string; brand?: string; year?: number } = {}) =>
+  postJson<MrSheetIngestResult>("/api/mr/ingest-sheet", body);
+
+export const mrDatasets = () => getJson<MrDataset[]>("/api/mr/datasets");
+
+export const mrConnectors = () => getJson<MrConnector[]>("/api/mr/connectors");
+
+export const mrConfig = () => getJson<MrConfig>("/api/mr/config");
+
+export interface MrTabProfile {
+  title: string;
+  gid: number;
+  kind: string;
+  granularity: string;
+  date_range: string | null;
+  platforms: string[];
+  metrics: string[];
+  summary: string;
+  useful: boolean;
+  hidden: boolean;
+}
+
+export interface MrAskAnswer {
+  question: string;
+  timeframe: string | null;
+  answer: string;
+  used_tabs: string[];
+}
+
+export const mrWorkbook = () => getJson<{ tabs: MrTabProfile[]; count: number }>("/api/mr/workbook");
+
+export const mrWorkbookScan = () =>
+  postJson<{ tabs: MrTabProfile[]; count: number }>("/api/mr/workbook/scan", {});
+
+export const mrAsk = (question: string, timeframe?: string) =>
+  postJson<MrAskAnswer>("/api/mr/ask", { question, timeframe });
+
+export const mrBuildReport = (kind: MrReportKind) =>
+  postJson<MrReport>(`/api/mr/reports/${kind}`, {});
+
+export const mrListRuns = () => getJson<MrRunSummary[]>("/api/mr/runs");
+
+export const mrGetRun = (id: string) => getJson<MrReport>(`/api/mr/runs/${id}`);
+
+export const mrSchedule = (period: "daily" | "weekly" | "biweekly" | "monthly") =>
+  postJson<MrReport>(`/api/mr/schedule/${period}`, {});
