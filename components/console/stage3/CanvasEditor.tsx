@@ -33,14 +33,17 @@ export function CanvasEditor({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ id: string; mode: "move" | "resize"; ox: number; oy: number } | null>(null);
+  // Position/size of the element being dragged, held in LOCAL state so a drag
+  // updates only this small component every frame — never the heavy parent tree
+  // (that re-render-per-move was the source of the jitter). The parent
+  // (`onElementsChange`) is called ONCE, on release, with the final position.
+  const [live, setLive] = useState<{ id: string; x: number; y: number; w: number; h: number } | null>(null);
 
   const pt = (e: React.PointerEvent) => {
     const r = ref.current?.getBoundingClientRect();
     if (!r || !r.width) return { x: 0.5, y: 0.5 };
     return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
   };
-  const patch = (id: string, p: Partial<GdElement>) =>
-    onElementsChange(elements.map((el) => (el.id === id ? { ...el, ...p } : el)));
 
   const down = (e: React.PointerEvent, el: GdElement, mode: "move" | "resize") => {
     e.preventDefault();
@@ -49,23 +52,31 @@ export function CanvasEditor({
     onSelect(el.id);
     const p = pt(e);
     setDrag({ id: el.id, mode, ox: p.x - el.x, oy: p.y - el.y });
+    setLive({ id: el.id, x: el.x, y: el.y, w: el.w, h: el.h });
   };
   const move = (e: React.PointerEvent) => {
     if (!drag) return;
     const p = pt(e);
-    const el = elements.find((x) => x.id === drag.id);
-    if (!el) return;
-    if (drag.mode === "move") {
-      patch(drag.id, { x: clamp(p.x - drag.ox), y: clamp(p.y - drag.oy) });
-    } else {
+    setLive((l) => {
+      if (!l) return l;
+      if (drag.mode === "move") {
+        return { ...l, x: clamp(p.x - drag.ox), y: clamp(p.y - drag.oy) };
+      }
       // Resize handle sits at bottom-right of the box; distance from center
       // to pointer (doubled) gives the new box width. Keep it square (w===h)
       // since emoji/icon/sticker/image assets are all rendered contain-fit.
-      const w = clamp(Math.abs(p.x - el.x) * 2);
-      patch(drag.id, { w: Math.max(0.03, w), h: Math.max(0.03, w) });
-    }
+      const w = clamp(Math.abs(p.x - l.x) * 2);
+      return { ...l, w: Math.max(0.03, w), h: Math.max(0.03, w) };
+    });
   };
-  const up = () => setDrag(null);
+  const up = () => {
+    if (drag && live) {
+      const { id, x, y, w, h } = live;
+      onElementsChange(elements.map((el) => (el.id === id ? { ...el, x, y, w, h } : el)));
+    }
+    setDrag(null);
+    setLive(null);
+  };
 
   const visual = (el: GdElement) => {
     if (el.kind === "emoji") {
@@ -126,27 +137,34 @@ export function CanvasEditor({
     >
       {previewSrc && <img className="gdcanvas__base" src={previewSrc} alt="Stage 3 preview" />}
       {children}
-      {elements.map((el) => (
-        <div
-          key={el.id}
-          className={`gdcanvas__el${selectedId === el.id ? " is-sel" : ""}`}
-          style={{
-            left: `${(el.x - el.w / 2) * 100}%`,
-            top: `${(el.y - el.h / 2) * 100}%`,
-            width: `${el.w * 100}%`,
-            height: `${el.h * 100}%`,
-            transform: `rotate(${el.rotation}deg)`,
-            opacity: el.opacity,
-            zIndex: el.z,
-          }}
-          onPointerDown={(e) => down(e, el, "move")}
-        >
-          {visual(el)}
-          {selectedId === el.id && (
-            <span className="gdcanvas__handle" onPointerDown={(e) => down(e, el, "resize")} />
-          )}
-        </div>
-      ))}
+      {elements.map((el) => {
+        // While dragging, render the dragged element from the local `live`
+        // position so it tracks the cursor smoothly without a parent re-render.
+        const p = live && live.id === el.id ? live : el;
+        const isDragging = drag?.id === el.id;
+        return (
+          <div
+            key={el.id}
+            className={`gdcanvas__el${selectedId === el.id ? " is-sel" : ""}${isDragging ? " is-drag" : ""}`}
+            style={{
+              left: `${(p.x - p.w / 2) * 100}%`,
+              top: `${(p.y - p.h / 2) * 100}%`,
+              width: `${p.w * 100}%`,
+              height: `${p.h * 100}%`,
+              transform: `rotate(${el.rotation}deg)`,
+              opacity: el.opacity,
+              zIndex: isDragging ? 999 : el.z,
+              willChange: isDragging ? "left, top, width, height" : undefined,
+            }}
+            onPointerDown={(e) => down(e, el, "move")}
+          >
+            {visual(el)}
+            {selectedId === el.id && (
+              <span className="gdcanvas__handle" onPointerDown={(e) => down(e, el, "resize")} />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

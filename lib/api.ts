@@ -1099,15 +1099,29 @@ export interface GdBrandLogo {
 export const gdBrandLogo = (id: string) =>
   getJson<GdBrandLogo>(`/api/gd/runs/${id}/brand-logo`);
 
+export interface GdBrandLogoVariant {
+  id: string;
+  name: string;
+  thumb: string; // data-URL thumbnail
+}
+
+export async function gdBrandLogos(id: string) {
+  return getJson<{ logos: GdBrandLogoVariant[]; brand_name: string }>(
+    `/api/gd/runs/${id}/brand-logos`,
+  );
+}
+
 export async function gdStage4(
   id: string,
   logo: File | null,
   useAi: boolean,
+  logoId?: string | null,
 ): Promise<{ attempt: GdAttempt; run: GdRun }> {
   const form = new FormData();
-  // Omitting the file makes the backend fall back to the brand's logo.
+  // Omitting the file makes the backend fall back to the picked/brand logo.
   if (logo) form.append("logo", logo);
   form.append("use_ai", String(useAi));
+  if (!logo && logoId) form.append("logo_id", logoId);
   const response = await request(`/api/gd/runs/${id}/stage4`, { method: "POST", body: form });
   if (!response.ok) throw new Error(await parseError(response));
   return (await response.json()) as { attempt: GdAttempt; run: GdRun };
