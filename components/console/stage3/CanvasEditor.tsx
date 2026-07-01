@@ -137,6 +137,7 @@ export function CanvasEditor({
             height: `${el.h * 100}%`,
             transform: `rotate(${el.rotation}deg)`,
             opacity: el.opacity,
+            zIndex: el.z,
           }}
           onPointerDown={(e) => down(e, el, "move")}
         >
