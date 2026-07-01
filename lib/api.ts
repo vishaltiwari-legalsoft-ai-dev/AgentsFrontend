@@ -698,6 +698,32 @@ export interface GdSubheading {
   approved?: boolean;
 }
 
+// One row of the emoji catalogue served by GET /api/gd/elements.
+export interface EmojiRow {
+  char: string;
+  name: string;
+  category: string;
+  file: string;
+}
+
+// One Stage-3 free element (emoji / icon / sticker / uploaded image). Positioned
+// by absolute coords like shapes; `ref` identifies the asset (emoji char, icon
+// key, sticker key, or an uploaded-image ref from gdElementUpload).
+export interface GdElement {
+  id: string;
+  kind: "emoji" | "icon" | "sticker" | "image";
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  anchor: string;
+  z: number;
+  rotation: number;
+  opacity: number;
+  ref: string;
+  fill: string;
+}
+
 // Stage-4 logo placement controls (deterministic compositor).
 export interface GdLogoLayout {
   position: string;
@@ -1026,6 +1052,7 @@ export const gdUpdateConfig = (
     subheadings?: GdSubheading[];
     layout?: Record<string, GdLayoutEntry | null>;
     shapes?: GdShape[];
+    elements?: GdElement[];
     logo_layout?: Partial<GdLogoLayout>;
     custom_gradient?: GdCustomGradient | null;
     custom_element?: GdCustomElement | null;
@@ -1106,6 +1133,26 @@ export async function gdTextPreview(
   });
   if (!response.ok) throw new Error(await parseError(response));
   return URL.createObjectURL(await response.blob());
+}
+
+/** Stage-3 element catalogue (emoji / icon / sticker keys + the per-run cap). */
+export const gdElements = () =>
+  getJson<{ emoji: EmojiRow[]; icons: string[]; stickers: string[]; max_elements: number }>(
+    "/api/gd/elements",
+  );
+
+/** Upload a custom image element for one run; returns a `ref` to use in a
+ *  GdElement with kind "image". Multipart — no JSON Content-Type so the
+ *  browser sets the boundary; auth header still comes from `request()`. */
+export async function gdElementUpload(runId: string, file: File): Promise<{ ref: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await request(`/api/gd/runs/${runId}/elements/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as { ref: string };
 }
 
 /* ---------------- Creative Agent (brochures / decks / carousels / blogs) --- */
