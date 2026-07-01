@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { AiArrangeButton } from "./stage3/AiArrangeButton";
 import { DragCanvas, type DragMarker } from "./stage3/DragCanvas";
 import { ShapePanel } from "./stage3/ShapePanel";
+import { ElementPicker } from "./stage3/ElementPicker";
+import { CanvasEditor } from "./stage3/CanvasEditor";
+import { LayersPanel } from "./stage3/LayersPanel";
 import {
   gdApprove,
   gdArtifactBlob,
@@ -22,6 +25,7 @@ import {
   type GdBrandOption,
   type GdBrandLogo,
   type GdConfig,
+  type GdElement,
   type GdElementStyle,
   type GdSubheading,
   type GdLogoLayout,
@@ -489,6 +493,10 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   // Local draft of the Stage-3 sub-heading text (smooth typing); structural
   // edits + approval persist the full list through patchConfig.
   const [subTexts, setSubTexts] = useState<string[]>([]);
+  // Canva-style Stage-3 free elements (emoji/icon/sticker/uploaded image) +
+  // the currently selected one (shared by the canvas and the layers panel).
+  const [elements, setElements] = useState<GdElement[]>([]);
+  const [selEl, setSelEl] = useState<string | null>(null);
   const [build, setBuild] = useState<GdPromptBuild | null>(null);
   const [showAudit, setShowAudit] = useState(true);
 
@@ -596,6 +604,11 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
     if (run) setSubTexts((run.config.subheadings ?? []).map((s) => s.text));
   }, [run?.id, subCount]);
 
+  // seed the Stage-3 free elements from the run whenever the run switches
+  useEffect(() => {
+    if (run) setElements(run.config.elements ?? []);
+  }, [run?.id]);
+
   const refreshBuild = useCallback(
     async (r: GdRun) => {
       const stage = r.state === "DONE" ? 4 : stageNum(r.state);
@@ -688,6 +701,18 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
       onToast((e as Error).message);
     }
   };
+
+  // Stage-3 free elements — debounced persist so dragging/resizing doesn't
+  // fire a request per pointer move; the server then re-renders the
+  // authoritative preview once edits settle.
+  useEffect(() => {
+    if (!run) return;
+    const t = setTimeout(() => {
+      void patchConfig({ elements });
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elements, run?.id]);
 
   // current stage data
   const curStage = run?.stages[String(active)];
@@ -810,7 +835,7 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
   // render in the center, just below the preview.
   const stageProps = {
     run, config, active, reviewing, busy, sel1, setSel1, sel2, setSel2, tokens, setTokens,
-    subTexts, setSubTexts, answers, setAnswers, direction, setDirection,
+    subTexts, setSubTexts, elements, setElements, selEl, setSelEl, answers, setAnswers, direction, setDirection,
     conceptSugg, setConceptSugg, exploreSugg, setExploreSugg,
     gradSugg, setGradSugg, gradSteer, setGradSteer, gradExclude, setGradExclude,
     elemSugg, setElemSugg, elemSteer, setElemSteer, elemExclude, setElemExclude,
@@ -1002,6 +1027,10 @@ function StageControls(props: {
   setTokens: (v: Record<string, string>) => void;
   subTexts: string[];
   setSubTexts: (v: string[]) => void;
+  elements: GdElement[];
+  setElements: (v: GdElement[] | ((cur: GdElement[]) => GdElement[])) => void;
+  selEl: string | null;
+  setSelEl: (v: string | null) => void;
   answers: Record<string, string>;
   setAnswers: (v: Record<string, string>) => void;
   direction: GdDirection | null;
@@ -1039,6 +1068,7 @@ function StageControls(props: {
 }) {
   const {
     run, config, active, busy, sel1, setSel1, sel2, setSel2, tokens, setTokens, subTexts, setSubTexts,
+    elements, setElements, selEl, setSelEl,
     answers, setAnswers, direction, setDirection, conceptSugg, setConceptSugg, exploreSugg, setExploreSugg, hooks, setHooks,
     gradSugg, setGradSugg, gradSteer, setGradSteer, gradExclude, setGradExclude,
     elemSugg, setElemSugg, elemSteer, setElemSteer, elemExclude, setElemExclude,
@@ -1771,8 +1801,13 @@ function StageControls(props: {
       <div className="gdcard">
         {opt && <p className="gdsec__title">Stage 3 · Text overlay</p>}
 
+        <div className="gdstep3">
+        <div className="gdstep3__canvas">
         {/* live WYSIWYG preview + free-drag canvas — drag a handle to place an
-            element anywhere; the server re-renders the overlay authoritatively. */}
+            element anywhere; the server re-renders the overlay authoritatively.
+            The CanvasEditor wraps it to add a second, Canva-style layer of free
+            elements (emoji/icon/sticker/uploaded image) on top — the existing
+            headline/subheading/CTA/shape drag markers are unchanged. */}
         {opt && (() => {
           const DEFAULT_W = 0.42;
           const markerPoint = (id: string, place?: string) => {
@@ -1821,28 +1856,35 @@ function StageControls(props: {
           };
 
           return (
-            <DragCanvas markers={markers} onMove={onMove}>
-              <LivePreview
-                runId={run.id}
-                tokens={tokens}
-                subTexts={subTexts}
-                aspect={run.config.aspect_ratio}
-                sig={JSON.stringify({
-                  h: tokens.headline ?? "",
-                  hl: tokens.highlight ?? "",
-                  c: tokens.cta ?? "",
-                  s: subTexts,
-                  es: run.config.element_styles,
-                  sh: run.config.subheadings,
-                  f: run.config.font,
-                  ar: run.config.aspect_ratio,
-                  l: run.config.layout,
-                  shp: run.config.shapes,
-                  vn: tokens.venue ?? "",
-                  wb: tokens.website ?? "",
-                })}
-              />
-            </DragCanvas>
+            <CanvasEditor
+              elements={elements}
+              onElementsChange={setElements}
+              selectedId={selEl}
+              onSelect={setSelEl}
+            >
+              <DragCanvas markers={markers} onMove={onMove}>
+                <LivePreview
+                  runId={run.id}
+                  tokens={tokens}
+                  subTexts={subTexts}
+                  aspect={run.config.aspect_ratio}
+                  sig={JSON.stringify({
+                    h: tokens.headline ?? "",
+                    hl: tokens.highlight ?? "",
+                    c: tokens.cta ?? "",
+                    s: subTexts,
+                    es: run.config.element_styles,
+                    sh: run.config.subheadings,
+                    f: run.config.font,
+                    ar: run.config.aspect_ratio,
+                    l: run.config.layout,
+                    shp: run.config.shapes,
+                    vn: tokens.venue ?? "",
+                    wb: tokens.website ?? "",
+                  })}
+                />
+              </DragCanvas>
+            </CanvasEditor>
           );
         })()}
 
@@ -1855,6 +1897,17 @@ function StageControls(props: {
             onApply={(layout) => patchConfig({ layout })}
             onError={onToast}
           />
+        )}
+        </div>
+
+        <div className="gdstep3__side">
+        {/* Canva-style element picker + layers — add emoji/icon/sticker/image,
+            then manage z-order, opacity, rotation and (icon) fill. */}
+        {opt && (
+          <>
+            <ElementPicker runId={run.id} onAdd={(el) => setElements((cur) => [...cur, el])} />
+            <LayersPanel elements={elements} onChange={setElements} selectedId={selEl} onSelect={setSelEl} />
+          </>
         )}
 
         {/* agent hooks */}
@@ -1944,16 +1997,21 @@ function StageControls(props: {
             onChange={(s) => patchConfig({ shapes: s })}
           />
         </div>
-
-        <Button
-          fullWidth
-          onClick={doGenerate}
-          disabled={busy || !run.tokens_ready}
-          iconLeft={<Icon name="sparkles" size={15} />}
-        >
-          {run.tokens_ready ? "Generate text overlay" : "Approve all tokens to generate"}
-        </Button>
         </>)}
+        </div>
+        </div>
+
+        {opt && (
+          <Button
+            fullWidth
+            onClick={doGenerate}
+            disabled={busy || !run.tokens_ready}
+            iconLeft={<Icon name="sparkles" size={15} />}
+            style={{ marginTop: 16 }}
+          >
+            {run.tokens_ready ? "Generate text overlay" : "Approve all tokens to generate"}
+          </Button>
+        )}
       </div>
     );
   }

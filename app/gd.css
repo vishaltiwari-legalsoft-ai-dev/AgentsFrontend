@@ -669,4 +669,74 @@
 .crea-modal__text { font-size: 13px; line-height: 1.55; color: var(--text-secondary); margin: 0 0 18px; }
 .crea-modal__actions { display: flex; gap: 10px; justify-content: flex-end; }
 
+/* ============================================================================
+   Stage-3 Canva-style layout — sticky canvas (left/centre) + element picker,
+   layers and the existing text/CTA controls (right). Additive: does not touch
+   the unrelated Stage 1/2/4 `.gdcanvas` review strip in `.gdmain`.
+   ========================================================================== */
+.gdstep3 { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.gdstep3__canvas { position: sticky; top: 16px; } /* pinned — no scroll to see edits */
+.gdstep3__side { max-height: calc(100vh - 32px); overflow: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 2px; }
+@media (max-width: 900px) {
+  .gdstep3 { grid-template-columns: 1fr; }
+  .gdstep3__canvas { position: static; }
+  .gdstep3__side { max-height: none; overflow: visible; }
+}
+
+/* Free-element canvas (Task 10's CanvasEditor) — sits inside `.gdstep3__canvas`,
+   wrapping the existing DragCanvas + LivePreview as `children`; adds a second
+   drag/resize/rotate layer for emoji/icon/sticker/uploaded images. */
+.gdstep3__canvas .gdcanvas {
+  position: relative; display: block; width: 100%; min-height: 0;
+  background: none; border: none; box-shadow: none; overflow: visible;
+}
+/* `.gdcanvas__base` (CanvasEditor's own `previewSrc` img) is unused in this
+   integration — the base media comes from the nested LivePreview/DragCanvas
+   children instead — but is styled here in case a future caller passes
+   `previewSrc` directly. */
+.gdcanvas__base { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.gdcanvas__el {
+  position: absolute; cursor: grab; touch-action: none; box-sizing: border-box;
+  outline: 1px dashed transparent; transition: outline-color var(--dur-fast, 120ms);
+}
+.gdcanvas__el:hover { outline-color: color-mix(in srgb, var(--brand) 45%, transparent); }
+.gdcanvas__el.is-sel { outline: 2px solid var(--brand); outline-offset: 1px; z-index: 20; }
+.gdcanvas__el.is-sel:active { cursor: grabbing; }
+.gdcanvas__handle {
+  position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--brand); border: 2px solid #fff;
+  box-shadow: var(--shadow-xs); cursor: nwse-resize; touch-action: none;
+}
+
+/* Element picker */
+.gdpicker { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 10px; }
+.gdpicker__tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.gdpicker__tabs .gdminibtn.is-active { background: var(--brand); color: var(--on-brand, #fff); border-color: var(--brand); }
+.gdpicker__search { width: 100%; }
+.gdpicker__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(36px, 1fr)); gap: 6px; max-height: 220px; overflow-y: auto; padding: 2px; }
+.gdpicker__tile {
+  display: flex; align-items: center; justify-content: center; aspect-ratio: 1 / 1;
+  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-hover, var(--surface));
+  cursor: pointer; padding: 4px; transition: border-color var(--dur-fast, 120ms), background var(--dur-fast, 120ms);
+}
+.gdpicker__tile:hover { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, transparent); }
+.gdpicker__tile img { max-width: 100%; max-height: 100%; }
+.gdpicker__empty, .gdpicker__hint { font-size: 11px; color: var(--text-tertiary); padding: 6px 2px; }
+
+/* Layers panel */
+.gdlayers { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 10px; }
+.gdlayers__list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+.gdlayers__row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 8px; border-radius: var(--radius-md); font-size: 12px; color: var(--text-secondary);
+  cursor: pointer; border: 1px solid transparent;
+}
+.gdlayers__row:hover { background: var(--surface-hover, var(--surface-sunken)); }
+.gdlayers__row.is-sel { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, transparent); color: var(--text-primary); }
+.gdlayers__ops { display: flex; gap: 4px; }
+.gdlayers__inspect { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--border-subtle); padding-top: 10px; }
+.gdlayers__inspect label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text-tertiary); }
+.gdlayers__inspect input[type="range"] { width: 100%; }
+.gdlayers__inspect input[type="color"] { width: 40px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+
 @media (max-width: 880px) { .crea-grid { grid-template-columns: 1fr; } .gdtypegrid { grid-template-columns: 1fr; } }

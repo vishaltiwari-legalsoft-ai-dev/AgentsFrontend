@@ -627,6 +627,8 @@ export interface GdRun {
     // Stage-3 free-drag coordinates per element id (headline / subheading-N / cta).
     layout?: Record<string, GdLayoutEntry>;
     shapes?: GdShape[];
+    // Canva-style free elements (emoji / icon / sticker / uploaded image).
+    elements?: GdElement[];
     logo_layout?: GdLogoLayout;
     custom_gradient?: GdCustomGradient | null;
     custom_element?: GdCustomElement | null;
