@@ -136,7 +136,7 @@ export function AgentChat({
     if (!canva) return;
     if (canva === "connected") onToast("Canva connected. Try import again.");
     else onToast("Canva connection failed.");
-    window.history.replaceState({}, "", window.location.pathname);
+    window.history.replaceState({}, "", window.location.pathname + window.location.hash);
   }, [onToast]);
 
   useEffect(() => {

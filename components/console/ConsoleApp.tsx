@@ -26,6 +26,41 @@ function WorkBar() {
   );
 }
 
+// Views that can be reflected in the URL so a reload restores the current page.
+const NAV_VIEWS = [
+  "home",
+  "agents",
+  "teams",
+  "workspace",
+  "studio",
+  "marketing",
+  "library",
+  "admin",
+  "database",
+  "agentcfg",
+  "settings",
+  "integrations",
+] as const;
+
+type NavView = (typeof NAV_VIEWS)[number];
+
+function isNavView(value: string): value is NavView {
+  return (NAV_VIEWS as readonly string[]).includes(value);
+}
+
+// Some views are permission-gated; don't restore one the user can't access.
+function canAccess(view: NavView, user: { is_admin?: boolean; is_creator?: boolean }): boolean {
+  if (view === "admin" || view === "database") return !!user.is_admin;
+  if (view === "agentcfg") return !!user.is_creator;
+  return true;
+}
+
+function readNavFromHash(): NavView | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.location.hash.replace(/^#\/?/, "");
+  return isNavView(raw) ? raw : null;
+}
+
 function Toast({ toast }: { toast: { msg: string; k: number } | null }) {
   if (!toast) return null;
   return (
@@ -45,6 +80,30 @@ export default function ConsoleApp() {
   const [toast, setToast] = useState<{ msg: string; k: number } | null>(null);
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Restore the view from the URL hash on first load (so a reload keeps you in
+  // place instead of bouncing to home), and follow browser back/forward.
+  useEffect(() => {
+    if (!user) return;
+    const sync = () => {
+      const fromHash = readNavFromHash();
+      if (fromHash && canAccess(fromHash, user)) setNav(fromHash);
+    };
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.is_admin, user?.is_creator]);
+
+  // Keep the URL hash in sync with the current view. replaceState avoids
+  // piling up history entries while still surviving a reload.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const target = `#/${nav}`;
+    if (window.location.hash !== target) {
+      window.history.replaceState(null, "", target);
+    }
+  }, [nav]);
 
   const fire = useCallback((msg: string) => {
     setToast({ msg, k: Date.now() });
