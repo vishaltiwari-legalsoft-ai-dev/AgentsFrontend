@@ -69,7 +69,7 @@ function ElementNode({ el, W, H, onSelect, onCommit, nodeRef }: {
         onCommit(el.id, { x: pxToFrac(e.target.x(), W), y: pxToFrac(e.target.y(), H) })}
       onTransformEnd={(e: KonvaEventObject<Event>) => {
         const n = e.target;
-        const size = Math.max(0.03, (n.width() * n.scaleX()) / W); // keep w===h law
+        const size = Math.min(1, Math.max(0.03, (n.width() * n.scaleX()) / W));
         n.scaleX(1); n.scaleY(1);
         onCommit(el.id, {
           x: pxToFrac(n.x(), W), y: pxToFrac(n.y(), H),
