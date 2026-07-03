@@ -29,7 +29,7 @@ interface Props {
   onSelect: (id: string | null) => void;
 }
 
-function useContainerWidth(ref: React.RefObject<HTMLDivElement>) {
+function useContainerWidth(ref: React.RefObject<HTMLDivElement | null>) {
   const [w, setW] = useState(0);
   useEffect(() => {
     const el = ref.current;
