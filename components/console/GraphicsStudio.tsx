@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import dynamic from "next/dynamic";
 import { AiArrangeButton } from "./stage3/AiArrangeButton";
-import { DragCanvas, type DragMarker } from "./stage3/DragCanvas";
 import { ShapePanel } from "./stage3/ShapePanel";
 import { ElementPicker } from "./stage3/ElementPicker";
-import { CanvasEditor } from "./stage3/CanvasEditor";
 import { LayersPanel } from "./stage3/LayersPanel";
+import type { DragMarker } from "./stage3/KonvaCanvas";
 import {
   gdApprove,
   gdArtifactBlob,
@@ -48,6 +48,10 @@ import { useAuth } from "@/lib/auth";
 import { useReportWork } from "@/lib/work";
 import { ReferenceProbe } from "./ReferenceProbe";
 import { CreativeAgent } from "./CreativeAgent";
+
+// react-konva touches the browser canvas/`window` at import time, so the
+// unified Stage-3 surface must load client-only (no SSR).
+const KonvaCanvas = dynamic(() => import("./stage3/KonvaCanvas"), { ssr: false });
 
 /* --------------------------------------------------------------------------
    Graphic Designer Studio — drives the 4-stage human-in-the-loop pipeline.
@@ -232,24 +236,21 @@ function PlacementSliders({
  * small size, so the editor shows exactly where each element lands and whether
  * it fits — no more guessing. Debounced and keyed on `sig` (a signature of every
  * render-affecting field) so it refreshes on any edit. */
-function LivePreview({
-  runId,
-  tokens,
-  subTexts,
-  aspect,
-  sig,
-}: {
-  runId: string;
-  tokens: Record<string, string>;
-  subTexts: string[];
-  aspect?: string;
-  sig: string;
-}) {
+// Stage-3 live server preview. Fetches the authoritative PNG the compositor
+// renders for the current tokens/styles and hands back an object-URL, lifted
+// out of the old <LivePreview> component so the unified KonvaCanvas can paint
+// it as its WYSIWYG background. `sig` captures tokens + subTexts + every
+// persisted style/placement/size; `enabled` gates the request so only the
+// Stage-3 options slot fetches (KonvaCanvas owns the loading/aspect chrome).
+function useLivePreviewSrc(
+  runId: string,
+  tokens: Record<string, string>,
+  subTexts: string[],
+  sig: string,
+  enabled: boolean,
+): string | null {
   const [src, setSrc] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
   const srcRef = useRef<string | null>(null);
-  const arCss = aspect ? aspect.replace(":", " / ") : "4 / 5";
 
   // Revoke the last object URL on unmount.
   useEffect(() => () => {
@@ -257,8 +258,8 @@ function LivePreview({
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
     let alive = true;
-    setLoading(true);
     // Debounce so dragging a slider doesn't fire a request per pixel.
     const t = setTimeout(() => {
       gdTextPreview(runId, { tokens, subheading_texts: subTexts })
@@ -270,13 +271,9 @@ function LivePreview({
           if (srcRef.current) URL.revokeObjectURL(srcRef.current);
           srcRef.current = url;
           setSrc(url);
-          setError(false);
         })
         .catch(() => {
-          if (alive) setError(true);
-        })
-        .finally(() => {
-          if (alive) setLoading(false);
+          /* keep the last good preview on a transient failure */
         });
     }, 280);
     return () => {
@@ -285,16 +282,9 @@ function LivePreview({
     };
     // `sig` captures tokens + subTexts + every persisted style/placement/size.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runId, sig]);
+  }, [runId, sig, enabled]);
 
-  return (
-    <div className="gdmock gdmock--live" style={{ aspectRatio: arCss }}>
-      {src && <img src={src} alt="Live Stage 3 preview" />}
-      {!src && !error && <div className="gdmock__ph">Rendering preview…</div>}
-      {error && <div className="gdmock__ph gdmock__ph--err">Preview unavailable</div>}
-      {loading && src && <span className="gdmock__updating">updating…</span>}
-    </div>
-  );
+  return src;
 }
 
 /* ---- pre-generation discovery (the micro-conversation, Steps 1–2) --------
@@ -1147,6 +1137,28 @@ function StageControls(props: {
     return () => { alive = false; };
   }, [activeLogoUrl]);
 
+  // Stage-3 live server preview, lifted out of the old <LivePreview> component
+  // so the unified KonvaCanvas can paint it as its WYSIWYG background. The `sig`
+  // is byte-identical to what <LivePreview> received; only the Stage-3 options
+  // slot fetches (must be called before the early returns to keep hook order).
+  const stage3PreviewSig = JSON.stringify({
+    h: tokens.headline ?? "",
+    hl: tokens.highlight ?? "",
+    c: tokens.cta ?? "",
+    s: subTexts,
+    es: run.config.element_styles,
+    sh: run.config.subheadings,
+    f: run.config.font,
+    ar: run.config.aspect_ratio,
+    l: run.config.layout,
+    shp: run.config.shapes,
+    vn: tokens.venue ?? "",
+    wb: tokens.website ?? "",
+  });
+  const livePreviewSrc = useLivePreviewSrc(
+    run.id, tokens, subTexts, stage3PreviewSig, opt && active === 3,
+  );
+
   if (!config) return null;
 
   // The right-rail "AI" slot holds Stage 1's gradient box, Stage 2's strategist
@@ -1850,11 +1862,11 @@ function StageControls(props: {
 
         {opt && (
         <div className="gdstep3__canvas">
-        {/* live WYSIWYG preview + free-drag canvas — drag a handle to place an
-            element anywhere; the server re-renders the overlay authoritatively.
-            The CanvasEditor wraps it to add a second, Canva-style layer of free
-            elements (emoji/icon/sticker/uploaded image) on top — the existing
-            headline/subheading/CTA/shape drag markers are unchanged. */}
+        {/* Unified Konva canvas: the live WYSIWYG server preview as background,
+            with draggable headline/subheading/CTA/shape markers AND the Canva-
+            style free elements (emoji/icon/sticker/uploaded image) on one stage.
+            Drag a marker to place text — the server re-renders authoritatively;
+            drag/resize/rotate an element — persisted via the debounced effect. */}
         {(() => {
           const DEFAULT_W = 0.42;
           const markerPoint = (id: string, place?: string) => {
@@ -1902,36 +1914,22 @@ function StageControls(props: {
             }
           };
 
+          // aspect_ratio is "W:H" (e.g. "4:5"); KonvaCanvas wants height/width
+          // as its pre-image-load box shape (matches the old LivePreview CSS box).
+          const [arW, arH] = (run.config.aspect_ratio ?? "4:5").split(":").map(Number);
+          const aspect = arW > 0 && arH > 0 ? arH / arW : 5 / 4;
+
           return (
-            <CanvasEditor
+            <KonvaCanvas
+              previewSrc={livePreviewSrc ?? undefined}
+              aspect={aspect}
+              markers={markers}
+              onMove={onMove}
               elements={elements}
               onElementsChange={setElements}
               selectedId={selEl}
               onSelect={setSelEl}
-            >
-              <DragCanvas markers={markers} onMove={onMove}>
-                <LivePreview
-                  runId={run.id}
-                  tokens={tokens}
-                  subTexts={subTexts}
-                  aspect={run.config.aspect_ratio}
-                  sig={JSON.stringify({
-                    h: tokens.headline ?? "",
-                    hl: tokens.highlight ?? "",
-                    c: tokens.cta ?? "",
-                    s: subTexts,
-                    es: run.config.element_styles,
-                    sh: run.config.subheadings,
-                    f: run.config.font,
-                    ar: run.config.aspect_ratio,
-                    l: run.config.layout,
-                    shp: run.config.shapes,
-                    vn: tokens.venue ?? "",
-                    wb: tokens.website ?? "",
-                  })}
-                />
-              </DragCanvas>
-            </CanvasEditor>
+            />
           );
         })()}
 
