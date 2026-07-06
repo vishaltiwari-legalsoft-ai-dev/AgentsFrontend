@@ -381,6 +381,29 @@
 }
 .gd2-tt-btn:hover:not(:disabled) { background: var(--gd2-paper); }
 
+.gd2-tt-btn--on { background: var(--gd2-ink); color: #fff; border-color: var(--gd2-ink); }
+
+.gd2-editpop {
+  position: fixed;
+  z-index: 80;
+  background: var(--gd2-card);
+  border: 1px solid var(--gd2-line);
+  border-radius: 12px;
+  box-shadow: var(--gd2-sh-lg);
+  padding: 7px;
+}
+.gd2-editpop input {
+  width: 264px;
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 11px;
+  border: 1px solid var(--gd2-line2);
+  border-radius: 8px;
+  background: var(--gd2-paper);
+  color: var(--gd2-ink);
+}
+.gd2-editpop input:focus { outline: 2px solid var(--gd2-s3); outline-offset: 1px; }
+
 .gd2-tt-ai {
   margin-left: auto;
   color: var(--gd2-s3);

@@ -18,6 +18,23 @@ export interface DragMarker {
   h?: number;
 }
 
+/* Direct-manipulation text: the ACTUAL line rendered on the stage, draggable
+   at 60fps, double-click to edit in place. fontSize is a fraction of the
+   stage height (mirrors the engine's size_pct semantics). Client fonts are
+   an editing approximation — the deterministic engine remains the truth. */
+export interface TextNodeSpec {
+  id: string;
+  text: string;
+  x: number;      // fraction, anchor mc (matches engine layout entries)
+  y: number;
+  maxW: number;   // fraction of width the line may occupy
+  fontSize: number; // fraction of height
+  fontFamily: string;
+  fontStyle?: string; // "bold" | "italic" | "bold italic"
+  fill: string;
+  pill?: boolean; // CTA button treatment
+}
+
 interface Props {
   previewSrc?: string;
   aspect: number; // height / width, used before the preview image loads
@@ -27,6 +44,11 @@ interface Props {
   onElementsChange: (els: GdElement[]) => void;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  // Optional direct-manipulation text layer (V2 studio). Absent -> classic
+  // marker-only behavior, byte-identical for existing callers.
+  texts?: TextNodeSpec[];
+  onTextMove?: (id: string, x: number, y: number) => void;
+  onTextDblClick?: (id: string, clientX: number, clientY: number) => void;
 }
 
 function useContainerWidth(ref: React.RefObject<HTMLDivElement | null>) {
@@ -83,6 +105,7 @@ function ElementNode({ el, W, H, onSelect, onCommit, nodeRef }: {
 export default function KonvaCanvas({
   previewSrc, aspect, markers, onMove,
   elements, onElementsChange, selectedId, onSelect,
+  texts, onTextMove, onTextDblClick,
 }: Props) {
   const boxRef = useRef<HTMLDivElement>(null);
   const W = useContainerWidth(boxRef);
@@ -145,6 +168,61 @@ export default function KonvaCanvas({
               </Label>
             ),
           )}
+
+          {/* Direct-manipulation text layer (V2): drag the REAL line, not a
+              marker. Anchor mc mirrors the engine's layout entries, so the
+              committed x/y round-trips 1:1 with the deterministic renderer. */}
+          {(texts ?? []).map((t) => {
+            const fs = Math.max(8, t.fontSize * H);
+            const boxW = t.maxW * W;
+            const common = {
+              x: t.x * W,
+              y: t.y * H,
+              draggable: true,
+              onClick: () => onSelect(t.id),
+              onTap: () => onSelect(t.id),
+              onDragEnd: (e: KonvaEventObject<DragEvent>) =>
+                onTextMove?.(t.id, pxToFrac(e.target.x(), W), pxToFrac(e.target.y(), H)),
+              onDblClick: (e: KonvaEventObject<MouseEvent>) =>
+                onTextDblClick?.(t.id, e.evt.clientX, e.evt.clientY),
+              onDblTap: (e: KonvaEventObject<Event>) => {
+                const evt = e.evt as unknown as { clientX?: number; clientY?: number };
+                onTextDblClick?.(t.id, evt.clientX ?? 0, evt.clientY ?? 0);
+              },
+            };
+            return t.pill ? (
+              <Label key={t.id} {...common} offsetX={boxW * 0.18} offsetY={fs}>
+                <Tag fill="#D9A441" cornerRadius={fs * 1.4} />
+                <Text
+                  text={t.text}
+                  fontSize={fs}
+                  fontFamily={t.fontFamily}
+                  fontStyle={t.fontStyle ?? "bold"}
+                  fill="#1D2A50"
+                  padding={fs * 0.6}
+                  align="center"
+                />
+              </Label>
+            ) : (
+              <Text
+                key={t.id}
+                {...common}
+                text={t.text}
+                width={boxW}
+                offsetX={boxW / 2}
+                offsetY={fs * 0.65}
+                fontSize={fs}
+                fontFamily={t.fontFamily}
+                fontStyle={t.fontStyle ?? "normal"}
+                fill={t.fill}
+                align="center"
+                lineHeight={1.12}
+                shadowColor="rgba(4,9,22,0.35)"
+                shadowBlur={fs * 0.35}
+                shadowOffsetY={2}
+              />
+            );
+          })}
 
           <Transformer
             ref={trRef}

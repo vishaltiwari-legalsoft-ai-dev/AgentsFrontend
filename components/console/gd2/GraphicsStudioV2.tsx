@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import type { DragMarker } from "@/components/console/stage3/KonvaCanvas";
+import type { DragMarker, TextNodeSpec } from "@/components/console/stage3/KonvaCanvas";
 import {
   gdApprove,
   gdArtifactBlob,
@@ -149,6 +149,11 @@ export function GraphicsStudioV2({
   const [maxElements, setMaxElements] = useState(8);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const previewTimer = useRef<number | null>(null);
+  // Step-3 editing surface: false = direct-manipulation mode (drag the real
+  // text over the Stage-2 image), true = the engine's exact render.
+  const [exactPreview, setExactPreview] = useState(false);
+  const [bg2Url, setBg2Url] = useState<string | null>(null);
+  const [editPop, setEditPop] = useState<{ id: string; x: number; y: number; value: string } | null>(null);
 
   const fail = useCallback(
     (e: unknown) => onToast(e instanceof Error ? e.message : String(e)),
@@ -228,11 +233,40 @@ export function GraphicsStudioV2({
       .catch(() => setEmojiQuick([]));
   }, [cur, emojiQuick.length]);
 
-  // Live text preview: on Step 3, every styling/text change re-renders the
-  // REAL deterministic text engine (debounced) — no formal attempt needed.
+  // Stage-2 approved image = the editing-mode canvas background.
+  const stage2Ref = run?.stages["2"]?.approved?.url ?? null;
+  useEffect(() => {
+    if (!stage2Ref || cur !== 3) {
+      setBg2Url((old) => {
+        if (old) URL.revokeObjectURL(old);
+        return null;
+      });
+      return;
+    }
+    let alive = true;
+    gdArtifactBlob(stage2Ref)
+      .then((u) => {
+        if (!alive) {
+          URL.revokeObjectURL(u);
+          return;
+        }
+        setBg2Url((old) => {
+          if (old) URL.revokeObjectURL(old);
+          return u;
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [stage2Ref, cur]);
+
+  // Exact-render preview: the REAL deterministic text engine (debounced).
+  // Only fetched while the user is in exact mode — editing mode is fully
+  // client-side and instant.
   const subheadings = run?.config.subheadings ?? [];
   useEffect(() => {
-    if (!run || cur !== 3) {
+    if (!run || cur !== 3 || !exactPreview) {
       setPreviewUrl((old) => {
         if (old) URL.revokeObjectURL(old);
         return null;
@@ -307,8 +341,27 @@ export function GraphicsStudioV2({
       return;
     }
     list.push({ text: "New text" });
-    patch({ subheadings: list });
+    // Drop the new box mid-canvas so it lands under the cursor's world,
+    // instantly draggable — not buried in a form.
+    patch({
+      subheadings: list,
+      layout: { [`subheading-${list.length - 1}`]: { x: 0.5, y: 0.5, w: DEFAULT_LAYOUT_W, anchor: "mc" } },
+    });
     setActiveLine(`sub-${list.length - 1}`);
+  };
+
+  const commitEditPop = () => {
+    setEditPop((pop) => {
+      if (!pop || !run) return null;
+      const value = pop.value;
+      if (pop.id.startsWith("subheading-")) {
+        setSubText(Number(pop.id.split("-")[1]), value);
+      } else {
+        setTok((t) => ({ ...t, [pop.id]: value }));
+        patch({ tokens: { ...run.config.tokens, ...tok, [pop.id]: value } });
+      }
+      return null;
+    });
   };
 
   const removeTextBox = (idx: number) => {
@@ -1053,6 +1106,13 @@ export function GraphicsStudioV2({
                       <button onClick={() => removeElement(e2.id)} title="Remove">×</button>
                     </span>
                   ))}
+                  <button
+                    className={`gd2-tt-btn ${exactPreview ? "gd2-tt-btn--on" : ""}`}
+                    title="Toggle the engine's pixel-perfect render"
+                    onClick={() => setExactPreview((v) => !v)}
+                  >
+                    {exactPreview ? "✎ Edit mode" : "👁 Exact render"}
+                  </button>
                   <button className="gd2-tt-btn gd2-tt-ai" onClick={aiPlacement} disabled={busy !== null}>
                     ✦ AI placement
                   </button>
@@ -1068,26 +1128,70 @@ export function GraphicsStudioV2({
             }}
           >
             {cur === 3 ? (() => {
-              // Konva drag surface: markers move the engine's real layout
-              // entries; elements get drag + resize via the transformer.
+              // Direct manipulation: the REAL text lines are Konva nodes over
+              // the approved Stage-2 image — instant 60fps drag, dblclick to
+              // edit in place. "Exact render" flips to the engine's output.
               const lay = run.config.layout ?? {};
               const es = run.config.element_styles ?? {};
               const tokens = { ...run.config.tokens, ...tok };
-              const markers: DragMarker[] = [];
+              const fam = `${cfg.font_family}, Inter, sans-serif`;
+              const colorOf = (c?: string) =>
+                !c ? "#F4F7FF" : c.startsWith("#") ? c : (cfg.text_colors.find((tc) => tc.key === c)?.swatch ?? "#F4F7FF");
+              const styleOf = (fontName?: string) => {
+                const fv = cfg.font_variants.find((v) => v.name === (fontName ?? run.config.font));
+                const b = (fv?.weight ?? 400) >= 600;
+                const i = (fv?.style || "normal") === "italic";
+                return b && i ? "bold italic" : b ? "bold" : i ? "italic" : "normal";
+              };
+              const sizeOf = (key: string, pct?: number, fallback = 5) =>
+                (pct ?? cfg.default_text_size_pct[key] ?? fallback) / 100;
+
+              const texts: TextNodeSpec[] = [];
+              const pos = (id: string, place?: string) => lay[id] ?? markerPoint(id, place);
               if ((tokens.headline ?? "").trim())
-                markers.push({ id: "headline", label: "Headline", ...(lay.headline ?? markerPoint("headline", es.headline?.placement)) });
+                texts.push({
+                  id: "headline", text: tokens.headline, ...pos("headline", es.headline?.placement),
+                  maxW: lay.headline?.w ?? DEFAULT_LAYOUT_W,
+                  fontSize: sizeOf("headline", es.headline?.size_pct, 6.5),
+                  fontFamily: fam, fontStyle: styleOf(es.headline?.font) === "normal" ? "bold" : styleOf(es.headline?.font),
+                  fill: colorOf(es.headline?.color),
+                });
               subheadings.forEach((s, i) => {
-                if ((s.text ?? "").trim()) {
-                  const id = `subheading-${i}`;
-                  markers.push({ id, label: `Text ${i + 1}`, ...(lay[id] ?? markerPoint(id, s.placement)) });
-                }
+                if (!(s.text ?? "").trim()) return;
+                const id = `subheading-${i}`;
+                texts.push({
+                  id, text: s.text, ...pos(id, s.placement),
+                  maxW: lay[id]?.w ?? DEFAULT_LAYOUT_W,
+                  fontSize: sizeOf("subheading", s.size_pct, 3.4),
+                  fontFamily: fam, fontStyle: styleOf(s.font),
+                  fill: colorOf(s.color),
+                });
               });
               if ((tokens.cta ?? "").trim())
-                markers.push({ id: "cta", label: "Button", ...(lay.cta ?? markerPoint("cta", es.cta?.placement)) });
-              (run.config.shapes ?? []).forEach((sp) => {
-                markers.push({ id: sp.id, label: sp.kind === "icon" ? (sp.icon ?? "icon") : sp.kind, x: sp.x, y: sp.y, w: sp.w, h: sp.h });
+                texts.push({
+                  id: "cta", text: tokens.cta, ...pos("cta", es.cta?.placement),
+                  maxW: lay.cta?.w ?? DEFAULT_LAYOUT_W,
+                  fontSize: sizeOf("cta", es.cta?.size_pct, 3),
+                  fontFamily: fam, fontStyle: "bold",
+                  fill: "#1D2A50", pill: true,
+                });
+              (["venue", "website"] as const).forEach((fid) => {
+                if ((tokens[fid] ?? "").trim())
+                  texts.push({
+                    id: fid, text: tokens[fid], ...(lay[fid] ?? (fid === "venue" ? { x: 0.06, y: 0.965 } : { x: 0.94, y: 0.965 })),
+                    maxW: lay[fid]?.w ?? 0.4,
+                    fontSize: sizeOf(fid, undefined, 2.2),
+                    fontFamily: fam, fontStyle: styleOf(undefined),
+                    fill: colorOf(undefined),
+                  });
               });
-              const onMove = (id: string, x: number, y: number) => {
+
+              const shapeMarkers: DragMarker[] = (run.config.shapes ?? []).map((sp) => ({
+                id: sp.id, label: sp.kind === "icon" ? (sp.icon ?? "icon") : sp.kind,
+                x: sp.x, y: sp.y, w: sp.w, h: sp.h,
+              }));
+
+              const moveAnything = (id: string, x: number, y: number) => {
                 if (id.startsWith("shape-")) {
                   patch({ shapes: (run.config.shapes ?? []).map((s) => (s.id === id ? { ...s, x, y, anchor: "mc" } : s)) });
                 } else {
@@ -1095,16 +1199,26 @@ export function GraphicsStudioV2({
                   patch({ layout: { [id]: { x, y, w: prev?.w ?? DEFAULT_LAYOUT_W, anchor: "mc" } } });
                 }
               };
+
               return (
                 <KonvaCanvas
-                  previewSrc={previewUrl ?? undefined}
+                  previewSrc={exactPreview ? (previewUrl ?? bg2Url ?? undefined) : (bg2Url ?? undefined)}
                   aspect={arInfo ? arInfo.h / arInfo.w : 1}
-                  markers={markers}
-                  onMove={onMove}
-                  elements={run.config.elements ?? []}
+                  markers={exactPreview ? [] : shapeMarkers}
+                  onMove={moveAnything}
+                  elements={exactPreview ? [] : (run.config.elements ?? [])}
                   onElementsChange={(els) => patch({ elements: els })}
                   selectedId={selEl}
                   onSelect={setSelEl}
+                  texts={exactPreview ? [] : texts}
+                  onTextMove={moveAnything}
+                  onTextDblClick={(id, cx, cy) => {
+                    const value = id.startsWith("subheading-")
+                      ? (subheadings[Number(id.split("-")[1])]?.text ?? "")
+                      : (tokens[id] ?? "");
+                    setActiveLine(id.startsWith("subheading-") ? `sub-${id.split("-")[1]}` : id);
+                    setEditPop({ id, x: cx, y: cy, value });
+                  }}
                 />
               );
             })() : (
@@ -1126,6 +1240,29 @@ export function GraphicsStudioV2({
             {arInfo ? `${arInfo.dimensions} · ${arInfo.label}` : run.config.aspect_ratio}
           </p>
         </section>
+
+        {/* on-canvas double-click text editor */}
+        {editPop ? (
+          <div
+            className="gd2-editpop"
+            style={{
+              left: Math.max(12, Math.min(editPop.x - 130, (typeof window !== "undefined" ? window.innerWidth : 1200) - 290)),
+              top: Math.max(12, editPop.y - 54),
+            }}
+          >
+            <input
+              autoFocus
+              value={editPop.value}
+              maxLength={140}
+              onChange={(e) => setEditPop((p) => (p ? { ...p, value: e.target.value } : p))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitEditPop();
+                if (e.key === "Escape") setEditPop(null);
+              }}
+              onBlur={commitEditPop}
+            />
+          </div>
+        ) : null}
 
         {/* right panel */}
         <aside className="gd2-panel" style={{ ["--hue" as never]: hue } as React.CSSProperties}>
