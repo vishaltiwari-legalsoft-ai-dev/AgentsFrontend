@@ -55,6 +55,10 @@ interface Props {
   // Canva-style resize: side handles change the box width (text reflows),
   // corner handles scale the font. Both report fractions of the stage.
   onTextResize?: (id: string, wFrac: number, fontFrac: number) => void;
+  // Single draggable/resizable overlay image (V2 Stage-4 logo). Fractions,
+  // top-left anchored — mirrors the compositor's placement box.
+  overlay?: { src: string; x: number; y: number; w: number; h: number };
+  onOverlayCommit?: (box: { x: number; y: number; w: number }) => void;
 }
 
 function useContainerWidth(ref: React.RefObject<HTMLDivElement | null>) {
@@ -112,10 +116,12 @@ export default function KonvaCanvas({
   previewSrc, aspect, markers, onMove,
   elements, onElementsChange, selectedId, onSelect,
   texts, onTextMove, onTextDblClick, onTextResize,
+  overlay, onOverlayCommit,
 }: Props) {
   const boxRef = useRef<HTMLDivElement>(null);
   const W = useContainerWidth(boxRef);
   const [bg] = useImage(previewSrc ?? "");
+  const [overlayImg] = useImage(overlay?.src ?? "");
   const H = Math.round(W * (bg ? bg.height / bg.width : aspect));
   const trRef = useRef<Konva.Transformer>(null);
   const selectedNode = useRef<Konva.Node | null>(null);
@@ -125,7 +131,7 @@ export default function KonvaCanvas({
     if (!tr) return;
     tr.nodes(selectedNode.current && selectedId ? [selectedNode.current] : []);
     tr.getLayer()?.batchDraw();
-  }, [selectedId, elements, texts, W]);
+  }, [selectedId, elements, texts, overlay, W]);
 
   const commit = (id: string, patch: Partial<GdElement>) =>
     onElementsChange(elements.map((e) => (e.id === id ? { ...e, ...patch } : e)));
@@ -249,6 +255,31 @@ export default function KonvaCanvas({
               />
             );
           })}
+
+          {overlay && overlayImg ? (
+            <KImage
+              image={overlayImg}
+              ref={(n) => {
+                if (selectedId === "__overlay__") selectedNode.current = n;
+              }}
+              x={overlay.x * W}
+              y={overlay.y * H}
+              width={overlay.w * W}
+              height={overlay.h * H}
+              draggable
+              onClick={() => onSelect("__overlay__")}
+              onTap={() => onSelect("__overlay__")}
+              onDragEnd={(e: KonvaEventObject<DragEvent>) =>
+                onOverlayCommit?.({ x: pxToFrac(e.target.x(), W), y: pxToFrac(e.target.y(), H), w: overlay.w })}
+              onTransformEnd={(e: KonvaEventObject<Event>) => {
+                const n = e.target;
+                const wFrac = Math.min(1, Math.max(0.03, (n.width() * n.scaleX()) / W));
+                n.scaleX(1);
+                n.scaleY(1);
+                onOverlayCommit?.({ x: pxToFrac(n.x(), W), y: pxToFrac(n.y(), H), w: wFrac });
+              }}
+            />
+          ) : null}
 
           <Transformer
             ref={trRef}

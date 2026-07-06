@@ -164,6 +164,8 @@ export function GraphicsStudioV2({
   const [editPop, setEditPop] = useState<{ id: string; x: number; y: number; value: string } | null>(null);
   const [, setFontsLoaded] = useState(0); // re-render tick as brand faces arrive
   const fontsRequested = useRef<Set<string>>(new Set());
+  const [bg3Url, setBg3Url] = useState<string | null>(null); // Stage-4 edit background
+  const [logoDim, setLogoDim] = useState<{ w: number; h: number } | null>(null);
 
   const fail = useCallback(
     (e: unknown) => onToast(e instanceof Error ? e.message : String(e)),
@@ -265,6 +267,49 @@ export function GraphicsStudioV2({
         .catch(() => undefined); // editing falls back to system faces
     });
   }, [cfg]);
+
+  // Stage-3 approved image = the Stage-4 logo-placement background; measure
+  // the selected logo's natural ratio from its thumbnail.
+  const stage3Ref = run?.stages["3"]?.approved?.url ?? null;
+  useEffect(() => {
+    if (!stage3Ref || cur !== 4) {
+      setBg3Url((old) => {
+        if (old) URL.revokeObjectURL(old);
+        return null;
+      });
+      return;
+    }
+    let alive = true;
+    gdArtifactBlob(stage3Ref)
+      .then((u) => {
+        if (!alive) return URL.revokeObjectURL(u);
+        setBg3Url((old) => {
+          if (old) URL.revokeObjectURL(old);
+          return u;
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [stage3Ref, cur]);
+
+  const curLogoThumb = logos.find((l) => l.id === logoId)?.thumb ?? null;
+  useEffect(() => {
+    if (!curLogoThumb) {
+      setLogoDim(null);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => setLogoDim({ w: img.width, h: img.height });
+    img.src = curLogoThumb;
+  }, [curLogoThumb]);
+
+  // Arriving at Stage 4: show the composite if one exists, else the editor.
+  useEffect(() => {
+    if (cur === 4 && run) setExactPreview(!!run.stages["4"]?.attempts.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cur]);
 
   // Stage-2 approved image = the editing-mode canvas background.
   const stage2Ref = run?.stages["2"]?.approved?.url ?? null;
@@ -468,6 +513,53 @@ export function GraphicsStudioV2({
     return out;
   }, [run, tok]);
 
+  /* Stage-4 logo placement box, mirroring compositor.logo_placement exactly:
+     position grid + margin + size_pct (or auto ratio) + pixel offsets. */
+  const logoBox = useCallback(() => {
+    if (!run || !cfg) return null;
+    const ar = cfg.aspect_ratios.find((a) => a.ar === run.config.aspect_ratio);
+    if (!ar) return null;
+    const lw = logoDim?.w ?? 340;
+    const lh = logoDim?.h ?? 84;
+    const L = run.config.logo_layout ?? { position: "top-left", size_pct: null, margin_pct: 4, offset_x: 0, offset_y: 0 };
+    const shape = lh ? lw / lh : 1;
+    const autoRatio = shape > 3 ? 0.25 : shape < 0.5 ? 0.15 : 0.2;
+    const ratio = L.size_pct ? L.size_pct / 100 : autoRatio;
+    const w = Math.max(1, Math.round(ar.w * ratio));
+    const h = Math.max(1, Math.round(w * (lh / (lw || 1))));
+    const margin = Math.round(ar.w * ((L.margin_pct ?? 4) / 100));
+    const [v, hp] = (L.position || "top-left").split("-");
+    const x0 = hp === "right" ? ar.w - w - margin : hp === "center" ? Math.round((ar.w - w) / 2) : margin;
+    const y0 = v === "bottom" ? ar.h - h - margin : v === "middle" ? Math.round((ar.h - h) / 2) : margin;
+    const x = Math.min(Math.max(x0 + (L.offset_x || 0), 0), Math.max(0, ar.w - w));
+    const y = Math.min(Math.max(y0 + (L.offset_y || 0), 0), Math.max(0, ar.h - h));
+    return { fx: x / ar.w, fy: y / ar.h, fw: w / ar.w, fh: h / ar.h, baseW: ar.w, baseH: ar.h, lw, lh, margin, pos: L.position || "top-left" };
+  }, [run, cfg, logoDim]);
+
+  /* Drag/resize commit: convert the new box back into size_pct + pixel
+     offsets relative to the grid anchor (recomputed for the new width). */
+  const commitLogoBox = useCallback(
+    (box: { x: number; y: number; w: number }) => {
+      const b = logoBox();
+      if (!run || !cfg || !b) return;
+      const sizePct = Math.min(cfg.logo_size_pct_max, Math.max(cfg.logo_size_pct_min, box.w * 100));
+      const w = Math.max(1, Math.round(b.baseW * (sizePct / 100)));
+      const h = Math.max(1, Math.round(w * (b.lh / (b.lw || 1))));
+      const [v, hp] = b.pos.split("-");
+      const x0 = hp === "right" ? b.baseW - w - b.margin : hp === "center" ? Math.round((b.baseW - w) / 2) : b.margin;
+      const y0 = v === "bottom" ? b.baseH - h - b.margin : v === "middle" ? Math.round((b.baseH - h) / 2) : b.margin;
+      patch({
+        logo_layout: {
+          size_pct: Math.round(sizePct * 10) / 10,
+          offset_x: Math.round(box.x * b.baseW - x0),
+          offset_y: Math.round(box.y * b.baseH - y0),
+        },
+      });
+      setExactPreview(false);
+    },
+    [logoBox, run, cfg, patch],
+  );
+
   const variantFor = (bold: boolean, italic: boolean) =>
     cfg?.font_variants.find(
       (v) => (v.weight >= 600) === bold && isItalicStyle(v.style) === italic,
@@ -504,6 +596,7 @@ export function GraphicsStudioV2({
       void guard("Compositing your real logo…", async () => {
         const res = await gdStage4(run.id, null, run.config.use_ai_compositor ?? false, logoId);
         setRun(res.run);
+        setExactPreview(true); // show the engine's composite
       });
       return;
     }
@@ -541,6 +634,13 @@ export function GraphicsStudioV2({
         await signAndPin();
         const g = await gdGenerate(run.id, 3);
         setRun((await gdApprove(run.id, 3, g.attempt.attempt)) as GdRun);
+        return;
+      }
+      if (cur === 4) {
+        // Same no-stale rule for the logo: composite the CURRENT placement,
+        // then approve exactly that attempt.
+        const res = await gdStage4(run.id, null, run.config.use_ai_compositor ?? false, logoId);
+        setRun(await gdApprove(run.id, 4, res.attempt.attempt));
         return;
       }
       const r = await gdApprove(run.id, cur);
@@ -919,7 +1019,7 @@ export function GraphicsStudioV2({
       <>
         <span className="gd2-step-eyebrow">Step 4 of 4</span>
         <h2 className="gd2-paneltitle">Place your logo</h2>
-        <p className="gd2-help">These are your real logo files from the brand library — pixel-perfect, never redrawn by AI.</p>
+        <p className="gd2-help">Drag the logo on the design, resize from its corners — or use the sliders for a pixel-perfect nudge. Real logo files, never redrawn by AI.</p>
         {logos.length ? (
           <div>
             <p className="gd2-lbl">From your brand library</p>
@@ -928,7 +1028,10 @@ export function GraphicsStudioV2({
                 <button
                   key={l.id}
                   className={`gd2-tile ${logoId === l.id ? "gd2-tile--on" : ""}`}
-                  onClick={() => setLogoId(l.id)}
+                  onClick={() => {
+                    setLogoId(l.id);
+                    setExactPreview(false);
+                  }}
                 >
                   <span className="gd2-logotile-art">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -950,29 +1053,70 @@ export function GraphicsStudioV2({
                 key={p.key}
                 title={p.label}
                 className={(run.config.logo_layout?.position ?? "top-left") === p.key ? "on" : ""}
-                onClick={() => patch({ logo_layout: { position: p.key } })}
+                onClick={() => {
+                  // A new corner resets the manual nudge — least surprising.
+                  patch({ logo_layout: { position: p.key, offset_x: 0, offset_y: 0 } });
+                  setExactPreview(false);
+                }}
               />
             ))}
           </div>
         </div>
         <div>
-          <p className="gd2-lbl">Size</p>
-          <div className="gd2-seg">
-            {([
-              ["Auto", null],
-              ["Small", cfg.logo_size_pct_min],
-              ["Large", cfg.logo_size_pct_max],
-            ] as [string, number | null][]).map(([label, pct]) => (
-              <button
-                key={label}
-                className={(run.config.logo_layout?.size_pct ?? null) === pct ? "on" : ""}
-                onClick={() => patch({ logo_layout: { size_pct: pct as number | undefined } })}
-              >
-                {label}
-              </button>
-            ))}
+          <p className="gd2-lbl">Size &amp; position — fine-tune</p>
+          <div className="gd2-finegrid">
+            <label>
+              <span>Size (% of width) — blank = Auto</span>
+              <input
+                className="gd2-tt-num"
+                type="number"
+                min={cfg.logo_size_pct_min}
+                max={cfg.logo_size_pct_max}
+                step={0.5}
+                placeholder="Auto"
+                value={run.config.logo_layout?.size_pct ?? ""}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const v = raw === "" ? null : Math.min(cfg.logo_size_pct_max, Math.max(cfg.logo_size_pct_min, parseFloat(raw)));
+                  if (raw !== "" && !Number.isFinite(v)) return;
+                  patch({ logo_layout: { size_pct: v } });
+                  setExactPreview(false);
+                }}
+              />
+            </label>
+            <label>
+              <span>X nudge · {run.config.logo_layout?.offset_x ?? 0}px</span>
+              <input
+                type="range"
+                min={-cfg.logo_offset_px_range}
+                max={cfg.logo_offset_px_range}
+                value={run.config.logo_layout?.offset_x ?? 0}
+                onChange={(e) => {
+                  patch({ logo_layout: { offset_x: Number(e.target.value) } });
+                  setExactPreview(false);
+                }}
+              />
+            </label>
+            <label>
+              <span>Y nudge · {run.config.logo_layout?.offset_y ?? 0}px</span>
+              <input
+                type="range"
+                min={-cfg.logo_offset_px_range}
+                max={cfg.logo_offset_px_range}
+                value={run.config.logo_layout?.offset_y ?? 0}
+                onChange={(e) => {
+                  patch({ logo_layout: { offset_y: Number(e.target.value) } });
+                  setExactPreview(false);
+                }}
+              />
+            </label>
           </div>
         </div>
+        {run.stages["4"]?.attempts.length ? (
+          <button className="gd2-btn gd2-btn--soft" onClick={() => setExactPreview((v) => !v)}>
+            {exactPreview ? "✎ Adjust placement" : "👁 View composite"}
+          </button>
+        ) : null}
       </>
     );
   };
@@ -1415,10 +1559,27 @@ export function GraphicsStudioV2({
                   }}
                 />
               );
+            })() : cur === 4 && !exactPreview && bg3Url && curLogoThumb ? (() => {
+              const b = logoBox();
+              if (!b) return <AuthImg path={canvasPath} alt="Design preview" />;
+              return (
+                <KonvaCanvas
+                  previewSrc={bg3Url}
+                  aspect={arInfo ? arInfo.h / arInfo.w : 1}
+                  markers={[]}
+                  onMove={() => undefined}
+                  elements={[]}
+                  onElementsChange={() => undefined}
+                  selectedId={selEl}
+                  onSelect={setSelEl}
+                  overlay={{ src: curLogoThumb, x: b.fx, y: b.fy, w: b.fw, h: b.fh }}
+                  onOverlayCommit={commitLogoBox}
+                />
+              );
             })() : (
               <AuthImg path={canvasPath} alt="Design preview" />
             )}
-            {!canvasPath && cur !== 3 ? (
+            {!canvasPath && cur !== 3 && !(cur === 4 && bg3Url) ? (
               <div className="gd2-canvashint">{STAGE_HINTS[cur] ?? ""}</div>
             ) : null}
             {busy ? (
@@ -1470,8 +1631,8 @@ export function GraphicsStudioV2({
                 <button
                   className="gd2-btn"
                   onClick={approve}
-                  disabled={busy !== null || (!hasAttempt && cur !== 3)}
-                  title={cur === 3 ? "Renders your current arrangement and approves it" : undefined}
+                  disabled={busy !== null || (!hasAttempt && cur !== 3 && cur !== 4)}
+                  title={cur >= 3 ? "Renders your current arrangement and approves exactly that" : undefined}
                 >
                   Approve ✓
                 </button>
