@@ -1460,6 +1460,7 @@ export function GraphicsStudioV2({
                   fill: colorOf(es.headline?.color),
                   align: (es.headline?.align as TextNodeSpec["align"]) ?? "left",
                   gradient: gradStops(es.headline?.color),
+                  lineFactor: 1.15,
                 });
               subheadings.forEach((s, i) => {
                 if (!(s.text ?? "").trim()) return;
@@ -1472,6 +1473,7 @@ export function GraphicsStudioV2({
                   fill: colorOf(s.color),
                   align: (s.align as TextNodeSpec["align"]) ?? "left",
                   gradient: gradStops(s.color),
+                  lineFactor: 1.4,
                 });
               });
               if ((tokens.cta ?? "").trim()) {

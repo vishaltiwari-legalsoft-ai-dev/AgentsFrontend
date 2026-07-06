@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Image as KImage, Label, Layer, Rect, Stage, Tag, Text, Transformer } from "react-konva";
+import { Group, Image as KImage, Label, Layer, Rect, Stage, Tag, Text, Transformer } from "react-konva";
 import useImage from "use-image";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
@@ -28,14 +28,51 @@ export interface TextNodeSpec {
   x: number;      // fraction, anchor mc (matches engine layout entries)
   y: number;
   maxW: number;   // fraction of width the line may occupy
-  fontSize: number; // fraction of height
+  fontSize: number; // fraction of width (engine size_pct semantics)
   fontFamily: string;
   fontStyle?: string; // "bold" | "italic" | "bold italic"
   fill: string;
   align?: "left" | "center" | "right"; // line alignment inside the box
   gradient?: [string, string];         // brand gradient text fill (vertical)
+  lineFactor?: number; // engine line-gap: 1.15 headline, 1.4 others
   pill?: boolean;     // CTA button treatment
   pillFill?: string;  // CTA pill background (defaults to brand gold)
+}
+
+/* Mirror the engine's text geometry so anchor "mc" means the SAME pixels
+   on both sides: greedy word-wrap at maxW, block = (widest line) x
+   (lines x (asc+desc) x factor), centered on (x, y). Metrics come from the
+   loaded brand FontFace, so they match the .otf Pillow uses. */
+const measureCtx =
+  typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null;
+
+function wrapMeasure(text: string, fontCss: string, maxW: number) {
+  if (!measureCtx) return { lines: [text || ""], widest: maxW, asc: 0, desc: 0 };
+  measureCtx.font = fontCss;
+  const probeM = measureCtx.measureText("Mg");
+  const asc = probeM.fontBoundingBoxAscent ?? 0;
+  const desc = probeM.fontBoundingBoxDescent ?? 0;
+  const lines: string[] = [];
+  for (const seg of (text || "").split("\n")) {
+    const words = seg.split(/\s+/).filter(Boolean);
+    if (!words.length) {
+      lines.push("");
+      continue;
+    }
+    let cur = "";
+    for (const w of words) {
+      const probe = cur ? `${cur} ${w}` : w;
+      if (cur && measureCtx.measureText(probe).width > maxW) {
+        lines.push(cur);
+        cur = w;
+      } else {
+        cur = probe;
+      }
+    }
+    if (cur) lines.push(cur);
+  }
+  const widest = Math.max(1, ...lines.map((l) => measureCtx.measureText(l).width));
+  return { lines, widest, asc, desc };
 }
 
 interface Props {
@@ -189,6 +226,13 @@ export default function KonvaCanvas({
             // or story/landscape formats wrap differently than the render.
             const fs = Math.max(8, t.fontSize * W);
             const boxW = t.maxW * W;
+            const style = t.fontStyle ?? "normal";
+            const fontCss = `${style === "normal" ? "" : `${style} `}${fs}px ${t.fontFamily}`;
+            const wm = wrapMeasure(t.text, fontCss, boxW);
+            const asc = wm.asc || fs * 0.88;
+            const desc = wm.desc || fs * 0.24;
+            const lineH = (asc + desc) * (t.lineFactor ?? 1.4);
+            const blockH = lineH * Math.max(1, wm.lines.length);
             const common = {
               x: t.x * W,
               y: t.y * H,
@@ -213,28 +257,53 @@ export default function KonvaCanvas({
               n.scaleY(1);
               onTextResize?.(t.id, wFrac, fFrac);
             };
-            return t.pill ? (
-              <Label key={t.id} {...common} ref={reg} offsetX={boxW * 0.18} offsetY={fs} onTransformEnd={resize}>
-                <Tag fill={t.pillFill ?? "#D9A441"} cornerRadius={fs * 1.4} />
-                <Text
-                  text={t.text}
-                  fontSize={fs}
-                  fontFamily={t.fontFamily}
-                  fontStyle={t.fontStyle ?? "bold"}
-                  fill={t.fill}
-                  padding={fs * 0.6}
-                  align="center"
-                />
-              </Label>
-            ) : (
+            if (t.pill) {
+              // Mirror the engine's _draw_cta: label + "  →", pad_x = th*0.9,
+              // pad_y = th*0.55, pill anchored mc on its own box.
+              const label = `${t.text.replace(/\s+$/, "")}  →`;
+              if (measureCtx) measureCtx.font = fontCss;
+              const tw = measureCtx ? measureCtx.measureText(label).width : boxW * 0.5;
+              const th = asc + desc;
+              const padX = th * 0.9;
+              const padY = th * 0.55;
+              const pw = tw + 2 * padX;
+              const ph = th + 2 * padY;
+              return (
+                <Group key={t.id} {...common} ref={reg} offsetX={pw / 2} offsetY={ph / 2} onTransformEnd={resize}>
+                  <Rect
+                    width={pw}
+                    height={ph}
+                    cornerRadius={ph / 2}
+                    fill={t.pillFill ?? "#D9A441"}
+                    shadowColor="rgba(9,16,34,0.35)"
+                    shadowBlur={fs * 0.4}
+                    shadowOffsetY={3}
+                  />
+                  <Text
+                    x={padX}
+                    y={padY}
+                    width={tw}
+                    height={th}
+                    text={label}
+                    fontSize={fs}
+                    fontFamily={t.fontFamily}
+                    fontStyle={t.fontStyle ?? "bold"}
+                    fill={t.fill}
+                    align="center"
+                    verticalAlign="middle"
+                    listening={false}
+                  />
+                </Group>
+              );
+            }
+            return (
               <Text
                 key={t.id}
                 {...common}
                 ref={reg}
-                text={t.text}
-                width={boxW}
-                offsetX={boxW / 2}
-                offsetY={fs * 0.65}
+                text={wm.lines.join("\n")}
+                offsetX={wm.widest / 2}
+                offsetY={blockH / 2}
                 fontSize={fs}
                 fontFamily={t.fontFamily}
                 fontStyle={t.fontStyle ?? "normal"}
@@ -247,7 +316,7 @@ export default function KonvaCanvas({
                     }
                   : { fill: t.fill })}
                 align={t.align ?? "left"}
-                lineHeight={1.12}
+                lineHeight={lineH / fs}
                 shadowColor="rgba(4,9,22,0.35)"
                 shadowBlur={fs * 0.35}
                 shadowOffsetY={2}
