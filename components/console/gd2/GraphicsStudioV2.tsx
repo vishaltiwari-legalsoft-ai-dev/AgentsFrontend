@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   gdApprove,
   gdArtifactBlob,
   gdBack,
   gdBrandLogos,
   gdCreateRun,
+  gdElements,
   gdGenerate,
   gdGetConfig,
   gdListBrands,
@@ -14,14 +15,18 @@ import {
   gdSubjectUpload,
   gdSuggest,
   gdSuggestPlacement,
+  gdTextPreview,
   gdUpdateConfig,
   type GdBrandLogoVariant,
   type GdBrandOption,
   type GdChatMessage,
   type GdChatTurn,
   type GdConfig,
+  type GdElement,
+  type GdElementStyle,
   type GdGradientSuggestion,
   type GdRun,
+  type GdSubheading,
 } from "@/lib/api";
 
 /* --------------------------------------------------------------------------
@@ -120,6 +125,14 @@ export function GraphicsStudioV2({
   const [chat, setChat] = useState<GdChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
 
+  // Step-3 toolbar: which line is being styled ("headline" | "highlight" |
+  // "cta" | "sub-<idx>"), a curated emoji strip, and the live text preview.
+  const [activeLine, setActiveLine] = useState("headline");
+  const [emojiQuick, setEmojiQuick] = useState<string[]>([]);
+  const [maxElements, setMaxElements] = useState(8);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const previewTimer = useRef<number | null>(null);
+
   const fail = useCallback(
     (e: unknown) => onToast(e instanceof Error ? e.message : String(e)),
     [onToast],
@@ -180,6 +193,55 @@ export function GraphicsStudioV2({
       .catch(fail);
   }, [run, cur, logos.length, fail]);
 
+  // Curated emoji strip for the Step-3 toolbar (catalogue is codepoint-ordered,
+  // so cherry-pick the useful ones by name).
+  useEffect(() => {
+    if (cur !== 3 || emojiQuick.length) return;
+    gdElements()
+      .then((r) => {
+        setMaxElements(r.max_elements);
+        const wanted = ["sparkles", "star", "fire", "rocket", "check mark button", "briefcase", "balance scale", "chart increasing", "party popper", "light bulb"];
+        const picks: string[] = [];
+        for (const w of wanted) {
+          const hit = r.emoji.find((e) => e.name.toLowerCase() === w) ?? r.emoji.find((e) => e.name.toLowerCase().includes(w));
+          if (hit && !picks.includes(hit.char)) picks.push(hit.char);
+        }
+        setEmojiQuick(picks.length ? picks.slice(0, 8) : r.emoji.slice(0, 8).map((e) => e.char));
+      })
+      .catch(() => setEmojiQuick([]));
+  }, [cur, emojiQuick.length]);
+
+  // Live text preview: on Step 3, every styling/text change re-renders the
+  // REAL deterministic text engine (debounced) — no formal attempt needed.
+  const subheadings = run?.config.subheadings ?? [];
+  useEffect(() => {
+    if (!run || cur !== 3) {
+      setPreviewUrl((old) => {
+        if (old) URL.revokeObjectURL(old);
+        return null;
+      });
+      return;
+    }
+    if (previewTimer.current) window.clearTimeout(previewTimer.current);
+    previewTimer.current = window.setTimeout(() => {
+      gdTextPreview(run.id, {
+        tokens: { ...run.config.tokens, ...tok },
+        subheading_texts: subheadings.map((s) => s.text),
+      })
+        .then((url) =>
+          setPreviewUrl((old) => {
+            if (old) URL.revokeObjectURL(old);
+            return url;
+          }),
+        )
+        .catch(() => undefined); // preview is best-effort; Generate still works
+    }, 550);
+    return () => {
+      if (previewTimer.current) window.clearTimeout(previewTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run, cur, tok]);
+
   /* ---------------- actions ---------------- */
   const patch = useCallback(
     (body: Parameters<typeof gdUpdateConfig>[1]) => {
@@ -188,6 +250,91 @@ export function GraphicsStudioV2({
     },
     [run, fail],
   );
+
+  /* ---------------- step-3 toolbar helpers ---------------- */
+  const lineRef = useCallback((): { kind: "el"; key: string } | { kind: "sub"; idx: number } => {
+    if (activeLine.startsWith("sub-")) return { kind: "sub", idx: Number(activeLine.slice(4)) };
+    return { kind: "el", key: activeLine };
+  }, [activeLine]);
+
+  const lineStyle = (): GdSubheading | GdElementStyle => {
+    const L = lineRef();
+    if (!run) return {} as GdElementStyle;
+    if (L.kind === "sub") return run.config.subheadings?.[L.idx] ?? ({ text: "" } as GdSubheading);
+    return run.config.element_styles?.[L.key] ?? ({} as GdElementStyle);
+  };
+
+  const setLineField = (field: "font" | "color" | "size_pct" | "placement", value: string | number | null) => {
+    if (!run) return;
+    const L = lineRef();
+    if (L.kind === "el") {
+      if (value === null) return; // element styles are merge-only
+      patch({ element_styles: { [L.key]: { [field]: value } as unknown as GdElementStyle } });
+    } else {
+      const list = (run.config.subheadings ?? []).map((s, i) => {
+        if (i !== L.idx) return s;
+        const next = { ...s } as Record<string, unknown>;
+        if (value === null) delete next[field];
+        else next[field] = value;
+        return next as unknown as GdSubheading;
+      });
+      patch({ subheadings: list });
+    }
+  };
+
+  const addTextBox = () => {
+    if (!run) return;
+    const list = [...(run.config.subheadings ?? [])];
+    if (list.length >= 5) {
+      onToast("Text-box limit reached (5 lines).");
+      return;
+    }
+    list.push({ text: "New text" });
+    patch({ subheadings: list });
+    setActiveLine(`sub-${list.length - 1}`);
+  };
+
+  const removeTextBox = (idx: number) => {
+    if (!run) return;
+    const list = (run.config.subheadings ?? []).filter((_, i) => i !== idx);
+    if (!list.length) {
+      onToast("At least one sub-heading line must remain.");
+      return;
+    }
+    patch({ subheadings: list });
+    setActiveLine("headline");
+  };
+
+  const setSubText = (idx: number, text: string) => {
+    if (!run) return;
+    const list = (run.config.subheadings ?? []).map((s, i) => (i === idx ? { ...s, text } : s));
+    patch({ subheadings: list });
+  };
+
+  const addEmoji = (char: string) => {
+    if (!run) return;
+    const els = run.config.elements ?? [];
+    if (els.length >= maxElements) {
+      onToast(`Element limit reached (${maxElements}).`);
+      return;
+    }
+    const el: GdElement = {
+      id: `el-${Math.random().toString(36).slice(2, 10)}`,
+      kind: "emoji", x: 0.5, y: 0.3, w: 0.15, h: 0.15,
+      anchor: "mc", z: 5, rotation: 0, opacity: 1, ref: char, fill: "#1746A2",
+    };
+    patch({ elements: [...els, el] });
+  };
+
+  const removeElement = (id: string) => {
+    if (!run) return;
+    patch({ elements: (run.config.elements ?? []).filter((e) => e.id !== id) });
+  };
+
+  const variantFor = (bold: boolean, italic: boolean) =>
+    cfg?.font_variants.find(
+      (v) => (v.weight >= 600) === bold && ((v.style || "normal") === "italic") === italic,
+    )?.name ?? null;
 
   const start = () =>
     guard("Studio is getting your brand kit ready…", async () => {
@@ -552,20 +699,42 @@ export function GraphicsStudioV2({
         ["highlight", "Highlight word"],
         ["cta", "Button text"],
       ];
-      const hlStyle = run.config.element_styles?.headline;
       return (
         <>
           <span className="gd2-step-eyebrow">Step 3 of 4</span>
           <h2 className="gd2-paneltitle">Say it in your words</h2>
-          <p className="gd2-help">Your brand fonts are already applied — headlines come out crisp, never AI-garbled.</p>
+          <p className="gd2-help">
+            Type your lines here; style the selected line with the toolbar above the canvas —
+            brand fonts only, so it always looks like you. The canvas preview updates live.
+          </p>
           {fields.map(([key, label]) => (
             <div className="gd2-tokfld" key={key}>
               <span>{label}</span>
               <input
                 type="text"
                 value={tok[key] ?? ""}
+                onFocus={() => setActiveLine(key)}
                 onChange={(e) => setTok((t) => ({ ...t, [key]: e.target.value }))}
                 onBlur={() => patch({ tokens: { ...run.config.tokens, ...tok } })}
+              />
+            </div>
+          ))}
+          {subheadings.map((s, i) => (
+            <div className="gd2-tokfld" key={`sub-${i}-${subheadings.length}`}>
+              <span>
+                Text {i + 1}
+                {subheadings.length > 1 ? (
+                  <button className="gd2-subdel" title="Remove this text box" onClick={() => removeTextBox(i)}>×</button>
+                ) : null}
+              </span>
+              <input
+                type="text"
+                defaultValue={s.text}
+                maxLength={120}
+                onFocus={() => setActiveLine(`sub-${i}`)}
+                onBlur={(e) => {
+                  if (e.target.value !== s.text) setSubText(i, e.target.value);
+                }}
               />
             </div>
           ))}
@@ -583,30 +752,6 @@ export function GraphicsStudioV2({
               ))}
             </div>
           </div>
-          <div>
-            <p className="gd2-lbl">Headline color</p>
-            <div className="gd2-swatches">
-              {cfg.text_colors.map((c) => (
-                <button
-                  key={c.key}
-                  title={c.label}
-                  className={`gd2-swatch ${hlStyle?.color === c.key ? "on" : ""}`}
-                  style={{ background: c.swatch }}
-                  onClick={() =>
-                    patch({
-                      element_styles: {
-                        ...(run.config.element_styles ?? {}),
-                        headline: { ...(run.config.element_styles?.headline ?? {}), color: c.key },
-                      },
-                    })
-                  }
-                />
-              ))}
-            </div>
-          </div>
-          <button className="gd2-btn gd2-btn--ai" onClick={aiPlacement} disabled={busy !== null}>
-            ✦ AI placement
-          </button>
         </>
       );
     }
@@ -763,6 +908,141 @@ export function GraphicsStudioV2({
 
         {/* center stage */}
         <section className="gd2-stage">
+          {cur === 3 ? (() => {
+            const st = lineStyle();
+            const L = lineRef();
+            const meta = L.kind === "el" ? cfg.stage3_elements.find((e) => e.key === L.key) : null;
+            const canColor = L.kind === "sub" || !!meta?.colorable;
+            const canSize = L.kind === "sub" || !!meta?.sizable;
+            const canPlace = L.kind === "sub" || !!meta?.placeable;
+            const fontName = st.font ?? run.config.font;
+            const fv = cfg.font_variants.find((v) => v.name === fontName);
+            const isBold = (fv?.weight ?? 400) >= 600;
+            const isItal = (fv?.style || "normal") === "italic";
+            const boldTarget = variantFor(!isBold, isItal);
+            const italTarget = variantFor(isBold, !isItal);
+            const sizeState =
+              st.size_pct === cfg.text_size_pct_min ? "S" : st.size_pct === cfg.text_size_pct_max ? "L" : "M";
+            const hex = typeof st.color === "string" && st.color.startsWith("#") ? st.color : "#FFFFFF";
+            return (
+              <div className="gd2-tt">
+                <div className="gd2-tt-row">
+                  <div className="gd2-tt-tabs">
+                    {cfg.stage3_elements.map((e) => (
+                      <button key={e.key} className={activeLine === e.key ? "on" : ""} onClick={() => setActiveLine(e.key)}>
+                        {e.label}
+                      </button>
+                    ))}
+                    {subheadings.map((_, i) => (
+                      <button key={`sub-${i}`} className={activeLine === `sub-${i}` ? "on" : ""} onClick={() => setActiveLine(`sub-${i}`)}>
+                        Text {i + 1}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="gd2-tt-btn" onClick={addTextBox} disabled={subheadings.length >= 5}>
+                    + Text box
+                  </button>
+                  <span className="gd2-tt-sep" />
+                  <select
+                    className="gd2-tt-select"
+                    title="Brand fonts only"
+                    value={fontName}
+                    onChange={(e) => setLineField("font", e.target.value)}
+                  >
+                    {cfg.fonts.map((f) => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
+                  {canSize ? (
+                    <div className="gd2-seg gd2-seg--tt">
+                      {(["S", "M", "L"] as const).map((sz) => (
+                        <button
+                          key={sz}
+                          className={sizeState === sz ? "on" : ""}
+                          onClick={() =>
+                            setLineField(
+                              "size_pct",
+                              sz === "S" ? cfg.text_size_pct_min
+                                : sz === "L" ? cfg.text_size_pct_max
+                                : L.kind === "sub" ? null
+                                : cfg.default_text_size_pct[L.kind === "el" ? L.key : ""] ?? cfg.text_size_pct_min,
+                            )
+                          }
+                        >
+                          {sz}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <button
+                    className={`gd2-tog ${isBold ? "on" : ""}`}
+                    title={boldTarget ? "Bold" : "No bold cut in this brand family"}
+                    disabled={!boldTarget}
+                    onClick={() => boldTarget && setLineField("font", boldTarget)}
+                  >
+                    <b>B</b>
+                  </button>
+                  <button
+                    className={`gd2-tog ${isItal ? "on" : ""}`}
+                    title={italTarget ? "Italic" : "No italic cut in this brand family"}
+                    disabled={!italTarget}
+                    onClick={() => italTarget && setLineField("font", italTarget)}
+                  >
+                    <i>I</i>
+                  </button>
+                </div>
+                <div className="gd2-tt-row">
+                  {canPlace ? (
+                    <div className="gd2-seg gd2-seg--tt">
+                      {cfg.text_placements.map((p) => (
+                        <button
+                          key={p.key}
+                          title={`Place on the ${p.label.toLowerCase()}`}
+                          className={st.placement === p.key ? "on" : ""}
+                          onClick={() => setLineField("placement", p.key)}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  {canColor ? (
+                    <div className="gd2-swatches">
+                      {cfg.text_colors.map((c) => (
+                        <button
+                          key={c.key}
+                          title={c.label}
+                          className={`gd2-swatch ${st.color === c.key ? "on" : ""}`}
+                          style={{ background: c.swatch }}
+                          onClick={() => setLineField("color", c.key)}
+                        />
+                      ))}
+                      <label className="gd2-swatch gd2-swatch--custom" title="Custom color">
+                        <input type="color" value={hex} onChange={(e) => setLineField("color", e.target.value.toUpperCase())} />
+                      </label>
+                    </div>
+                  ) : null}
+                  <span className="gd2-tt-sep" />
+                  <div className="gd2-tt-emojis">
+                    {emojiQuick.map((c) => (
+                      <button key={c} className="gd2-emoji" title="Add as a design element" onClick={() => addEmoji(c)}>
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                  {(run.config.elements ?? []).map((e2) => (
+                    <span key={e2.id} className="gd2-elchip">
+                      {e2.kind === "emoji" ? e2.ref : e2.kind}
+                      <button onClick={() => removeElement(e2.id)} title="Remove">×</button>
+                    </span>
+                  ))}
+                  <button className="gd2-tt-btn gd2-tt-ai" onClick={aiPlacement} disabled={busy !== null}>
+                    ✦ AI placement
+                  </button>
+                </div>
+              </div>
+            );
+          })() : null}
           <div
             className="gd2-canvasbox"
             style={{
@@ -770,8 +1050,15 @@ export function GraphicsStudioV2({
               ...(arInfo && arInfo.h >= arInfo.w ? { height: "100%", maxWidth: "100%" } : { width: "min(100%, 860px)" }),
             }}
           >
-            <AuthImg path={canvasPath} alt="Design preview" />
-            {!canvasPath ? <div className="gd2-canvashint">{STAGE_HINTS[cur] ?? ""}</div> : null}
+            {cur === 3 && previewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={previewUrl} alt="Live text preview" />
+            ) : (
+              <AuthImg path={canvasPath} alt="Design preview" />
+            )}
+            {!canvasPath && !(cur === 3 && previewUrl) ? (
+              <div className="gd2-canvashint">{STAGE_HINTS[cur] ?? ""}</div>
+            ) : null}
             {busy ? (
               <div className="gd2-veil">
                 <div className="gd2-veilcard">
