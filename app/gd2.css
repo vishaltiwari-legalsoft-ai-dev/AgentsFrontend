@@ -307,6 +307,14 @@
   text-align: center;
 }
 
+.gd2-upload--live {
+  display: block;
+  color: var(--gd2-ink);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.gd2-upload--live:hover { border-color: var(--gd2-faint); background: var(--gd2-paper); }
+
 .gd2-kitcard {
   border: 1px solid var(--gd2-line);
   border-radius: 14px;

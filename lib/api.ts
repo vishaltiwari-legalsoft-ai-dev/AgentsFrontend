@@ -632,7 +632,9 @@ export interface GdRun {
     logo_layout?: GdLogoLayout;
     custom_gradient?: GdCustomGradient | null;
     custom_element?: GdCustomElement | null;
+    subject_asset_ref?: string | null;
     creative_brief?: Record<string, string>;
+    creative_type?: string;
     use_ai_compositor: boolean;
     tokens: Record<string, string>;
     tokens_approved: Record<string, boolean>;
@@ -957,8 +959,10 @@ export const gdGetPrompts = (brand?: string | null) =>
     `/api/gd/prompts${_brandQuery(brand)}`,
   );
 
-export const gdCreateRun = (brandId?: string | null) =>
-  postJson<GdRun>("/api/gd/runs", { brand_id: brandId ?? null });
+export const gdCreateRun = (
+  brandId?: string | null,
+  init?: { aspect_ratio?: string; creative_type?: string; creative_brief?: Record<string, string> },
+) => postJson<GdRun>("/api/gd/runs", { brand_id: brandId ?? null, ...(init ?? {}) });
 
 /* ---------------- Brand Reference Library (ingestion + retrieval) --------- */
 // Test/debug surface so a human can SEE which reference creatives the agent
@@ -1058,6 +1062,7 @@ export const gdUpdateConfig = (
     logo_layout?: Partial<GdLogoLayout>;
     custom_gradient?: GdCustomGradient | null;
     custom_element?: GdCustomElement | null;
+    subject_asset_ref?: string | null;
     creative_brief?: Record<string, string>;
     use_ai_compositor?: boolean;
     tokens?: Record<string, string>;
@@ -1164,6 +1169,21 @@ export async function gdElementUpload(runId: string, file: File): Promise<{ ref:
   const form = new FormData();
   form.append("file", file);
   const response = await request(`/api/gd/runs/${runId}/elements/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as { ref: string };
+}
+
+/** Upload an image to use as the Stage-2 SUBJECT (composite mode). Accepts
+ *  PNG/WebP/JPEG; the backend normalizes to PNG. Store the returned `ref` via
+ *  gdUpdateConfig({ subject_asset_ref }) and generate Stage 2 with variant
+ *  "UPLOAD" — a deterministic Pillow composite, no image model involved. */
+export async function gdSubjectUpload(runId: string, file: File): Promise<{ ref: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await request(`/api/gd/runs/${runId}/subject/upload`, {
     method: "POST",
     body: form,
   });

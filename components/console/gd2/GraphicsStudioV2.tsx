@@ -11,6 +11,7 @@ import {
   gdGetConfig,
   gdListBrands,
   gdStage4,
+  gdSubjectUpload,
   gdSuggest,
   gdSuggestPlacement,
   gdUpdateConfig,
@@ -190,12 +191,12 @@ export function GraphicsStudioV2({
 
   const start = () =>
     guard("Studio is getting your brand kit ready…", async () => {
-      const created = await gdCreateRun(brandId || null);
-      const patched = await gdUpdateConfig(created.id, {
+      const created = await gdCreateRun(brandId || null, {
         ...(aspect ? { aspect_ratio: aspect } : {}),
+        creative_type: "social",
         ...(brief.trim() ? { creative_brief: { goal: brief.trim() } } : {}),
       });
-      setRun(patched);
+      setRun(created);
       setSel1(null);
       setSel2(null);
       setLogos([]);
@@ -285,6 +286,25 @@ export function GraphicsStudioV2({
         if (turn.reply) setChat((c) => [...c, { role: "agent", text: turn.reply }]);
       })
       .catch(fail);
+  };
+
+  const onUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !run) return;
+    void guard("Uploading your image…", async () => {
+      const { ref } = await gdSubjectUpload(run.id, file);
+      const r = await gdUpdateConfig(run.id, { subject_asset_ref: ref });
+      setRun(r);
+      setSel2("UPLOAD");
+      setChat((c) => [
+        ...c,
+        {
+          role: "agent",
+          text: `Got it — “${file.name}” is ready in Step 2 as “Your upload”. Generate a preview there to see it composited onto your background.`,
+        },
+      ]);
+    });
   };
 
   const download = () => {
@@ -484,6 +504,15 @@ export function GraphicsStudioV2({
           <div>
             <p className="gd2-lbl">Concepts</p>
             <div className="gd2-grid2">
+              {run.config.subject_asset_ref ? (
+                <button
+                  className={`gd2-tile ${sel2 === "UPLOAD" ? "gd2-tile--on" : ""}`}
+                  onClick={() => setSel2("UPLOAD")}
+                >
+                  <span className="gd2-tiletxt"><b>Your upload</b></span>
+                  <span className="gd2-tiledesc">Composited exactly as uploaded — no AI drawing, instant and free.</span>
+                </button>
+              ) : null}
               {cfg.stage2_variants.map((v) => (
                 <button
                   key={v.id}
@@ -716,9 +745,16 @@ export function GraphicsStudioV2({
               <button onClick={sendChat} aria-label="Send">➤</button>
             </div>
           </div>
-          <div className="gd2-upload" title="Uploading your own main image lands with the next backend phase.">
-            ⬆ Upload photo — coming soon
-          </div>
+          <label className="gd2-upload gd2-upload--live" title="Use your own photo as the Step-2 main image">
+            ⬆ Upload photo for Step 2
+            <input
+              type="file"
+              accept="image/png,image/webp,image/jpeg"
+              hidden
+              onChange={onUpload}
+              disabled={busy !== null}
+            />
+          </label>
           <div className="gd2-kitcard">
             <b>Brand kit — {cfg.brand_name}</b>
             <p>Colors, fonts and the logo are locked to brand — nothing goes off-brand here.</p>
