@@ -656,6 +656,7 @@ export interface GdElementStyle {
   font?: string;
   color?: string;
   placement?: string;
+  align?: string; // "left" | "center" | "right" — line alignment inside the box
   size_pct?: number;
   offset_x?: number;
   offset_y?: number;
@@ -695,6 +696,7 @@ export interface GdSubheading {
   text: string;
   font?: string;
   color?: string;
+  align?: string;
   size_pct?: number;
   placement?: string;
   offset_x?: number;
@@ -1174,6 +1176,17 @@ export async function gdElementUpload(runId: string, file: File): Promise<{ ref:
   });
   if (!response.ok) throw new Error(await parseError(response));
   return (await response.json()) as { ref: string };
+}
+
+/** Fetch one brand font file (validated server-side against the pack) as an
+ *  object URL, for FontFace registration so the editor canvas shows TRUE
+ *  brand typography. Callers should revoke the URL after the face loads. */
+export async function gdFontBlob(name: string, brand?: string | null): Promise<string> {
+  const response = await request(
+    `/api/gd/fonts/${encodeURIComponent(name)}${brand ? `?brand=${encodeURIComponent(brand)}` : ""}`,
+  );
+  if (!response.ok) throw new Error(await parseError(response));
+  return URL.createObjectURL(await response.blob());
 }
 
 /** Upload an image to use as the Stage-2 SUBJECT (composite mode). Accepts

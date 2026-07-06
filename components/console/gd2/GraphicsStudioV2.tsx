@@ -10,6 +10,7 @@ import {
   gdBrandLogos,
   gdCreateRun,
   gdElements,
+  gdFontBlob,
   gdGenerate,
   gdGetConfig,
   gdListBrands,
@@ -154,6 +155,8 @@ export function GraphicsStudioV2({
   const [exactPreview, setExactPreview] = useState(false);
   const [bg2Url, setBg2Url] = useState<string | null>(null);
   const [editPop, setEditPop] = useState<{ id: string; x: number; y: number; value: string } | null>(null);
+  const [, setFontsLoaded] = useState(0); // re-render tick as brand faces arrive
+  const fontsRequested = useRef<Set<string>>(new Set());
 
   const fail = useCallback(
     (e: unknown) => onToast(e instanceof Error ? e.message : String(e)),
@@ -232,6 +235,29 @@ export function GraphicsStudioV2({
       })
       .catch(() => setEmojiQuick([]));
   }, [cur, emojiQuick.length]);
+
+  // Load the REAL brand font files into the browser (FontFace per variant,
+  // registered under the variant's own name) so the editor canvas shows true
+  // brand typography and the font menu visibly changes the face.
+  useEffect(() => {
+    if (!cfg || typeof window === "undefined" || !("FontFace" in window)) return;
+    cfg.font_variants.forEach((v) => {
+      if (fontsRequested.current.has(v.name)) return;
+      fontsRequested.current.add(v.name);
+      gdFontBlob(v.name, cfg.brand_id)
+        .then(async (url) => {
+          try {
+            const face = new FontFace(v.name, `url(${url})`);
+            await face.load();
+            document.fonts.add(face);
+            setFontsLoaded((n) => n + 1);
+          } finally {
+            URL.revokeObjectURL(url);
+          }
+        })
+        .catch(() => undefined); // editing falls back to system faces
+    });
+  }, [cfg]);
 
   // Stage-2 approved image = the editing-mode canvas background.
   const stage2Ref = run?.stages["2"]?.approved?.url ?? null;
@@ -315,7 +341,7 @@ export function GraphicsStudioV2({
     return run.config.element_styles?.[L.key] ?? ({} as GdElementStyle);
   };
 
-  const setLineField = (field: "font" | "color" | "size_pct" | "placement", value: string | number | null) => {
+  const setLineField = (field: "font" | "color" | "size_pct" | "placement" | "align", value: string | number | null) => {
     if (!run) return;
     const L = lineRef();
     if (L.kind === "el") {
@@ -377,8 +403,15 @@ export function GraphicsStudioV2({
 
   const setSubText = (idx: number, text: string) => {
     if (!run) return;
-    const list = (run.config.subheadings ?? []).map((s, i) => (i === idx ? { ...s, text } : s));
-    patch({ subheadings: list });
+    const cur = run.config.subheadings ?? [];
+    // Emptying a box deletes it (Canva behavior) — unless it's the last one,
+    // which the engine requires to exist (it skips empty text anyway).
+    if (!text.trim() && cur.length > 1) {
+      patch({ subheadings: cur.filter((_, i) => i !== idx) });
+      setActiveLine("headline");
+      return;
+    }
+    patch({ subheadings: cur.map((s, i) => (i === idx ? { ...s, text } : s)) });
   };
 
   const addEmoji = (char: string) => {
@@ -401,9 +434,11 @@ export function GraphicsStudioV2({
     patch({ elements: (run.config.elements ?? []).filter((e) => e.id !== id) });
   };
 
+  // Italic cuts may be labeled "italic" OR "oblique" (Causten uses oblique).
+  const isItalicStyle = (s?: string) => !!s && s !== "normal";
   const variantFor = (bold: boolean, italic: boolean) =>
     cfg?.font_variants.find(
-      (v) => (v.weight >= 600) === bold && ((v.style || "normal") === "italic") === italic,
+      (v) => (v.weight >= 600) === bold && isItalicStyle(v.style) === italic,
     )?.name ?? null;
 
   const start = () =>
@@ -988,7 +1023,7 @@ export function GraphicsStudioV2({
             const fontName = st.font ?? run.config.font;
             const fv = cfg.font_variants.find((v) => v.name === fontName);
             const isBold = (fv?.weight ?? 400) >= 600;
-            const isItal = (fv?.style || "normal") === "italic";
+            const isItal = isItalicStyle(fv?.style);
             const boldTarget = variantFor(!isBold, isItal);
             const italTarget = variantFor(isBold, !isItal);
             const sizeState =
@@ -1092,6 +1127,20 @@ export function GraphicsStudioV2({
                       ))}
                     </div>
                   ) : null}
+                  {activeLine === "headline" || activeLine.startsWith("sub-") ? (
+                    <div className="gd2-seg gd2-seg--tt" title="Text alignment inside the box">
+                      {([["left", "⇤"], ["center", "≡"], ["right", "⇥"]] as const).map(([a, icon]) => (
+                        <button
+                          key={a}
+                          title={`Align ${a}`}
+                          className={((st as { align?: string }).align ?? "left") === a ? "on" : ""}
+                          onClick={() => setLineField("align", a)}
+                        >
+                          {icon}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                   {canColor ? (
                     <div className="gd2-swatches">
                       {cfg.text_colors.map((c) => (
@@ -1150,7 +1199,27 @@ export function GraphicsStudioV2({
               const lay = run.config.layout ?? {};
               const es = run.config.element_styles ?? {};
               const tokens = { ...run.config.tokens, ...tok };
-              const fam = `${cfg.font_family}, Inter, sans-serif`;
+              // Per-variant family: each brand cut is registered under its own
+              // name via FontFace, so picking a font visibly changes the face.
+              const famFor = (fontName?: string) => {
+                const name = fontName ?? run.config.font;
+                return `"${name}", "${cfg.font_family}", Inter, sans-serif`;
+              };
+              const faceLoaded = (fontName?: string) => {
+                try {
+                  return document.fonts.check(`12px "${fontName ?? run.config.font}"`);
+                } catch {
+                  return false;
+                }
+              };
+              // If the true cut is loaded, don't synthesize bold/italic on top.
+              const styleFor = (fontName?: string) => (faceLoaded(fontName) ? "normal" : styleOf(fontName));
+              const gradStops = (c?: string): [string, string] | undefined => {
+                if (c !== "gradient") return undefined;
+                const sw = cfg.text_colors.find((tc) => tc.key === "gradient")?.swatch ?? "";
+                const hexes = sw.match(/#[0-9a-fA-F]{6}/g);
+                return hexes && hexes.length >= 2 ? [hexes[0], hexes[1]] : ["#E8B45A", "#C8912F"];
+              };
               // Canvas fills must be flat colors. Brand tokens whose swatch is a
               // CSS gradient (e.g. the "gradient" key) get a solid stand-in here;
               // the Exact render shows the true gradient from the engine.
@@ -1184,8 +1253,11 @@ export function GraphicsStudioV2({
                   id: "headline", text: tokens.headline, ...pos("headline", es.headline?.placement),
                   maxW: lay.headline?.w ?? DEFAULT_LAYOUT_W,
                   fontSize: sizeOf("headline", es.headline?.size_pct, 6.5),
-                  fontFamily: fam, fontStyle: styleOf(es.headline?.font) === "normal" ? "bold" : styleOf(es.headline?.font),
+                  fontFamily: famFor(es.headline?.font),
+                  fontStyle: faceLoaded(es.headline?.font) ? "normal" : "bold",
                   fill: colorOf(es.headline?.color),
+                  align: (es.headline?.align as TextNodeSpec["align"]) ?? "left",
+                  gradient: gradStops(es.headline?.color),
                 });
               subheadings.forEach((s, i) => {
                 if (!(s.text ?? "").trim()) return;
@@ -1194,8 +1266,10 @@ export function GraphicsStudioV2({
                   id, text: s.text, ...pos(id, s.placement),
                   maxW: lay[id]?.w ?? DEFAULT_LAYOUT_W,
                   fontSize: sizeOf("subheading", s.size_pct, 3.4),
-                  fontFamily: fam, fontStyle: styleOf(s.font),
+                  fontFamily: famFor(s.font), fontStyle: styleFor(s.font),
                   fill: colorOf(s.color),
+                  align: (s.align as TextNodeSpec["align"]) ?? "left",
+                  gradient: gradStops(s.color),
                 });
               });
               if ((tokens.cta ?? "").trim()) {
@@ -1204,7 +1278,8 @@ export function GraphicsStudioV2({
                   id: "cta", text: tokens.cta, ...pos("cta", es.cta?.placement),
                   maxW: lay.cta?.w ?? DEFAULT_LAYOUT_W,
                   fontSize: sizeOf("cta", es.cta?.size_pct, 3),
-                  fontFamily: fam, fontStyle: "bold",
+                  fontFamily: famFor(es.cta?.font),
+                  fontStyle: faceLoaded(es.cta?.font) ? "normal" : "bold",
                   fill: isLight(pillBg) ? "#1D2A50" : "#FFFFFF",
                   pill: true, pillFill: pillBg,
                 });
@@ -1215,7 +1290,7 @@ export function GraphicsStudioV2({
                     id: fid, text: tokens[fid], ...(lay[fid] ?? (fid === "venue" ? { x: 0.06, y: 0.965 } : { x: 0.94, y: 0.965 })),
                     maxW: lay[fid]?.w ?? 0.4,
                     fontSize: sizeOf(fid, undefined, 2.2),
-                    fontFamily: fam, fontStyle: styleOf(undefined),
+                    fontFamily: famFor(undefined), fontStyle: styleFor(undefined),
                     fill: colorOf(undefined),
                   });
               });

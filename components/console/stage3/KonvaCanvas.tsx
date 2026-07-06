@@ -32,6 +32,8 @@ export interface TextNodeSpec {
   fontFamily: string;
   fontStyle?: string; // "bold" | "italic" | "bold italic"
   fill: string;
+  align?: "left" | "center" | "right"; // line alignment inside the box
+  gradient?: [string, string];         // brand gradient text fill (vertical)
   pill?: boolean;     // CTA button treatment
   pillFill?: string;  // CTA pill background (defaults to brand gold)
 }
@@ -228,8 +230,15 @@ export default function KonvaCanvas({
                 fontSize={fs}
                 fontFamily={t.fontFamily}
                 fontStyle={t.fontStyle ?? "normal"}
-                fill={t.fill}
-                align="center"
+                {...(t.gradient
+                  ? {
+                      fillPriority: "linear-gradient",
+                      fillLinearGradientStartPoint: { x: 0, y: 0 },
+                      fillLinearGradientEndPoint: { x: 0, y: fs * 1.15 },
+                      fillLinearGradientColorStops: [0, t.gradient[0], 1, t.gradient[1]],
+                    }
+                  : { fill: t.fill })}
+                align={t.align ?? "left"}
                 lineHeight={1.12}
                 shadowColor="rgba(4,9,22,0.35)"
                 shadowBlur={fs * 0.35}
