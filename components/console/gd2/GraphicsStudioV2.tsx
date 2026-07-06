@@ -1024,25 +1024,41 @@ export function GraphicsStudioV2({
                     ))}
                   </select>
                   {canSize ? (
-                    <div className="gd2-seg gd2-seg--tt">
-                      {(["S", "M", "L"] as const).map((sz) => (
-                        <button
-                          key={sz}
-                          className={sizeState === sz ? "on" : ""}
-                          onClick={() =>
-                            setLineField(
-                              "size_pct",
-                              sz === "S" ? cfg.text_size_pct_min
-                                : sz === "L" ? cfg.text_size_pct_max
-                                : L.kind === "sub" ? null
-                                : cfg.default_text_size_pct[L.kind === "el" ? L.key : ""] ?? cfg.text_size_pct_min,
-                            )
-                          }
-                        >
-                          {sz}
-                        </button>
-                      ))}
-                    </div>
+                    <>
+                      <div className="gd2-seg gd2-seg--tt">
+                        {(["S", "M", "L"] as const).map((sz) => (
+                          <button
+                            key={sz}
+                            className={sizeState === sz ? "on" : ""}
+                            onClick={() =>
+                              setLineField(
+                                "size_pct",
+                                sz === "S" ? cfg.text_size_pct_min
+                                  : sz === "L" ? cfg.text_size_pct_max
+                                  : L.kind === "sub" ? null
+                                  : cfg.default_text_size_pct[L.kind === "el" ? L.key : ""] ?? cfg.text_size_pct_min,
+                              )
+                            }
+                          >
+                            {sz}
+                          </button>
+                        ))}
+                      </div>
+                      <input
+                        className="gd2-tt-num"
+                        type="number"
+                        title="Font size (% of canvas height)"
+                        min={cfg.text_size_pct_min}
+                        max={cfg.text_size_pct_max}
+                        step={0.5}
+                        value={st.size_pct ?? cfg.default_text_size_pct[L.kind === "el" ? L.key : "subheading"] ?? ""}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          if (!Number.isFinite(v)) return;
+                          setLineField("size_pct", Math.min(cfg.text_size_pct_max, Math.max(cfg.text_size_pct_min, v)));
+                        }}
+                      />
+                    </>
                   ) : null}
                   <button
                     className={`gd2-tog ${isBold ? "on" : ""}`}
@@ -1135,8 +1151,23 @@ export function GraphicsStudioV2({
               const es = run.config.element_styles ?? {};
               const tokens = { ...run.config.tokens, ...tok };
               const fam = `${cfg.font_family}, Inter, sans-serif`;
-              const colorOf = (c?: string) =>
-                !c ? "#F4F7FF" : c.startsWith("#") ? c : (cfg.text_colors.find((tc) => tc.key === c)?.swatch ?? "#F4F7FF");
+              // Canvas fills must be flat colors. Brand tokens whose swatch is a
+              // CSS gradient (e.g. the "gradient" key) get a solid stand-in here;
+              // the Exact render shows the true gradient from the engine.
+              const colorOf = (c?: string, fallback = "#F4F7FF") => {
+                if (!c) return fallback;
+                if (c.startsWith("#") || c.startsWith("rgb")) return c;
+                const sw = cfg.text_colors.find((tc) => tc.key === c)?.swatch ?? "";
+                if (sw.startsWith("#") || sw.startsWith("rgb")) return sw;
+                if (c === "gradient" || sw.includes("gradient")) return "#E8B45A";
+                return fallback;
+              };
+              const isLight = (hex: string) => {
+                const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+                if (!m) return false;
+                const n = parseInt(m[1], 16);
+                return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) > 150;
+              };
               const styleOf = (fontName?: string) => {
                 const fv = cfg.font_variants.find((v) => v.name === (fontName ?? run.config.font));
                 const b = (fv?.weight ?? 400) >= 600;
@@ -1167,14 +1198,17 @@ export function GraphicsStudioV2({
                   fill: colorOf(s.color),
                 });
               });
-              if ((tokens.cta ?? "").trim())
+              if ((tokens.cta ?? "").trim()) {
+                const pillBg = colorOf(es.cta?.color, "#D9A441");
                 texts.push({
                   id: "cta", text: tokens.cta, ...pos("cta", es.cta?.placement),
                   maxW: lay.cta?.w ?? DEFAULT_LAYOUT_W,
                   fontSize: sizeOf("cta", es.cta?.size_pct, 3),
                   fontFamily: fam, fontStyle: "bold",
-                  fill: "#1D2A50", pill: true,
+                  fill: isLight(pillBg) ? "#1D2A50" : "#FFFFFF",
+                  pill: true, pillFill: pillBg,
                 });
+              }
               (["venue", "website"] as const).forEach((fid) => {
                 if ((tokens[fid] ?? "").trim())
                   texts.push({
@@ -1200,6 +1234,32 @@ export function GraphicsStudioV2({
                 }
               };
 
+              // Canva-style resize: side handles reflow the box, corners scale
+              // the font. One combined patch so nothing races.
+              const resizeText = (id: string, wFrac: number, fontFrac: number) => {
+                const prev = lay[id] ?? markerPoint(id);
+                const sizePct = Math.round(
+                  Math.min(cfg.text_size_pct_max, Math.max(cfg.text_size_pct_min, fontFrac * 100)) * 10,
+                ) / 10;
+                const body: Parameters<typeof gdUpdateConfig>[1] = {
+                  layout: { [id]: { x: prev.x, y: prev.y, w: wFrac, anchor: "mc" } },
+                };
+                if (id.startsWith("subheading-")) {
+                  const idx = Number(id.split("-")[1]);
+                  body.subheadings = subheadings.map((s, i) => (i === idx ? { ...s, size_pct: sizePct } : s));
+                } else if (id === "headline" || id === "cta") {
+                  body.element_styles = { [id]: { size_pct: sizePct } };
+                }
+                patch(body);
+              };
+
+              const selectAnything = (id: string | null) => {
+                setSelEl(id);
+                if (!id) return;
+                if (id === "headline" || id === "cta" || id === "venue" || id === "website") setActiveLine(id);
+                else if (id.startsWith("subheading-")) setActiveLine(`sub-${id.split("-")[1]}`);
+              };
+
               return (
                 <KonvaCanvas
                   previewSrc={exactPreview ? (previewUrl ?? bg2Url ?? undefined) : (bg2Url ?? undefined)}
@@ -1209,9 +1269,10 @@ export function GraphicsStudioV2({
                   elements={exactPreview ? [] : (run.config.elements ?? [])}
                   onElementsChange={(els) => patch({ elements: els })}
                   selectedId={selEl}
-                  onSelect={setSelEl}
+                  onSelect={selectAnything}
                   texts={exactPreview ? [] : texts}
                   onTextMove={moveAnything}
+                  onTextResize={resizeText}
                   onTextDblClick={(id, cx, cy) => {
                     const value = id.startsWith("subheading-")
                       ? (subheadings[Number(id.split("-")[1])]?.text ?? "")

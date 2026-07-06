@@ -32,7 +32,8 @@ export interface TextNodeSpec {
   fontFamily: string;
   fontStyle?: string; // "bold" | "italic" | "bold italic"
   fill: string;
-  pill?: boolean; // CTA button treatment
+  pill?: boolean;     // CTA button treatment
+  pillFill?: string;  // CTA pill background (defaults to brand gold)
 }
 
 interface Props {
@@ -49,6 +50,9 @@ interface Props {
   texts?: TextNodeSpec[];
   onTextMove?: (id: string, x: number, y: number) => void;
   onTextDblClick?: (id: string, clientX: number, clientY: number) => void;
+  // Canva-style resize: side handles change the box width (text reflows),
+  // corner handles scale the font. Both report fractions of the stage.
+  onTextResize?: (id: string, wFrac: number, fontFrac: number) => void;
 }
 
 function useContainerWidth(ref: React.RefObject<HTMLDivElement | null>) {
@@ -105,21 +109,21 @@ function ElementNode({ el, W, H, onSelect, onCommit, nodeRef }: {
 export default function KonvaCanvas({
   previewSrc, aspect, markers, onMove,
   elements, onElementsChange, selectedId, onSelect,
-  texts, onTextMove, onTextDblClick,
+  texts, onTextMove, onTextDblClick, onTextResize,
 }: Props) {
   const boxRef = useRef<HTMLDivElement>(null);
   const W = useContainerWidth(boxRef);
   const [bg] = useImage(previewSrc ?? "");
   const H = Math.round(W * (bg ? bg.height / bg.width : aspect));
   const trRef = useRef<Konva.Transformer>(null);
-  const selectedNode = useRef<Konva.Image | null>(null);
+  const selectedNode = useRef<Konva.Node | null>(null);
 
   useEffect(() => {
     const tr = trRef.current;
     if (!tr) return;
     tr.nodes(selectedNode.current && selectedId ? [selectedNode.current] : []);
     tr.getLayer()?.batchDraw();
-  }, [selectedId, elements, W]);
+  }, [selectedId, elements, texts, W]);
 
   const commit = (id: string, patch: Partial<GdElement>) =>
     onElementsChange(elements.map((e) => (e.id === id ? { ...e, ...patch } : e)));
@@ -190,15 +194,24 @@ export default function KonvaCanvas({
                 onTextDblClick?.(t.id, evt.clientX ?? 0, evt.clientY ?? 0);
               },
             };
+            const reg = t.id === selectedId ? (n: Konva.Node | null) => { selectedNode.current = n; } : undefined;
+            const resize = (e: KonvaEventObject<Event>) => {
+              const n = e.target;
+              const wFrac = Math.min(1, Math.max(0.08, (n.width() * n.scaleX()) / W));
+              const fFrac = Math.max(0.008, (fs * n.scaleY()) / H);
+              n.scaleX(1);
+              n.scaleY(1);
+              onTextResize?.(t.id, wFrac, fFrac);
+            };
             return t.pill ? (
-              <Label key={t.id} {...common} offsetX={boxW * 0.18} offsetY={fs}>
-                <Tag fill="#D9A441" cornerRadius={fs * 1.4} />
+              <Label key={t.id} {...common} ref={reg} offsetX={boxW * 0.18} offsetY={fs} onTransformEnd={resize}>
+                <Tag fill={t.pillFill ?? "#D9A441"} cornerRadius={fs * 1.4} />
                 <Text
                   text={t.text}
                   fontSize={fs}
                   fontFamily={t.fontFamily}
                   fontStyle={t.fontStyle ?? "bold"}
-                  fill="#1D2A50"
+                  fill={t.fill}
                   padding={fs * 0.6}
                   align="center"
                 />
@@ -207,6 +220,7 @@ export default function KonvaCanvas({
               <Text
                 key={t.id}
                 {...common}
+                ref={reg}
                 text={t.text}
                 width={boxW}
                 offsetX={boxW / 2}
@@ -220,6 +234,7 @@ export default function KonvaCanvas({
                 shadowColor="rgba(4,9,22,0.35)"
                 shadowBlur={fs * 0.35}
                 shadowOffsetY={2}
+                onTransformEnd={resize}
               />
             );
           })}
@@ -228,7 +243,7 @@ export default function KonvaCanvas({
             ref={trRef}
             rotateEnabled
             keepRatio
-            enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right"]}
+            enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right", "middle-left", "middle-right"]}
             boundBoxFunc={(oldBox, newBox) => (newBox.width < 12 ? oldBox : newBox)}
           />
         </Layer>

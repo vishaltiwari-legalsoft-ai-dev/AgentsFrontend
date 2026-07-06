@@ -383,6 +383,15 @@
 
 .gd2-tt-btn--on { background: var(--gd2-ink); color: #fff; border-color: var(--gd2-ink); }
 
+.gd2-tt-num {
+  width: 64px !important;
+  padding: 6px 6px !important;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px !important;
+  text-align: center;
+}
+
 .gd2-editpop {
   position: fixed;
   z-index: 80;
