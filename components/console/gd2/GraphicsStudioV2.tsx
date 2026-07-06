@@ -51,13 +51,20 @@ const STEPS = [
 
 const DEFAULT_LAYOUT_W = 0.42;
 
-function markerPoint(id: string, place?: string) {
-  const p = place || (id === "cta" ? "bottom" : "left");
-  if (p === "right") return { x: 0.73, y: 0.5 };
-  if (p === "center") return { x: 0.5, y: 0.5 };
-  if (p === "top") return { x: 0.5, y: 0.1 };
-  if (p === "bottom") return { x: 0.5, y: 0.9 };
-  return { x: 0.27, y: 0.5 }; // left
+/* Collision-free defaults for un-dragged lines. X follows the element's
+   placement preference; Y is STAGGERED per line so nothing ever starts on
+   top of anything else. Every line gets pinned to exactly these coords (or
+   wherever the user dragged it) before Generate — the engine's legacy
+   zone-stacking heuristic is never mixed with pinned items in V2, which is
+   what caused pinned/auto overlaps. */
+function defaultPos(id: string, place?: string, subIndex = 0) {
+  const x = place === "right" ? 0.73 : place === "left" ? 0.27 : 0.5;
+  if (id === "headline") return { x, y: place === "top" ? 0.16 : 0.34 };
+  if (id === "cta") return { x: place === "left" ? 0.27 : place === "right" ? 0.73 : 0.5, y: 0.84 };
+  if (id === "venue") return { x: 0.06, y: 0.965 };
+  if (id === "website") return { x: 0.94, y: 0.965 };
+  // subheadings stack downward from the headline's band
+  return { x, y: Math.min(0.78, (place === "top" ? 0.3 : 0.5) + subIndex * 0.09) };
 }
 
 function stageNum(state: string): number {
@@ -436,6 +443,31 @@ export function GraphicsStudioV2({
 
   // Italic cuts may be labeled "italic" OR "oblique" (Causten uses oblique).
   const isItalicStyle = (s?: string) => !!s && s !== "normal";
+  /* Pin EVERY visible text line to explicit coords (dragged position or the
+     staggered default the edit canvas shows). Sent before Generate so the
+     engine renders exactly what the user saw — never the zone-stack path. */
+  const pinAllLayout = useCallback(() => {
+    if (!run) return {};
+    const lay = run.config.layout ?? {};
+    const es = run.config.element_styles ?? {};
+    const tokens = { ...run.config.tokens, ...tok };
+    const out: Record<string, { x: number; y: number; w: number; anchor: string }> = {};
+    const pin = (id: string, place?: string, i = 0) => {
+      const prev = lay[id];
+      const p = prev ?? defaultPos(id, place, i);
+      out[id] = { x: p.x, y: p.y, w: prev?.w ?? DEFAULT_LAYOUT_W, anchor: "mc" };
+    };
+    if ((tokens.headline ?? "").trim()) pin("headline", es.headline?.placement);
+    (run.config.subheadings ?? []).forEach((s, i) => {
+      if ((s.text ?? "").trim()) pin(`subheading-${i}`, s.placement, i);
+    });
+    if ((tokens.cta ?? "").trim()) pin("cta", es.cta?.placement);
+    (["venue", "website"] as const).forEach((f) => {
+      if ((tokens[f] ?? "").trim()) pin(f);
+    });
+    return out;
+  }, [run, tok]);
+
   const variantFor = (bold: boolean, italic: boolean) =>
     cfg?.font_variants.find(
       (v) => (v.weight >= 600) === bold && isItalicStyle(v.style) === italic,
@@ -487,6 +519,7 @@ export function GraphicsStudioV2({
             tokens: { ...run.config.tokens, ...tok },
             token_approvals: { headline: sign, highlight: sign, cta: sign },
             subheadings: (run.config.subheadings ?? []).map((s) => ({ ...s, approved: true })),
+            layout: pinAllLayout(),
           });
         }
         const res = await gdGenerate(run.id, cur, variant ?? undefined);
@@ -1182,7 +1215,12 @@ export function GraphicsStudioV2({
                   <button
                     className={`gd2-tt-btn ${exactPreview ? "gd2-tt-btn--on" : ""}`}
                     title="Toggle the engine's pixel-perfect render"
-                    onClick={() => setExactPreview((v) => !v)}
+                    onClick={() => {
+                      // Pin everything first so the exact render matches the
+                      // edit canvas 1:1 (no zone-stack surprises).
+                      if (!exactPreview) patch({ layout: pinAllLayout() });
+                      setExactPreview((v) => !v);
+                    }}
                   >
                     {exactPreview ? "✎ Edit mode" : "👁 Exact render"}
                   </button>
@@ -1255,7 +1293,7 @@ export function GraphicsStudioV2({
                 (pct ?? cfg.default_text_size_pct[key] ?? fallback) / 100;
 
               const texts: TextNodeSpec[] = [];
-              const pos = (id: string, place?: string) => lay[id] ?? markerPoint(id, place);
+              const pos = (id: string, place?: string, i = 0) => lay[id] ?? defaultPos(id, place, i);
               if ((tokens.headline ?? "").trim())
                 texts.push({
                   id: "headline", text: tokens.headline, ...pos("headline", es.headline?.placement),
@@ -1271,7 +1309,7 @@ export function GraphicsStudioV2({
                 if (!(s.text ?? "").trim()) return;
                 const id = `subheading-${i}`;
                 texts.push({
-                  id, text: s.text, ...pos(id, s.placement),
+                  id, text: s.text, ...pos(id, s.placement, i),
                   maxW: lay[id]?.w ?? DEFAULT_LAYOUT_W,
                   fontSize: sizeOf("subheading", s.size_pct, 3.4),
                   fontFamily: famFor(s.font), fontStyle: styleFor(s.font),
@@ -1320,7 +1358,7 @@ export function GraphicsStudioV2({
               // Canva-style resize: side handles reflow the box, corners scale
               // the font. One combined patch so nothing races.
               const resizeText = (id: string, wFrac: number, fontFrac: number) => {
-                const prev = lay[id] ?? markerPoint(id);
+                const prev = lay[id] ?? defaultPos(id, undefined, id.startsWith("subheading-") ? Number(id.split("-")[1]) : 0);
                 const sizePct = Math.round(
                   Math.min(cfg.text_size_pct_max, Math.max(cfg.text_size_pct_min, fontFrac * 100)) * 10,
                 ) / 10;
