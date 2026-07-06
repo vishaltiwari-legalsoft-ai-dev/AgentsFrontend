@@ -20,8 +20,8 @@ export interface DragMarker {
 
 /* Direct-manipulation text: the ACTUAL line rendered on the stage, draggable
    at 60fps, double-click to edit in place. fontSize is a fraction of the
-   stage height (mirrors the engine's size_pct semantics). Client fonts are
-   an editing approximation — the deterministic engine remains the truth. */
+   stage WIDTH (the engine's size_pct semantics). Client fonts are an
+   editing approximation — the deterministic engine remains the truth. */
 export interface TextNodeSpec {
   id: string;
   text: string;
@@ -179,7 +179,9 @@ export default function KonvaCanvas({
               marker. Anchor mc mirrors the engine's layout entries, so the
               committed x/y round-trips 1:1 with the deterministic renderer. */}
           {(texts ?? []).map((t) => {
-            const fs = Math.max(8, t.fontSize * H);
+            // Engine size_pct is a % of canvas WIDTH — mirror that exactly,
+            // or story/landscape formats wrap differently than the render.
+            const fs = Math.max(8, t.fontSize * W);
             const boxW = t.maxW * W;
             const common = {
               x: t.x * W,
@@ -200,7 +202,7 @@ export default function KonvaCanvas({
             const resize = (e: KonvaEventObject<Event>) => {
               const n = e.target;
               const wFrac = Math.min(1, Math.max(0.08, (n.width() * n.scaleX()) / W));
-              const fFrac = Math.max(0.008, (fs * n.scaleY()) / H);
+              const fFrac = Math.max(0.008, (fs * n.scaleY()) / W);
               n.scaleX(1);
               n.scaleY(1);
               onTextResize?.(t.id, wFrac, fFrac);

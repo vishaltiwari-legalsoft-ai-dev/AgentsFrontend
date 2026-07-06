@@ -510,27 +510,39 @@ export function GraphicsStudioV2({
     void guard(
       cur === 1 ? "Painting your brand background…" : cur === 2 ? "Creating your main image…" : "Placing your words, pixel-perfect…",
       async () => {
-        if (cur === 3) {
-          // V2 has no per-token checkmarks — the user's Generate/Approve click
-          // IS the human sign-off. Approve everything in the same call so the
-          // engine's readiness gate passes and the manifest trail stays intact.
-          const sign = { approved: true, source: "user" as const };
-          await gdUpdateConfig(run.id, {
-            tokens: { ...run.config.tokens, ...tok },
-            token_approvals: { headline: sign, highlight: sign, cta: sign },
-            subheadings: (run.config.subheadings ?? []).map((s) => ({ ...s, approved: true })),
-            layout: pinAllLayout(),
-          });
-        }
+        if (cur === 3) await signAndPin();
         const res = await gdGenerate(run.id, cur, variant ?? undefined);
         setRun(res.run);
       },
     );
   };
 
+  /* V2 has no per-token checkmarks — the user's Generate/Approve click IS the
+     human sign-off. One call signs every token + text line and pins every
+     visible line to the coords the edit canvas shows. */
+  const signAndPin = useCallback(async () => {
+    if (!run) return;
+    const sign = { approved: true, source: "user" as const };
+    await gdUpdateConfig(run.id, {
+      tokens: { ...run.config.tokens, ...tok },
+      token_approvals: { headline: sign, highlight: sign, cta: sign },
+      subheadings: (run.config.subheadings ?? []).map((s) => ({ ...s, approved: true })),
+      layout: pinAllLayout(),
+    });
+  }, [run, tok, pinAllLayout]);
+
   const approve = () => {
     if (!run) return;
     void guard("Locking this layer in…", async () => {
+      if (cur === 3) {
+        // The approved artifact must be the CURRENT arrangement, not the last
+        // render. Stage-3 generation is deterministic and free, so always
+        // re-render right before approving — no stale-attempt trap.
+        await signAndPin();
+        const g = await gdGenerate(run.id, 3);
+        setRun((await gdApprove(run.id, 3, g.attempt.attempt)) as GdRun);
+        return;
+      }
       const r = await gdApprove(run.id, cur);
       setRun(r);
     });
@@ -1455,7 +1467,12 @@ export function GraphicsStudioV2({
                 <button className="gd2-btn gd2-btn--soft" onClick={generate} disabled={busy !== null || (cur <= 2 && !(cur === 1 ? sel1 : sel2))}>
                   {hasAttempt ? "↻ Regenerate" : cur === 4 ? "Generate composite" : "Generate preview"}
                 </button>
-                <button className="gd2-btn" onClick={approve} disabled={busy !== null || !hasAttempt}>
+                <button
+                  className="gd2-btn"
+                  onClick={approve}
+                  disabled={busy !== null || (!hasAttempt && cur !== 3)}
+                  title={cur === 3 ? "Renders your current arrangement and approves it" : undefined}
+                >
                   Approve ✓
                 </button>
               </div>
