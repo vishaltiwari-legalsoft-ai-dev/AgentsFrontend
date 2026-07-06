@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import type { DragMarker } from "@/components/console/stage3/KonvaCanvas";
 import {
   gdApprove,
   gdArtifactBlob,
@@ -36,12 +38,26 @@ import {
    console stays available behind the StudioSwitch toggle.
    -------------------------------------------------------------------------- */
 
+// react-konva touches the browser canvas at import time — client-only.
+const KonvaCanvas = dynamic(() => import("@/components/console/stage3/KonvaCanvas"), { ssr: false });
+
 const STEPS = [
   { n: 1, name: "Background", hue: "#D9930F" },
   { n: 2, name: "Main image", hue: "#E85C4A" },
   { n: 3, name: "Your words", hue: "#6D4DF2" },
   { n: 4, name: "Logo", hue: "#0E9A89" },
 ] as const;
+
+const DEFAULT_LAYOUT_W = 0.42;
+
+function markerPoint(id: string, place?: string) {
+  const p = place || (id === "cta" ? "bottom" : "left");
+  if (p === "right") return { x: 0.73, y: 0.5 };
+  if (p === "center") return { x: 0.5, y: 0.5 };
+  if (p === "top") return { x: 0.5, y: 0.1 };
+  if (p === "bottom") return { x: 0.5, y: 0.9 };
+  return { x: 0.27, y: 0.5 }; // left
+}
 
 function stageNum(state: string): number {
   if (state === "DONE") return 5;
@@ -128,6 +144,7 @@ export function GraphicsStudioV2({
   // Step-3 toolbar: which line is being styled ("headline" | "highlight" |
   // "cta" | "sub-<idx>"), a curated emoji strip, and the live text preview.
   const [activeLine, setActiveLine] = useState("headline");
+  const [selEl, setSelEl] = useState<string | null>(null);
   const [emojiQuick, setEmojiQuick] = useState<string[]>([]);
   const [maxElements, setMaxElements] = useState(8);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -1050,13 +1067,50 @@ export function GraphicsStudioV2({
               ...(arInfo && arInfo.h >= arInfo.w ? { height: "100%", maxWidth: "100%" } : { width: "min(100%, 860px)" }),
             }}
           >
-            {cur === 3 && previewUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={previewUrl} alt="Live text preview" />
-            ) : (
+            {cur === 3 ? (() => {
+              // Konva drag surface: markers move the engine's real layout
+              // entries; elements get drag + resize via the transformer.
+              const lay = run.config.layout ?? {};
+              const es = run.config.element_styles ?? {};
+              const tokens = { ...run.config.tokens, ...tok };
+              const markers: DragMarker[] = [];
+              if ((tokens.headline ?? "").trim())
+                markers.push({ id: "headline", label: "Headline", ...(lay.headline ?? markerPoint("headline", es.headline?.placement)) });
+              subheadings.forEach((s, i) => {
+                if ((s.text ?? "").trim()) {
+                  const id = `subheading-${i}`;
+                  markers.push({ id, label: `Text ${i + 1}`, ...(lay[id] ?? markerPoint(id, s.placement)) });
+                }
+              });
+              if ((tokens.cta ?? "").trim())
+                markers.push({ id: "cta", label: "Button", ...(lay.cta ?? markerPoint("cta", es.cta?.placement)) });
+              (run.config.shapes ?? []).forEach((sp) => {
+                markers.push({ id: sp.id, label: sp.kind === "icon" ? (sp.icon ?? "icon") : sp.kind, x: sp.x, y: sp.y, w: sp.w, h: sp.h });
+              });
+              const onMove = (id: string, x: number, y: number) => {
+                if (id.startsWith("shape-")) {
+                  patch({ shapes: (run.config.shapes ?? []).map((s) => (s.id === id ? { ...s, x, y, anchor: "mc" } : s)) });
+                } else {
+                  const prev = lay[id];
+                  patch({ layout: { [id]: { x, y, w: prev?.w ?? DEFAULT_LAYOUT_W, anchor: "mc" } } });
+                }
+              };
+              return (
+                <KonvaCanvas
+                  previewSrc={previewUrl ?? undefined}
+                  aspect={arInfo ? arInfo.h / arInfo.w : 1}
+                  markers={markers}
+                  onMove={onMove}
+                  elements={run.config.elements ?? []}
+                  onElementsChange={(els) => patch({ elements: els })}
+                  selectedId={selEl}
+                  onSelect={setSelEl}
+                />
+              );
+            })() : (
               <AuthImg path={canvasPath} alt="Design preview" />
             )}
-            {!canvasPath && !(cur === 3 && previewUrl) ? (
+            {!canvasPath && cur !== 3 ? (
               <div className="gd2-canvashint">{STAGE_HINTS[cur] ?? ""}</div>
             ) : null}
             {busy ? (
