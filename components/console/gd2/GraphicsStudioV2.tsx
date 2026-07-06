@@ -479,7 +479,15 @@ export function GraphicsStudioV2({
       cur === 1 ? "Painting your brand background…" : cur === 2 ? "Creating your main image…" : "Placing your words, pixel-perfect…",
       async () => {
         if (cur === 3) {
-          await gdUpdateConfig(run.id, { tokens: { ...run.config.tokens, ...tok } });
+          // V2 has no per-token checkmarks — the user's Generate/Approve click
+          // IS the human sign-off. Approve everything in the same call so the
+          // engine's readiness gate passes and the manifest trail stays intact.
+          const sign = { approved: true, source: "user" as const };
+          await gdUpdateConfig(run.id, {
+            tokens: { ...run.config.tokens, ...tok },
+            token_approvals: { headline: sign, highlight: sign, cta: sign },
+            subheadings: (run.config.subheadings ?? []).map((s) => ({ ...s, approved: true })),
+          });
         }
         const res = await gdGenerate(run.id, cur, variant ?? undefined);
         setRun(res.run);
