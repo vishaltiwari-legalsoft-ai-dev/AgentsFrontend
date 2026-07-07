@@ -1404,6 +1404,7 @@ export interface MrReport {
   generated_at: string;
   user_id: string;
   agent_id: string;
+  sources?: MrSource[];
   structured: Record<string, unknown>;
   markdown: string;
   html: string;
@@ -1414,6 +1415,53 @@ export interface MrRunSummary {
   kind: MrReportKind;
   generated_at: string;
 }
+
+export type MrMetricStatus = "good" | "warn" | "bad" | "na";
+
+export interface MrChannelAgg {
+  spend: number;
+  leads: number;
+  qualified_leads: number;
+  demos_booked: number;
+  demos_completed: number;
+  cost_per_lead?: number | null;
+  cost_per_qualified_lead?: number | null;
+  cost_per_demo_booked: number | null;
+  cost_per_demo_completed: number | null;
+  cac?: number | null;
+  goal?: {
+    cpd_booked_low: number;
+    cpd_booked_high: number;
+    cpd_completed_low: number;
+    cpd_completed_high: number;
+  } | null;
+  status?: Partial<Record<string, MrMetricStatus>>;
+}
+
+export interface MrFlagGroup {
+  metric: string | null;
+  level: string;
+  count: number;
+  text: string;
+}
+
+export interface MrSource {
+  platform: string;
+  generated_at: string | null;
+  metrics: number;
+  leads: number;
+}
+
+export interface MrOverview {
+  has_data: boolean;
+  month: string | null;
+  totals: MrChannelAgg | null;
+  channels: Record<string, MrChannelAgg>;
+  flag_summary: MrFlagGroup[];
+  sources: MrSource[];
+}
+
+export const mrOverview = () => getJson<MrOverview>("/api/mr/overview");
 
 /** Upload one platform's CSV export and normalize it into a dataset. */
 export async function mrIngest(file: File, platform: MrPlatform): Promise<MrIngestResult> {
