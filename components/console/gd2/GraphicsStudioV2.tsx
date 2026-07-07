@@ -696,8 +696,16 @@ export function GraphicsStudioV2({
   const onUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file || !run) return;
-    void guard("Uploading your image…", async () => {
+    if (!file) return;
+    if (!run) {
+      onToast("Start a design first, then upload your photo.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      onToast("That image is over 10 MB — please use a smaller file.");
+      return;
+    }
+    void guard(`Uploading “${file.name}”…`, async () => {
       const { ref } = await gdSubjectUpload(run.id, file);
       const r = await gdUpdateConfig(run.id, { subject_asset_ref: ref });
       setRun(r);
@@ -1209,8 +1217,8 @@ export function GraphicsStudioV2({
               <button onClick={sendChat} aria-label="Send">➤</button>
             </div>
           </div>
-          <label className="gd2-upload gd2-upload--live" title="Use your own photo as the Step-2 main image">
-            ⬆ Upload photo for Step 2
+          <label className="gd2-upload gd2-upload--live" title="Use your own photo as the main image">
+            ⬆ {run.config.subject_asset_ref ? "Replace your photo" : "Upload your own photo"}
             <input
               type="file"
               accept="image/png,image/webp,image/jpeg"
@@ -1219,6 +1227,29 @@ export function GraphicsStudioV2({
               disabled={busy !== null}
             />
           </label>
+          {run.config.subject_asset_ref ? (
+            <div className="gd2-uploadprev">
+              <AuthImg
+                path={`/api/gd/runs/${run.id}/artifact/${encodeURI(run.config.subject_asset_ref)}`}
+                alt="Your uploaded photo"
+              />
+              <div className="gd2-uploadprev-body">
+                <b>Photo ready ✓</b>
+                <span>
+                  {cur === 2
+                    ? "It’s on your design →"
+                    : cur < 2
+                      ? "Approve the background first — then it drops into Step 2."
+                      : "Placed as your main image."}
+                </span>
+                {cur > 2 ? (
+                  <button className="gd2-uploadprev-go" onClick={() => gotoStage(2)}>
+                    ← Back to Step 2
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           <div className="gd2-kitcard">
             <b>Brand kit — {cfg.brand_name}</b>
             <p>Colors, fonts and the logo are locked to brand — nothing goes off-brand here.</p>
