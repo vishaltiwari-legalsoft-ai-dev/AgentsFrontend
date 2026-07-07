@@ -79,9 +79,10 @@ export function OverviewView({ overview, busy, onPull, onAsk, onGotoData, onToas
         </Button>
       </div>
 
-      <div className="mr-panel__head">
-        <h2 className="mr-panel__title">{fmtMonth(overview.month)}</h2>
-        <span className="mr-panel__sub">Latest month in the data · flagged against the 2026 goals</span>
+      <div className="mr-mast">
+        <span className="mr-mast__eyebrow">Marketing desk · 2026 plan</span>
+        <h2 className="mr-mast__month">{fmtMonth(overview.month)}</h2>
+        <span className="mr-mast__line">Latest month in the data · flagged against the 2026 goals</span>
       </div>
 
       {t && (

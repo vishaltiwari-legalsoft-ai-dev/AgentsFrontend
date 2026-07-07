@@ -15,8 +15,9 @@ const HEADLINE: { path: string; label: string; money: boolean }[] = [
 
 function sign(n: number | null, money: boolean): string {
   if (n === null || n === undefined) return "—";
+  if (n === 0) return money ? "$0" : "0";
   const v = money ? fmtMoney(Math.abs(n)) : fmtNum(Math.abs(n));
-  return n < 0 ? `−${v}` : n > 0 ? `+${v}` : money ? "$0" : "0";
+  return n < 0 ? `▼ ${v}` : `▲ ${v}`;
 }
 
 export function DailyMovement({ onToast }: { onToast: (m: string) => void }) {
