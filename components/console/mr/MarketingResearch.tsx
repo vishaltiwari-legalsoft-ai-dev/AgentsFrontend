@@ -12,8 +12,9 @@ import { AskView } from "./AskView";
 import { DataView } from "./DataView";
 import { OverviewView } from "./OverviewView";
 import { ReportsView } from "./ReportsView";
+import { VendorsView } from "./VendorsView";
 
-export type MrView = "overview" | "ask" | "reports" | "data";
+export type MrView = "overview" | "ask" | "reports" | "vendors" | "data";
 
 export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) => void; onBack: () => void }) {
   const [view, setView] = useState<MrView>("overview");
@@ -98,10 +99,12 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
     setView("ask");
   }
 
+  const vendorCount = new Set(snapshots.map((s) => s.vendor_slug)).size;
   const navItems = [
     { value: "overview", label: "Overview" },
     { value: "ask", label: "Ask" },
     { value: "reports", label: "Reports", count: runs.length || undefined },
+    { value: "vendors", label: "Vendors", count: vendorCount || undefined },
     { value: "data", label: "Data", count: datasets.length || undefined },
   ];
 
@@ -131,6 +134,7 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
         )}
         {view === "ask" && <AskView seed={seed} onSeedConsumed={() => setSeed(null)} onToast={onToast} />}
         {view === "reports" && <ReportsView runs={runs} onRunsChanged={refresh} onToast={onToast} />}
+        {view === "vendors" && <VendorsView snapshots={snapshots} onToast={onToast} />}
         {view === "data" && (
           <DataView
             datasets={datasets}

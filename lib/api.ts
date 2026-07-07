@@ -1494,6 +1494,19 @@ export const mrSnapshotCapture = () =>
 export const mrSnapshotDeltas = () => getJson<MrVendorDelta[]>("/api/mr/snapshots/deltas");
 export const mrSnapshots = () => getJson<MrSnapshotMeta[]>("/api/mr/snapshots");
 
+export interface MrSnapshotDoc {
+  vendor: string; vendor_slug: string; gid: number; date: string; month: string; captured_at: string;
+  canonical: { team_overall: Record<string, unknown>; channels: Record<string, Record<string, unknown>> };
+}
+export interface MrVendorDetail {
+  vendor: string; vendor_slug: string; gid: number;
+  dates: string[];
+  snapshot: MrSnapshotDoc;
+  delta: MrVendorDelta;
+}
+export const mrVendorDetail = (slug: string, date?: string) =>
+  getJson<MrVendorDetail>(`/api/mr/snapshots/vendor/${slug}${date ? `?date_iso=${date}` : ""}`);
+
 /** Upload one platform's CSV export and normalize it into a dataset. */
 export async function mrIngest(file: File, platform: MrPlatform): Promise<MrIngestResult> {
   const form = new FormData();
