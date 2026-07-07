@@ -702,11 +702,23 @@ export function GraphicsStudioV2({
       const r = await gdUpdateConfig(run.id, { subject_asset_ref: ref });
       setRun(r);
       setSel2("UPLOAD");
+      if (stageNum(r.state) === 2) {
+        // Composite immediately — deterministic and free — so the photo is
+        // ON the design the moment the upload lands. No dead clicks.
+        const res = await gdGenerate(r.id, 2, "UPLOAD");
+        setRun(res.run);
+        onToast("Your photo is on the design — move it with the Position grid, then Approve.");
+      } else {
+        onToast(`“${file.name}” saved — it becomes your main image in Step 2.`);
+      }
       setChat((c) => [
         ...c,
         {
           role: "agent",
-          text: `Got it — “${file.name}” is ready in Step 2 as “Your upload”. Generate a preview there to see it composited onto your background.`,
+          text:
+            stageNum(r.state) === 2
+              ? `“${file.name}” is composited onto your background. Nudge it with the Position grid and Regenerate, or Approve if it looks right.`
+              : `Got it — “${file.name}” is saved. Once the background is approved, it appears in Step 2 as “Your upload”.`,
         },
       ]);
     });
@@ -914,8 +926,13 @@ export function GraphicsStudioV2({
                   className={`gd2-tile ${sel2 === "UPLOAD" ? "gd2-tile--on" : ""}`}
                   onClick={() => setSel2("UPLOAD")}
                 >
-                  <span className="gd2-tiletxt"><b>Your upload</b></span>
-                  <span className="gd2-tiledesc">Composited exactly as uploaded — no AI drawing, instant and free.</span>
+                  <span className="gd2-tileart gd2-tileart--img">
+                    <AuthImg
+                      path={`/api/gd/runs/${run.id}/artifact/${encodeURI(run.config.subject_asset_ref)}`}
+                      alt="Your upload"
+                    />
+                  </span>
+                  <span className="gd2-tilelabel">Your upload — placed as-is, no AI drawing</span>
                 </button>
               ) : null}
               {cfg.stage2_variants.map((v) => (
