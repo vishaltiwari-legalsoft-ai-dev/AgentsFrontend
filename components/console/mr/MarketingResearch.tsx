@@ -9,6 +9,7 @@ import {
 } from "@/lib/api";
 import { Icon, Tabs } from "@/lib/kit-ui";
 import { AskView } from "./AskView";
+import { OverviewView } from "./OverviewView";
 
 export type MrView = "overview" | "ask" | "reports" | "data";
 
@@ -118,7 +119,15 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
       </header>
 
       <div className="mr-body">
-        {view === "overview" && <Pending name="Overview" />}
+        {view === "overview" && (
+          <OverviewView
+            overview={overview}
+            busy={busy}
+            onPull={pullSheet}
+            onAsk={askFromAnywhere}
+            onGotoData={() => setView("data")}
+          />
+        )}
         {view === "ask" && <AskView seed={seed} onSeedConsumed={() => setSeed(null)} onToast={onToast} />}
         {view === "reports" && <Pending name="Reports" />}
         {view === "data" && <Pending name="Data" />}

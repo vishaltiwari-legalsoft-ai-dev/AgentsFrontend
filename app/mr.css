@@ -541,3 +541,21 @@
   font-size: 13.5px; line-height: 1.45;
 }
 .mr-askv__box { margin-top: 16px; position: sticky; bottom: 0; background: var(--surface); padding-top: 8px; }
+
+/* ------- Overview ------- */
+.mr-fresh {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-card); font-size: 12.5px; color: var(--text-2);
+  margin-bottom: 18px;
+}
+.mr-fresh__item { display: inline-flex; align-items: center; gap: 6px; }
+.mr-fresh > .ens-btn, .mr-fresh > button:last-child { margin-left: auto; }
+.mr-kpis--hero { margin-bottom: 18px; }
+.mr-kpis--hero .mr-kpi__label { display: inline-flex; align-items: center; gap: 6px; }
+.mr-onb { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; padding: 56px 24px; }
+.mr-onb__title { font-size: 20px; font-weight: 650; margin: 0; }
+.mr-onb__sub { max-width: 520px; color: var(--text-2); font-size: 13.5px; line-height: 1.55; margin: 0; }
+.mr-onb__steps { text-align: left; max-width: 480px; margin: 4px 0 6px; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; color: var(--text-2); }
+.mr-onb__actions { display: flex; gap: 10px; }
+.mr-teaser { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
