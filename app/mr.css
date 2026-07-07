@@ -597,3 +597,21 @@
 .mr-doc__srcrow--muted { color: var(--text-3); }
 .mr-doc__none { font-size: 13px; color: var(--text-3); margin: 0; }
 @media (max-width: 720px) { .mr-doc { padding: 28px 20px; } }
+
+/* ------- Reports: rail + viewer ------- */
+.mr-rpts { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 24px; align-items: start; }
+.mr-rpts__rail { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.mr-gen { display: flex; flex-direction: column; gap: 8px; }
+.mr-gencard {
+  display: flex; flex-direction: column; gap: 3px; text-align: left;
+  padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-card); cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.mr-gencard:hover:not(:disabled) { border-color: var(--brand); }
+.mr-gencard:disabled { opacity: 0.55; cursor: default; }
+.mr-gencard__eyebrow { font-size: 10.5px; font-weight: 650; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+.mr-gencard__name { font-size: 13.5px; font-weight: 600; color: var(--text-1); }
+.mr-gencard__desc { font-size: 12px; line-height: 1.45; color: var(--text-2); }
+.mr-rpts__view { min-width: 0; }
+@media (max-width: 960px) { .mr-rpts { grid-template-columns: 1fr; } .mr-rpts__rail { position: static; } }
