@@ -9,14 +9,11 @@ import {
 } from "@/lib/api";
 import { Icon, Tabs } from "@/lib/kit-ui";
 import { AskView } from "./AskView";
+import { DataView } from "./DataView";
 import { OverviewView } from "./OverviewView";
 import { ReportsView } from "./ReportsView";
 
 export type MrView = "overview" | "ask" | "reports" | "data";
-
-function Pending({ name }: { name: string }) {
-  return <div className="mr-panel"><div className="mr-empty">{name} view lands in the next commit.</div></div>;
-}
 
 export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) => void; onBack: () => void }) {
   const [view, setView] = useState<MrView>("overview");
@@ -131,7 +128,20 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
         )}
         {view === "ask" && <AskView seed={seed} onSeedConsumed={() => setSeed(null)} onToast={onToast} />}
         {view === "reports" && <ReportsView runs={runs} onRunsChanged={refresh} onToast={onToast} />}
-        {view === "data" && <Pending name="Data" />}
+        {view === "data" && (
+          <DataView
+            datasets={datasets}
+            connectors={connectors}
+            config={config}
+            catalog={catalog}
+            busy={busy}
+            year={year}
+            onYear={setYear}
+            onPull={pullSheet}
+            onUpload={uploadCsv}
+            onScan={deepScan}
+          />
+        )}
       </div>
     </div>
   );

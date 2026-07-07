@@ -615,3 +615,8 @@
 .mr-gencard__desc { font-size: 12px; line-height: 1.45; color: var(--text-2); }
 .mr-rpts__view { min-width: 0; }
 @media (max-width: 960px) { .mr-rpts { grid-template-columns: 1fr; } .mr-rpts__rail { position: static; } }
+
+/* ------- Data view ------- */
+.mr-datanav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; position: sticky; top: 0; background: var(--surface); padding: 8px 0; z-index: 2; }
+.mr-datasec { padding: 18px 0 26px; border-bottom: 1px solid var(--border); scroll-margin-top: 60px; display: flex; flex-direction: column; gap: 14px; }
+.mr-datasec:last-child { border-bottom: none; }
