@@ -8,7 +8,7 @@ import { IntegrationsView } from "@/components/console/IntegrationsView";
 import { isAgentLive, LIVE_AGENTS } from "@/lib/console-data";
 import { AgentChat } from "@/components/console/AgentChat";
 import { StudioSwitch } from "@/components/console/gd2/StudioSwitch";
-import { MarketingResearch } from "@/components/console/MarketingResearch";
+import { MarketingResearch } from "@/components/console/mr/MarketingResearch";
 import { LibraryView } from "@/components/console/LibraryView";
 import { AdminView } from "@/components/console/AdminView";
 import { DatabaseView } from "@/components/console/DatabaseView";
