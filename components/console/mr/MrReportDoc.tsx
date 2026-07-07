@@ -100,6 +100,37 @@ function CompetitorDetail({ s }: { s: Record<string, unknown> }) {
   );
 }
 
+function DailyMovementDetail({ s }: { s: Record<string, unknown> }) {
+  const vendors = (s.vendors ?? []) as {
+    vendor: string; date: string; since: string | null; days: number; month_start: boolean; corrected: boolean;
+    blocks: { team_overall: { additive: Record<string, { delta: number | null; mtd: number | null; corrected: boolean }> } };
+  }[];
+  if (!vendors.length) return <p className="mr-doc__none">No snapshots captured yet.</p>;
+  const COLS: { path: string; label: string; money: boolean }[] = [
+    { path: "spend.performance", label: "Spend", money: true },
+    { path: "leads.total", label: "Leads", money: false },
+    { path: "leads.qualified", label: "Qualified", money: false },
+    { path: "demos.total_booked_all", label: "Booked", money: false },
+    { path: "demos.completed_all", label: "Completed", money: false },
+  ];
+  const cell = (n: number | null | undefined, money: boolean) =>
+    n === null || n === undefined ? "—" : `${n > 0 ? "+" : ""}${money ? fmtMoney(n) : fmtNum(n)}`;
+  return (
+    <table className="mr-table">
+      <thead><tr><th>Vendor</th>{COLS.map((c) => <th key={c.path}>{c.label}</th>)}<th>Window</th></tr></thead>
+      <tbody>
+        {vendors.map((v) => (
+          <tr key={v.vendor}>
+            <td>{v.vendor}{v.corrected ? " ⚠" : ""}</td>
+            {COLS.map((c) => <td key={c.path}>{cell(v.blocks.team_overall.additive[c.path]?.delta, c.money)}</td>)}
+            <td>{v.month_start ? "month start" : v.days > 1 ? `${v.days}d since ${v.since}` : "1d"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 export function MrReportDoc({ report }: { report: MrReport }) {
   const meta = REPORT_META[report.kind] ?? { label: report.kind, eyebrow: "Report", desc: "" };
   const s = report.structured ?? {};
@@ -154,6 +185,7 @@ export function MrReportDoc({ report }: { report: MrReport }) {
         {report.kind === "utm_attribution" && <AttributionDetail s={s} />}
         {(report.kind === "opportunity_report" || report.kind === "icp_signal") && <OpportunityDetail s={s} />}
         {report.kind === "competitor_digest" && <CompetitorDetail s={s} />}
+        {report.kind === "daily_movement" && <DailyMovementDetail s={s} />}
       </Section>
 
       <Section n={next()} title="Appendix — data & provenance">

@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   mrConfig, mrConnectors, mrDatasets, mrIngest, mrIngestSheet, mrListRuns,
-  mrOverview, mrWorkbook, mrWorkbookScan,
+  mrOverview, mrSnapshots, mrWorkbook, mrWorkbookScan,
   type MrConfig, type MrConnector, type MrDataset, type MrOverview,
-  type MrPlatform, type MrRunSummary, type MrTabProfile,
+  type MrPlatform, type MrRunSummary, type MrSnapshotMeta, type MrTabProfile,
 } from "@/lib/api";
 import { Icon, Tabs } from "@/lib/kit-ui";
 import { AskView } from "./AskView";
@@ -27,6 +27,7 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
   const [connectors, setConnectors] = useState<MrConnector[]>([]);
   const [config, setConfig] = useState<MrConfig | null>(null);
   const [catalog, setCatalog] = useState<MrTabProfile[]>([]);
+  const [snapshots, setSnapshots] = useState<MrSnapshotMeta[]>([]);
 
   const refresh = useCallback(async () => {
     try {
@@ -37,6 +38,7 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
     } catch (e) {
       onToast(e instanceof Error ? e.message : "Failed to load");
     }
+    mrSnapshots().then(setSnapshots).catch(() => {});
   }, [onToast]);
 
   useEffect(() => {
@@ -124,6 +126,7 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
             onPull={pullSheet}
             onAsk={askFromAnywhere}
             onGotoData={() => setView("data")}
+            onToast={onToast}
           />
         )}
         {view === "ask" && <AskView seed={seed} onSeedConsumed={() => setSeed(null)} onToast={onToast} />}
@@ -131,6 +134,7 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
         {view === "data" && (
           <DataView
             datasets={datasets}
+            snapshots={snapshots}
             connectors={connectors}
             config={config}
             catalog={catalog}

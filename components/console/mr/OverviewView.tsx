@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { MrOverview } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
 import { ChannelCard, Dot, fmtMoney, fmtMonth, fmtNum, fmtTime, sourceLabel } from "./shared";
+import { DailyMovement } from "./DailyMovement";
 
 const KPIS = [
   { key: "spend", label: "Spend", money: true },
@@ -15,12 +16,13 @@ const KPIS = [
 
 const TEASERS = ["How did we perform this month?", "Where are we wasting spend?"];
 
-export function OverviewView({ overview, busy, onPull, onAsk, onGotoData }: {
+export function OverviewView({ overview, busy, onPull, onAsk, onGotoData, onToast }: {
   overview: MrOverview | null;
   busy: boolean;
   onPull: () => void;
   onAsk: (q: string) => void;
   onGotoData: () => void;
+  onToast: (m: string) => void;
 }) {
   const [teaser, setTeaser] = useState("");
 
@@ -103,6 +105,8 @@ export function OverviewView({ overview, busy, onPull, onAsk, onGotoData }: {
           ))}
         </div>
       )}
+
+      <DailyMovement onToast={onToast} />
 
       <div className="mr-cards">
         {Object.entries(overview.channels).map(([name, a]) => (

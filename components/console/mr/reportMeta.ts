@@ -31,4 +31,8 @@ export const REPORT_META: Record<MrReportKind, ReportMeta> = {
     label: "ICP Audience Signal", eyebrow: "Monthly · Audience",
     desc: "Where ideal-customer-profile buyers are showing up, scored and ranked.",
   },
+  daily_movement: {
+    label: "Daily Movement Report", eyebrow: "Daily · Snapshots",
+    desc: "What actually happened yesterday per vendor — day deltas from the snapshot history, corrections flagged.",
+  },
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import type { MrConfig, MrConnector, MrDataset, MrPlatform, MrTabProfile } from "@/lib/api";
+import type { MrConfig, MrConnector, MrDataset, MrPlatform, MrSnapshotMeta, MrTabProfile } from "@/lib/api";
 import { Badge, Button, Icon } from "@/lib/kit-ui";
 import { fmtTime, sourceLabel } from "./shared";
 
@@ -17,8 +17,9 @@ const SECTIONS = [
   { id: "mr-data-settings", label: "Settings" },
 ];
 
-export function DataView({ datasets, connectors, config, catalog, busy, year, onYear, onPull, onUpload, onScan }: {
+export function DataView({ datasets, snapshots, connectors, config, catalog, busy, year, onYear, onPull, onUpload, onScan }: {
   datasets: MrDataset[];
+  snapshots: MrSnapshotMeta[];
   connectors: MrConnector[];
   config: MrConfig | null;
   catalog: MrTabProfile[];
@@ -84,6 +85,29 @@ export function DataView({ datasets, connectors, config, catalog, busy, year, on
               </div>
             );
           })
+        )}
+        {snapshots.length > 0 && (
+          <>
+            <h3 className="mr-section__title" style={{ marginTop: 10 }}>Snapshot history</h3>
+            {Object.entries(
+              snapshots.reduce<Record<string, { vendor: string; days: number; last: string }>>((acc, s) => {
+                const e = acc[s.vendor_slug] ?? { vendor: s.vendor, days: 0, last: "" };
+                e.days += 1;
+                if (s.captured_at > e.last) e.last = s.captured_at;
+                acc[s.vendor_slug] = e;
+                return acc;
+              }, {})
+            ).map(([slug, e]) => (
+              <div className="mr-src" key={slug}>
+                <span className="mr-src__icon"><Icon name="camera" size={18} /></span>
+                <div className="mr-src__id">
+                  <span className="mr-src__name">{e.vendor}</span>
+                  <span className="mr-src__meta">Last snapshot {fmtTime(e.last)}</span>
+                </div>
+                <div className="mr-src__stat"><span className="mr-src__count">{e.days}<span> days</span></span></div>
+              </div>
+            ))}
+          </>
         )}
       </section>
 

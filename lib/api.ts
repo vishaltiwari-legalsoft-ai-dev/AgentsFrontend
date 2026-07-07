@@ -1355,6 +1355,7 @@ export const MR_REPORT_KINDS = [
   "opportunity_report",
   "utm_attribution",
   "icp_signal",
+  "daily_movement",
 ] as const;
 export type MrReportKind = (typeof MR_REPORT_KINDS)[number];
 
@@ -1462,6 +1463,36 @@ export interface MrOverview {
 }
 
 export const mrOverview = () => getJson<MrOverview>("/api/mr/overview");
+
+export interface MrDeltaField { delta: number | null; mtd: number | null; corrected: boolean }
+export interface MrRateField { value: number | null; mode: "recomputed" | "mtd" }
+export interface MrDeltaBlock {
+  additive: Record<string, MrDeltaField>;
+  rates: Record<string, MrRateField>;
+}
+export interface MrVendorDelta {
+  vendor: string;
+  vendor_slug: string;
+  date: string;
+  since: string | null;
+  days: number;
+  month_start: boolean;
+  corrected: boolean;
+  blocks: { team_overall: MrDeltaBlock; channels: Record<string, MrDeltaBlock> };
+}
+export interface MrSnapshotCaptureResult {
+  date: string;
+  tabs: { tab: string; slug?: string; captured?: boolean; skipped?: boolean; error?: string }[];
+  exported: string[];
+}
+export interface MrSnapshotMeta {
+  vendor: string; vendor_slug: string; gid: number; date: string; month: string; captured_at: string;
+}
+
+export const mrSnapshotCapture = () =>
+  postJson<MrSnapshotCaptureResult>("/api/mr/snapshots/capture", {});
+export const mrSnapshotDeltas = () => getJson<MrVendorDelta[]>("/api/mr/snapshots/deltas");
+export const mrSnapshots = () => getJson<MrSnapshotMeta[]>("/api/mr/snapshots");
 
 /** Upload one platform's CSV export and normalize it into a dataset. */
 export async function mrIngest(file: File, platform: MrPlatform): Promise<MrIngestResult> {
