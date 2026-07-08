@@ -65,7 +65,11 @@
 }
 
 /* Overview masthead — month as the desk's front page ----------------------- */
-.mr-mast { display: grid; gap: 4px; padding: 6px 0 2px; }
+.mr-mast {
+  display: grid; gap: 4px;
+  padding: 6px 0 14px;
+  border-bottom: 4px double var(--text-primary);
+}
 .mr-mast__eyebrow {
   font: 600 10.5px/1.4 var(--font-mono);
   letter-spacing: 0.16em;
@@ -124,7 +128,22 @@
   letter-spacing: -0.02em;
   color: var(--text-primary);
 }
-.mr-kpis--hero { margin-bottom: 2px; }
+/* Hero variant: open editorial row — hairlines, not boxes. */
+.mr-kpis--hero {
+  margin-bottom: 2px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  gap: 0;
+  overflow: visible;
+}
+.mr-kpis--hero .mr-kpi {
+  background: transparent;
+  padding: 6px 18px 6px 18px;
+  border-left: 1px solid var(--border);
+}
+.mr-kpis--hero .mr-kpi:first-child { border-left: none; padding-left: 0; }
+.mr-kpis--hero .mr-kpi__value { font-size: 30px; }
 .mr-kpis--hero .mr-kpi__label { display: inline-flex; align-items: center; gap: 6px; }
 
 /* Goal-status dots ---------------------------------------------------------- */
@@ -710,10 +729,12 @@
 .mr-insight--info::before { background: var(--brand); }
 .mr-board__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
 .mr-chart {
-  background: var(--surface-card); border: 1px solid var(--border);
+  background: var(--surface-card); border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg); padding: 14px 16px;
   display: flex; flex-direction: column; gap: 10px; min-width: 0;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
 }
+.mr-chart:hover { box-shadow: var(--shadow-sm); border-color: var(--border); }
 .mr-chart__svg { width: 100%; height: auto; }
 .mr-chart__val { font: 600 8.5px var(--font-mono); fill: var(--text-primary); font-variant-numeric: tabular-nums; }
 .mr-chart__axis { font: 500 8px var(--font-mono); fill: var(--text-tertiary); }
@@ -723,12 +744,13 @@
 
 /* Desk board v2: hero, wire, motion ------------------------------------------- */
 .mr-hero {
-  border: 1px solid var(--border);
+  border: none;
   border-radius: var(--radius-lg);
-  background: var(--grad-hero), var(--surface-card);
-  padding: 16px 20px 10px;
+  background: var(--grad-hero);
+  padding: 20px 22px 12px;
   display: flex; flex-direction: column; gap: 8px;
 }
+.mr-hero__range { font: 500 11px/1.5 var(--font-mono); letter-spacing: 0.08em; color: var(--text-tertiary); margin-left: 8px; }
 .mr-hero__head { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; flex-wrap: wrap; }
 .mr-hero__pace {
   font: 500 12px/1.45 var(--font-mono);

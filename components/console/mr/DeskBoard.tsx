@@ -32,7 +32,9 @@ export function DeskBoard({ trends }: { trends: MrTrends | null }) {
 
       <div className="mr-hero">
         <div className="mr-hero__head">
-          <h4 className="mr-section__title">Spend · January → today</h4>
+          <h4 className="mr-section__title">
+            Spend<span className="mr-hero__range">January → today</span>
+          </h4>
           {pace && <span className={`mr-hero__pace mr-hero__pace--${pace.level}`}>{pace.text}</span>}
         </div>
         <Area data={t.monthly.map((m) => ({ month: m.month, value: m.spend }))} money />

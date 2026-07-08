@@ -70,8 +70,11 @@ export function Area({ data, money }: { data: { month: string; value: number }[]
         </linearGradient>
       </defs>
       {[0.25, 0.5, 0.75].map((f) => (
-        <line key={f} x1={HPAD} x2={HW - HPAD} y1={y(max * f)} y2={y(max * f)}
-          stroke="var(--border-subtle)" strokeWidth="1" />
+        <g key={f}>
+          <line x1={HPAD} x2={HW - HPAD} y1={y(max * f)} y2={y(max * f)}
+            stroke="var(--border-subtle)" strokeWidth="1" />
+          <text x={HPAD} y={y(max * f) - 4} className="mr-chart__axis">{fmtK(max * f)}</text>
+        </g>
       ))}
       <polygon points={`${x(0)},${HH - 20} ${pts} ${x(last)},${HH - 20}`} fill="url(#mrHeroFill)" />
       <polyline points={pts} fill="none" stroke="var(--brand)" strokeWidth="2.5"

@@ -127,6 +127,11 @@ export function OverviewView({ overview, busy, onPull, onAsk, onGotoData, onToas
 
       <DailyMovement onToast={onToast} />
 
+      {Object.keys(overview.channels).length > 0 && (
+        <h3 className="mr-section__title" style={{ marginTop: 6 }}>
+          Channels · {fmtMonth(overview.month)}
+        </h3>
+      )}
       <div className="mr-cards">
         {Object.entries(overview.channels).map(([name, a]) => (
           <ChannelCard key={name} name={name} a={a} />
