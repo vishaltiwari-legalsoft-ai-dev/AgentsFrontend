@@ -1526,6 +1526,17 @@ export interface MrTrends {
 }
 export const mrTrends = () => getJson<MrTrends>("/api/mr/trends");
 
+export interface MrPortfolio {
+  date: string; month: string; vendors: number;
+  total_budget: number; total_spend: number; budget_utilized_pct: number | null;
+  leads: number; qualified_leads: number; cost_per_qualified_lead: number | null;
+  qual_demos_booked: number; cost_per_qual_demo_booked: number | null;
+  demos_completed: number; show_rate_pct: number | null; services_sold: number;
+  pacing: { day: number; days_in_month: number; expected_pct: number };
+  benchmarks: { cpqdb_max: number; ql_ratio_min: number; show_rate_min: number; cac_target: number; cpql_red: number };
+}
+export const mrPortfolio = () => getJson<MrPortfolio>("/api/mr/snapshots/portfolio");
+
 /** Upload one platform's CSV export and normalize it into a dataset. */
 export async function mrIngest(file: File, platform: MrPlatform): Promise<MrIngestResult> {
   const form = new FormData();

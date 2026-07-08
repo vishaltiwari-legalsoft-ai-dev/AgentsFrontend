@@ -1,9 +1,91 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { mrVendorDetail, type MrSnapshotMeta, type MrVendorDetail } from "@/lib/api";
-import { Icon } from "@/lib/kit-ui";
+import { mrPortfolio, mrVendorDetail, type MrPortfolio, type MrSnapshotMeta, type MrVendorDetail } from "@/lib/api";
+import { Button, Icon } from "@/lib/kit-ui";
 import { fmtMoney, fmtNum, fmtTime } from "./shared";
+
+const pct = (n: number | null) => (n === null || n === undefined ? "—" : `${n.toFixed(1)}%`);
+
+function copyText(p: MrPortfolio): string {
+  return [
+    "Portfolio Summary — Paid Vendors (Official Total)",
+    `As of ${p.date} · ${p.vendors} vendors · ${p.month} MTD`,
+    `Total budget: ${fmtMoney(p.total_budget)}`,
+    `Total spend: ${fmtMoney(p.total_spend)} (${pct(p.budget_utilized_pct)} of budget)`,
+    `Qualified leads: ${p.qualified_leads} · Cost/qual. lead: ${fmtMoney(p.cost_per_qualified_lead)}`,
+    `Qual. demos booked: ${p.qual_demos_booked} · Cost/qual. demo booked: ${fmtMoney(p.cost_per_qual_demo_booked)}`,
+    `Demos completed: ${p.demos_completed} · Show rate: ${pct(p.show_rate_pct)}`,
+    `Total services sold (act.): ${p.services_sold}`,
+    `Benchmarks: Cost/Qual. Demo Booked < $${p.benchmarks.cpqdb_max} · QL Ratio ≥ ${p.benchmarks.ql_ratio_min}% · ` +
+      `Show Rate ≥ ${p.benchmarks.show_rate_min}% · CAC ~$${p.benchmarks.cac_target.toLocaleString()} · ` +
+      `Day ${p.pacing.day} of ${p.pacing.days_in_month} ≈ ${p.pacing.expected_pct}% expected budget utilization`,
+  ].join("\n");
+}
+
+function PortfolioBar({ onToast }: { onToast: (m: string) => void }) {
+  const [p, setP] = useState<MrPortfolio | null>(null);
+
+  useEffect(() => {
+    mrPortfolio().then(setP).catch(() => setP(null));
+  }, []);
+
+  if (!p) return null;
+  const b = p.benchmarks;
+  const cpqlBad = p.cost_per_qualified_lead !== null && p.cost_per_qualified_lead >= b.cpql_red;
+  const cpqdbGood = p.cost_per_qual_demo_booked !== null && p.cost_per_qual_demo_booked < b.cpqdb_max;
+  const showBad = p.show_rate_pct !== null && p.show_rate_pct < b.show_rate_min;
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(copyText(p as MrPortfolio));
+      onToast("Copied portfolio summary");
+    } catch {
+      onToast("Copy failed — clipboard unavailable");
+    }
+  }
+
+  const CELLS: { label: string; value: string; tone?: "good" | "bad" }[] = [
+    { label: "Total budget", value: fmtMoney(p.total_budget) },
+    { label: "Total spend", value: fmtMoney(p.total_spend) },
+    { label: "Budget utilized", value: pct(p.budget_utilized_pct) },
+    { label: "Qualified leads", value: fmtNum(p.qualified_leads) },
+    { label: "Qual. demos booked", value: fmtNum(p.qual_demos_booked) },
+    { label: "Cost / qual. lead", value: fmtMoney(p.cost_per_qualified_lead), tone: cpqlBad ? "bad" : undefined },
+    { label: "Cost / qual. demo booked", value: fmtMoney(p.cost_per_qual_demo_booked), tone: cpqdbGood ? "good" : "bad" },
+    { label: "Demos completed", value: fmtNum(p.demos_completed) },
+    { label: "Show rate", value: pct(p.show_rate_pct), tone: showBad ? "bad" : "good" },
+    { label: "Total services sold (act.)", value: fmtNum(p.services_sold) },
+  ];
+
+  return (
+    <div className="mr-port">
+      <div className="mr-port__head">
+        <h3 className="mr-section__title">
+          Portfolio summary · paid vendors (official total)
+          <span className="mr-dm__date"> · {p.date}</span>
+        </h3>
+        <Button size="sm" variant="secondary" onClick={() => void copy()}
+          iconLeft={<Icon name="copy" size={13} />}>
+          Copy summary
+        </Button>
+      </div>
+      <div className="mr-port__grid">
+        {CELLS.map((c) => (
+          <div className="mr-port__cell" key={c.label}>
+            <b className={c.tone ? `mr-port__val--${c.tone}` : undefined}>{c.value}</b>
+            <span>{c.label}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mr-port__bench">
+        <b>Benchmarks:</b> Cost/Qual. Demo Booked &lt; ${b.cpqdb_max} · QL Ratio ≥ {b.ql_ratio_min}% ·
+        Show Rate ≥ {b.show_rate_min}% · CAC ~${b.cac_target.toLocaleString()} ·
+        Pacing: Day {p.pacing.day} of {p.pacing.days_in_month} ≈ {p.pacing.expected_pct}% expected budget utilization
+      </div>
+    </div>
+  );
+}
 
 const BRANDS = ["LS", "RA", "LI", "VS", "BK", "RCM"];
 const CHANNELS = ["Google", "Meta", "Email", "Website"];
@@ -143,7 +225,9 @@ export function VendorsView({ snapshots, onToast }: {
   const t = d?.blocks.team_overall.additive;
 
   return (
-    <div className="mr-vend">
+    <>
+      <PortfolioBar onToast={onToast} />
+      <div className="mr-vend">
       <aside className="mr-vend__rail">
         <h3 className="mr-section__title">Vendors ({vendors.length})</h3>
         {vendors.map((v) => (
@@ -218,6 +302,7 @@ export function VendorsView({ snapshots, onToast }: {
           </>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
