@@ -89,61 +89,26 @@ function VendorSummary({ team, month, benchmarks }: {
   );
 }
 
-function PortfolioBar({ p, onToast }: { p: MrPortfolio | null; onToast: (m: string) => void }) {
-  if (!p) return null;
-  const b = p.benchmarks;
-  const cpqlBad = p.cost_per_qualified_lead !== null && p.cost_per_qualified_lead >= b.cpql_red;
-  const cpqdbGood = p.cost_per_qual_demo_booked !== null && p.cost_per_qual_demo_booked < b.cpqdb_max;
-  const showBad = p.show_rate_pct !== null && p.show_rate_pct < b.show_rate_min;
-
+/* Compact replacement for the removed portfolio board: one button that copies
+   the official cross-vendor totals as chat-ready text. */
+function CopyPortfolio({ p, onToast }: { p: MrPortfolio | null; onToast: (m: string) => void }) {
   async function copy() {
+    if (!p) {
+      onToast("Portfolio totals aren't available yet — run a snapshot first");
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(copyText(p as MrPortfolio));
+      await navigator.clipboard.writeText(copyText(p));
       onToast("Copied portfolio summary");
     } catch {
       onToast("Copy failed — clipboard unavailable");
     }
   }
-
-  const CELLS: { label: string; value: string; tone?: "good" | "bad" }[] = [
-    { label: "Total budget", value: fmtMoney(p.total_budget) },
-    { label: "Total spend", value: fmtMoney(p.total_spend) },
-    { label: "Budget utilized", value: pct(p.budget_utilized_pct) },
-    { label: "Qualified leads", value: fmtNum(p.qualified_leads) },
-    { label: "Qual. demos booked", value: fmtNum(p.qual_demos_booked) },
-    { label: "Cost / qual. lead", value: fmtMoney(p.cost_per_qualified_lead), tone: cpqlBad ? "bad" : undefined },
-    { label: "Cost / qual. demo booked", value: fmtMoney(p.cost_per_qual_demo_booked), tone: cpqdbGood ? "good" : "bad" },
-    { label: "Demos completed", value: fmtNum(p.demos_completed) },
-    { label: "Show rate", value: pct(p.show_rate_pct), tone: showBad ? "bad" : "good" },
-    { label: "Total services sold (act.)", value: fmtNum(p.services_sold) },
-  ];
-
   return (
-    <div className="mr-port">
-      <div className="mr-port__head">
-        <h3 className="mr-section__title">
-          Portfolio summary · paid vendors (official total)
-          <span className="mr-dm__date"> · {p.date}</span>
-        </h3>
-        <Button size="sm" variant="secondary" onClick={() => void copy()}
-          iconLeft={<Icon name="copy" size={13} />}>
-          Copy summary
-        </Button>
-      </div>
-      <div className="mr-port__grid">
-        {CELLS.map((c) => (
-          <div className="mr-port__cell" key={c.label}>
-            <b className={c.tone ? `mr-port__val--${c.tone}` : undefined}>{c.value}</b>
-            <span>{c.label}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mr-port__bench">
-        <b>Benchmarks:</b> Cost/Qual. Demo Booked &lt; ${b.cpqdb_max} · QL Ratio ≥ {b.ql_ratio_min}% ·
-        Show Rate ≥ {b.show_rate_min}% · CAC ~${b.cac_target.toLocaleString()} ·
-        Pacing: Day {p.pacing.day} of {p.pacing.days_in_month} ≈ {p.pacing.expected_pct}% expected budget utilization
-      </div>
-    </div>
+    <Button size="sm" variant="secondary" onClick={() => void copy()}
+      iconLeft={<Icon name="copy" size={13} />}>
+      Copy summary
+    </Button>
   );
 }
 
@@ -291,7 +256,6 @@ export function VendorsView({ snapshots, onToast }: {
 
   return (
     <>
-      <PortfolioBar p={portfolioData} onToast={onToast} />
       <div className="mr-vend">
       <aside className="mr-vend__rail">
         <h3 className="mr-section__title">Vendors ({vendors.length})</h3>
@@ -320,6 +284,7 @@ export function VendorsView({ snapshots, onToast }: {
                   {detail.dates.length} day{detail.dates.length === 1 ? "" : "s"} captured · showing {detail.snapshot.date} (MTD) · captured {fmtTime(detail.snapshot.captured_at)}
                 </span>
               </div>
+              <CopyPortfolio p={portfolioData} onToast={onToast} />
             </header>
 
             <div className="mr-vend__dates">
