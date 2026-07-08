@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import type { MrOverview } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { mrTrends, type MrOverview, type MrTrends } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
 import { ChannelCard, Dot, fmtMoney, fmtMonth, fmtNum, fmtTime, sourceLabel } from "./shared";
 import { DailyMovement } from "./DailyMovement";
 import { DeskBoard } from "./DeskBoard";
+import { Spark } from "./charts";
 
 const KPIS = [
   { key: "spend", label: "Spend", money: true },
@@ -26,6 +27,11 @@ export function OverviewView({ overview, busy, onPull, onAsk, onGotoData, onToas
   onToast: (m: string) => void;
 }) {
   const [teaser, setTeaser] = useState("");
+  const [trends, setTrends] = useState<MrTrends | null>(null);
+
+  useEffect(() => {
+    mrTrends().then(setTrends).catch(() => setTrends(null));
+  }, []);
 
   if (!overview) {
     return <div className="mr-panel"><div className="mr-empty">Reading the agent&apos;s data…</div></div>;
@@ -88,16 +94,25 @@ export function OverviewView({ overview, busy, onPull, onAsk, onGotoData, onToas
 
       {t && (
         <div className="mr-kpis mr-kpis--hero">
-          {KPIS.map((k) => (
-            <div className="mr-kpi" key={k.key}>
-              <span className="mr-kpi__label">{k.label}{t.status?.[k.key] && <Dot s={t.status[k.key]} />}</span>
-              <span className="mr-kpi__value">{k.money ? fmtMoney(t[k.key]) : fmtNum(t[k.key])}</span>
-            </div>
-          ))}
+          {KPIS.map((k) => {
+            const series = trends?.monthly.map((m) =>
+              k.key === "spend" ? m.spend
+              : k.key === "leads" ? m.leads
+              : k.key === "qualified_leads" ? m.qualified_leads
+              : k.key === "demos_completed" ? m.demos_completed
+              : m.cpql ?? 0);
+            return (
+              <div className="mr-kpi" key={k.key}>
+                <span className="mr-kpi__label">{k.label}{t.status?.[k.key] && <Dot s={t.status[k.key]} />}</span>
+                <span className="mr-kpi__value">{k.money ? fmtMoney(t[k.key]) : fmtNum(t[k.key])}</span>
+                {series && series.length > 1 && <Spark values={series} />}
+              </div>
+            );
+          })}
         </div>
       )}
 
-      <DeskBoard />
+      <DeskBoard trends={trends} />
 
       {(reds.length > 0 || warns.length > 0) && (
         <div className="mr-attn">

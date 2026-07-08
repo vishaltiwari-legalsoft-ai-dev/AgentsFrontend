@@ -720,3 +720,54 @@
 .mr-chart__legend { display: flex; gap: 12px; flex-wrap: wrap; }
 .mr-chart__key { display: inline-flex; align-items: center; gap: 5px; font: 500 10.5px/1 var(--font-mono); color: var(--text-secondary); }
 .mr-chart__key i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+/* Desk board v2: hero, wire, motion ------------------------------------------- */
+.mr-hero {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--grad-hero), var(--surface-card);
+  padding: 16px 20px 10px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.mr-hero__head { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.mr-hero__pace {
+  font: 500 12px/1.45 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface-card);
+}
+.mr-hero__pace--warn { color: var(--amber-600); border-color: color-mix(in srgb, var(--amber-500) 45%, transparent); }
+.mr-wire { display: flex; flex-wrap: wrap; gap: 8px; }
+.mr-wire__item {
+  font: 500 12px/1.5 var(--font-sans);
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+}
+.mr-wire__item--warn { color: var(--amber-600); border-color: color-mix(in srgb, var(--amber-500) 45%, transparent); background: var(--amber-50); }
+.mr-wire__item--good { color: var(--green-600); border-color: color-mix(in srgb, var(--green-500) 40%, transparent); background: var(--green-50); }
+.mr-chart__note { margin: 0; font: 450 12px/1.5 var(--font-sans); color: var(--text-secondary); padding-left: 12px; position: relative; }
+.mr-chart__note::before { content: ""; position: absolute; left: 0; top: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--brand); }
+.mr-chart__note--warn::before { background: var(--warning); }
+.mr-chart__note--good::before { background: var(--success); }
+.mr-chart__val--lg { font: 650 11px var(--font-mono); fill: var(--text-primary); font-variant-numeric: tabular-nums; }
+.mr-kpi .mr-spark { width: 72px; height: 22px; color: var(--brand); margin-top: 2px; opacity: 0.85; }
+
+/* Motion: one-time draw-in; endpoint pulse. Killed under reduced motion. */
+.mr-grow { transform-box: fill-box; transform-origin: bottom center; animation: mrGrow 0.5s ease-out backwards; }
+@keyframes mrGrow { from { transform: scaleY(0); } }
+.mr-grow-x { transform-box: fill-box; transform-origin: left center; animation: mrGrowX 0.5s ease-out backwards; }
+@keyframes mrGrowX { from { transform: scaleX(0); } }
+.mr-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: mrDraw 0.9s ease-out forwards; }
+@keyframes mrDraw { to { stroke-dashoffset: 0; } }
+.mr-pulse { transform-box: fill-box; transform-origin: center; animation: mrPulse 2.4s ease-out infinite; }
+@keyframes mrPulse { 0% { opacity: 0.5; transform: scale(1); } 70% { opacity: 0; transform: scale(2.8); } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .mr-grow, .mr-grow-x, .mr-pulse { animation: none !important; }
+  .mr-draw { animation: none !important; stroke-dashoffset: 0; }
+}

@@ -1,39 +1,44 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { mrTrends, type MrTrends } from "@/lib/api";
-import { ChartCard, Columns, HBars, Lines, StackedBars, channelColor } from "./charts";
+import type { MrInsight, MrTrends } from "@/lib/api";
+import { Area, ChartCard, HBars, Lines, StackedBars, channelColor } from "./charts";
 
-export function DeskBoard() {
-  const [t, setT] = useState<MrTrends | null>(null);
+function pick(insights: MrInsight[], test: (t: string) => boolean): MrInsight[] {
+  return insights.filter((i) => test(i.text.toLowerCase()));
+}
 
-  useEffect(() => {
-    mrTrends().then(setT).catch(() => setT(null));
-  }, []);
-
-  if (!t || !t.has_data) return null;
+export function DeskBoard({ trends }: { trends: MrTrends | null }) {
+  if (!trends || !trends.has_data) return null;
+  const t = trends;
 
   const months = t.monthly.map((m) => m.month);
   const channels = Object.entries(t.channels);
   const ranked = t.vendors.filter((v) => v.cpql !== null)
     .sort((a, b) => (a.cpql ?? 0) - (b.cpql ?? 0)).slice(0, 8);
 
+  const pace = pick(t.insights, (s) => s.includes("pace"))[0];
+  const efficiency = pick(t.insights, (s) => s.includes("qualified lead") && !s.includes("zero"));
+  const strip = t.insights.filter((i) => i !== pace && !efficiency.includes(i));
+
   return (
     <div className="mr-board">
-      {t.insights.length > 0 && (
-        <div className="mr-insights">
-          <h4 className="mr-section__title">Desk read · computed from the numbers</h4>
-          {t.insights.map((i, n) => (
-            <div className={`mr-insight mr-insight--${i.level}`} key={n}>{i.text}</div>
+      {strip.length > 0 && (
+        <div className="mr-wire">
+          {strip.map((i, n) => (
+            <span className={`mr-wire__item mr-wire__item--${i.level}`} key={n}>{i.text}</span>
           ))}
         </div>
       )}
 
-      <div className="mr-board__grid">
-        <ChartCard title="Spend by month">
-          <Columns data={t.monthly.map((m) => ({ month: m.month, value: m.spend }))} money />
-        </ChartCard>
+      <div className="mr-hero">
+        <div className="mr-hero__head">
+          <h4 className="mr-section__title">Spend · January → today</h4>
+          {pace && <span className={`mr-hero__pace mr-hero__pace--${pace.level}`}>{pace.text}</span>}
+        </div>
+        <Area data={t.monthly.map((m) => ({ month: m.month, value: m.spend }))} money />
+      </div>
 
+      <div className="mr-board__grid">
         <ChartCard title="Leads vs qualified">
           <Lines months={months} series={[
             { name: "Leads", color: "var(--gray-400)", values: t.monthly.map((m) => m.leads) },
@@ -56,7 +61,12 @@ export function DeskBoard() {
 
         <ChartCard title="Cost per qualified lead · by vendor (MTD)">
           {ranked.length ? (
-            <HBars money data={ranked.map((v) => ({ label: v.vendor, value: v.cpql as number }))} />
+            <>
+              <HBars money data={ranked.map((v) => ({ label: v.vendor, value: v.cpql as number }))} />
+              {efficiency.map((i, n) => (
+                <p className={`mr-chart__note mr-chart__note--${i.level}`} key={n}>{i.text}</p>
+              ))}
+            </>
           ) : (
             <p className="mr-doc__none">No vendor has qualified leads yet this month.</p>
           )}
