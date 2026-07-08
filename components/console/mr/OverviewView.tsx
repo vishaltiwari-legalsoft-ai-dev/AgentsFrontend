@@ -5,6 +5,7 @@ import type { MrOverview } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
 import { ChannelCard, Dot, fmtMoney, fmtMonth, fmtNum, fmtTime, sourceLabel } from "./shared";
 import { DailyMovement } from "./DailyMovement";
+import { DeskBoard } from "./DeskBoard";
 
 const KPIS = [
   { key: "spend", label: "Spend", money: true },
@@ -95,6 +96,8 @@ export function OverviewView({ overview, busy, onPull, onAsk, onGotoData, onToas
           ))}
         </div>
       )}
+
+      <DeskBoard />
 
       {(reds.length > 0 || warns.length > 0) && (
         <div className="mr-attn">

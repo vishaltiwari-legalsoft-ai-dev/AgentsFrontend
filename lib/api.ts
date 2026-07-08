@@ -1507,6 +1507,25 @@ export interface MrVendorDetail {
 export const mrVendorDetail = (slug: string, date?: string) =>
   getJson<MrVendorDetail>(`/api/mr/snapshots/vendor/${slug}${date ? `?date_iso=${date}` : ""}`);
 
+export interface MrMonthRow {
+  month: string; spend: number; leads: number; qualified_leads: number;
+  demos_booked: number; demos_completed: number; cpql: number | null;
+}
+export interface MrChannelPoint { month: string; spend: number; leads: number; qualified_leads: number }
+export interface MrTrendVendor {
+  vendor: string; spend_mtd: number; leads: number; qualified_leads: number;
+  cpql: number | null; spend_series: { month: string; spend: number }[];
+}
+export interface MrInsight { level: "good" | "warn" | "info"; text: string }
+export interface MrTrends {
+  has_data: boolean; month: string | null;
+  monthly: MrMonthRow[];
+  channels: Record<string, MrChannelPoint[]>;
+  vendors: MrTrendVendor[];
+  insights: MrInsight[];
+}
+export const mrTrends = () => getJson<MrTrends>("/api/mr/trends");
+
 /** Upload one platform's CSV export and normalize it into a dataset. */
 export async function mrIngest(file: File, platform: MrPlatform): Promise<MrIngestResult> {
   const form = new FormData();
