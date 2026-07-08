@@ -829,3 +829,5 @@
 }
 .mr-port__bench b { color: var(--text-primary); }
 @media (max-width: 860px) { .mr-port__grid { grid-template-columns: repeat(2, 1fr); } }
+.mr-port--vendor { max-width: none; margin: 0; padding: 12px 16px; border-top-width: 2px; }
+.mr-port--vendor .mr-port__cell b { font-size: 17px; }

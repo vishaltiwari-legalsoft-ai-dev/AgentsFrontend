@@ -23,13 +23,73 @@ function copyText(p: MrPortfolio): string {
   ].join("\n");
 }
 
-function PortfolioBar({ onToast }: { onToast: (m: string) => void }) {
-  const [p, setP] = useState<MrPortfolio | null>(null);
+/* Per-vendor official stats computed from the snapshot's canonical block —
+   same field set as the portfolio bar, never a hardcoded subset of values. */
+function vendorStats(team: Record<string, unknown>) {
+  const num = (o: unknown): number | null => (typeof o === "number" ? o : null);
+  const node = (o: unknown, k: string): Record<string, unknown> =>
+    ((o as Record<string, unknown> | undefined)?.[k] ?? {}) as Record<string, unknown>;
+  const pair = (o: Record<string, unknown>): number | null => {
+    const p = num(o.performance);
+    return p !== null ? p : num(o.investment);
+  };
+  const budget = pair(node(team, "budget")) ?? 0;
+  const spend = pair(node(team, "spend")) ?? 0;
+  const ql = num(node(team, "leads").qualified) ?? 0;
+  const leads = num(node(team, "leads").total) ?? 0;
+  const demos = node(team, "demos");
+  const qdb = (num(demos.qualified_booked_all) ?? 0) || (num(demos.total_booked_all) ?? 0);
+  const completed = num(demos.completed_all) ?? 0;
+  const sold = num(node(team, "actualized_revenue").services_sold) ?? 0;
+  const div = (n: number, d: number) => (d ? Math.round((n / d) * 100) / 100 : null);
+  return {
+    budget, spend, leads, ql, qdb, completed, sold,
+    utilized: div(spend * 100, budget),
+    cpql: div(spend, ql),
+    cpqdb: div(spend, qdb),
+    show: div(completed * 100, qdb),
+  };
+}
 
-  useEffect(() => {
-    mrPortfolio().then(setP).catch(() => setP(null));
-  }, []);
+function VendorSummary({ team, month, benchmarks }: {
+  team: Record<string, unknown>;
+  month: string;
+  benchmarks: MrPortfolio["benchmarks"] | null;
+}) {
+  const s = vendorStats(team);
+  const tone = {
+    cpql: benchmarks && s.cpql !== null && s.cpql >= benchmarks.cpql_red ? "bad" : undefined,
+    cpqdb: benchmarks && s.cpqdb !== null ? (s.cpqdb < benchmarks.cpqdb_max ? "good" : "bad") : undefined,
+    show: benchmarks && s.show !== null ? (s.show < benchmarks.show_rate_min ? "bad" : "good") : undefined,
+  };
+  const CELLS: { label: string; value: string; tone?: string }[] = [
+    { label: "Budget", value: fmtMoney(s.budget) },
+    { label: "Spend", value: fmtMoney(s.spend) },
+    { label: "Budget utilized", value: pct(s.utilized) },
+    { label: "Qualified leads", value: fmtNum(s.ql) },
+    { label: "Qual. demos booked", value: fmtNum(s.qdb) },
+    { label: "Cost / qual. lead", value: fmtMoney(s.cpql), tone: tone.cpql },
+    { label: "Cost / qual. demo booked", value: fmtMoney(s.cpqdb), tone: tone.cpqdb },
+    { label: "Demos completed", value: fmtNum(s.completed) },
+    { label: "Show rate", value: pct(s.show), tone: tone.show },
+    { label: "Services sold (act.)", value: fmtNum(s.sold) },
+  ];
+  return (
+    <div className="mr-port mr-port--vendor">
+      <h4 className="mr-section__title">Official summary · {month} MTD</h4>
+      <div className="mr-port__grid">
+        {CELLS.map((c) => (
+          <div className="mr-port__cell" key={c.label}>
+            <b className={c.tone ? `mr-port__val--${c.tone}` : undefined}>{c.value}</b>
+            <span>{c.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
+function PortfolioBar({ p, onToast }: { p: MrPortfolio | null; onToast: (m: string) => void }) {
   if (!p) return null;
   const b = p.benchmarks;
   const cpqlBad = p.cost_per_qualified_lead !== null && p.cost_per_qualified_lead >= b.cpql_red;
@@ -200,6 +260,11 @@ export function VendorsView({ snapshots, onToast }: {
   const [slug, setSlug] = useState<string | null>(null);
   const [date, setDate] = useState<string | null>(null);
   const [detail, setDetail] = useState<MrVendorDetail | null>(null);
+  const [portfolioData, setPortfolioData] = useState<MrPortfolio | null>(null);
+
+  useEffect(() => {
+    mrPortfolio().then(setPortfolioData).catch(() => setPortfolioData(null));
+  }, []);
 
   const active = slug ?? vendors[0]?.slug ?? null;
 
@@ -226,7 +291,7 @@ export function VendorsView({ snapshots, onToast }: {
 
   return (
     <>
-      <PortfolioBar onToast={onToast} />
+      <PortfolioBar p={portfolioData} onToast={onToast} />
       <div className="mr-vend">
       <aside className="mr-vend__rail">
         <h3 className="mr-section__title">Vendors ({vendors.length})</h3>
@@ -263,6 +328,12 @@ export function VendorsView({ snapshots, onToast }: {
                   onClick={() => setDate(dd)}>{dd.slice(5)}</button>
               ))}
             </div>
+
+            <VendorSummary
+              team={detail.snapshot.canonical.team_overall}
+              month={detail.snapshot.month}
+              benchmarks={portfolioData?.benchmarks ?? null}
+            />
 
             {d && t && (
               <div className="mr-vend__move">
