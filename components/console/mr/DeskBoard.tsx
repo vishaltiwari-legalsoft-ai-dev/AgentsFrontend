@@ -41,9 +41,14 @@ export function DeskBoard({ trends }: { trends: MrTrends | null }) {
       </div>
 
       <div className="mr-board__grid">
-        <ChartCard title="Leads vs qualified">
+        <ChartCard title="Leads vs qualified" legend={
+          <>
+            <span className="mr-chart__key"><i className="mr-chart__key--dash" style={{ background: "var(--gray-400)" }} /> Leads</span>
+            <span className="mr-chart__key"><i style={{ background: "var(--brand)" }} /> Qualified</span>
+          </>
+        }>
           <Lines months={months} series={[
-            { name: "Leads", color: "var(--gray-400)", values: t.monthly.map((m) => m.leads) },
+            { name: "Leads", color: "var(--gray-400)", values: t.monthly.map((m) => m.leads), dash: true },
             { name: "Qualified", color: "var(--brand)", values: t.monthly.map((m) => m.qualified_leads) },
           ]} />
         </ChartCard>

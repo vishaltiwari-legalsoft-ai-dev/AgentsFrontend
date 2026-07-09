@@ -832,3 +832,29 @@
 .mr-port--vendor { max-width: none; margin: 0; padding: 12px 16px; border-top-width: 2px; }
 .mr-port--vendor .mr-port__cell b { font-size: 17px; }
 .mr-vend__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+
+/* Sources popup (Overview freshness strip) -------------------------------------- */
+.mr-srcpop {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm), 0 10px 30px rgb(0 0 0 / 8%);
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.mr-srcpop__head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 4px; }
+.mr-srcpop__row {
+  display: flex; justify-content: space-between; gap: 16px;
+  font: 500 12px/1.6 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 3px 0;
+}
+.mr-srcpop__row:last-child { border-bottom: none; }
+.mr-srcpop__row span:first-child { color: var(--text-primary); }
+.mr-chart__key--dash {
+  background-image: linear-gradient(90deg, currentColor 60%, transparent 60%) !important;
+  background-size: 5px 100%;
+}

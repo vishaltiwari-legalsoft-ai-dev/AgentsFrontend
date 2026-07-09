@@ -124,26 +124,38 @@ export function Columns({ data, money }: { data: { month: string; value: number 
 }
 
 export function Lines({ series, months }: {
-  series: { name: string; color: string; values: number[] }[];
+  series: { name: string; color: string; values: number[]; dash?: boolean }[];
   months: string[];
 }) {
   const max = Math.max(...series.flatMap((s) => s.values), 1);
   const step = (W - PAD * 2) / Math.max(months.length - 1, 1);
   const y = (v: number) => H - 12 - (v / max) * (H - 34);
+
+  // End-value labels only (names live in the legend); nudge apart on collision.
+  const endYs = series.map((s) => y(s.values[s.values.length - 1] ?? 0) - 6);
+  for (let i = 1; i < endYs.length; i++) {
+    for (let j = 0; j < i; j++) {
+      if (Math.abs(endYs[i] - endYs[j]) < 11) {
+        endYs[i] = endYs[i] <= endYs[j] ? endYs[j] - 11 : endYs[j] + 11;
+      }
+    }
+  }
+
   return (
     <svg viewBox={`0 0 ${W} ${H + LBL}`} className="mr-chart__svg" role="img">
-      {series.map((s) => (
+      {series.map((s, si) => (
         <g key={s.name}>
           <polyline fill="none" stroke={s.color} strokeWidth="2"
+            strokeDasharray={s.dash ? "5 4" : undefined}
             points={s.values.map((v, i) => `${PAD + i * step},${y(v)}`).join(" ")} />
           {s.values.map((v, i) => (
             <circle key={i} cx={PAD + i * step} cy={y(v)} r="2.6" fill={s.color}>
               <title>{`${s.name} · ${mon(months[i])}: ${v.toLocaleString()}`}</title>
             </circle>
           ))}
-          <text x={W - PAD} y={y(s.values[s.values.length - 1] ?? 0) - 6} textAnchor="end"
+          <text x={W - PAD} y={endYs[si]} textAnchor="end"
             className="mr-chart__val" fill={s.color}>
-            {s.name} {(s.values[s.values.length - 1] ?? 0).toLocaleString()}
+            {(s.values[s.values.length - 1] ?? 0).toLocaleString()}
           </text>
         </g>
       ))}

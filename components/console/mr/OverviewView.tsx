@@ -28,6 +28,7 @@ export function OverviewView({ overview, busy, onPull, onAsk, onGotoData, onToas
 }) {
   const [teaser, setTeaser] = useState("");
   const [trends, setTrends] = useState<MrTrends | null>(null);
+  const [showSources, setShowSources] = useState(false);
 
   useEffect(() => {
     mrTrends().then(setTrends).catch(() => setTrends(null));
@@ -68,23 +69,42 @@ export function OverviewView({ overview, busy, onPull, onAsk, onGotoData, onToas
   const t = overview.totals;
   const reds = overview.flag_summary.filter((f) => f.level === "red");
   const warns = overview.flag_summary.filter((f) => f.level !== "red");
+  const latestPull = overview.sources.reduce<string | null>(
+    (m, s) => (s.generated_at && (!m || s.generated_at > m) ? s.generated_at : m), null);
 
   return (
     <div className="mr-panel">
       <div className="mr-fresh">
-        {overview.sources.map((s) => {
-          const { src, tab } = sourceLabel(s.platform);
-          return (
-            <span className="mr-fresh__item" key={s.platform}>
-              <Icon name="database" size={13} />
-              {src}{tab ? ` · ${tab}` : ""} — pulled {fmtTime(s.generated_at)}
-            </span>
-          );
-        })}
+        <span className="mr-fresh__item">
+          <Icon name="database" size={13} />
+          {overview.sources.length} source{overview.sources.length === 1 ? "" : "s"} · last pulled {fmtTime(latestPull)}
+        </span>
+        <button className="mr-chip" onClick={() => setShowSources((v) => !v)} aria-expanded={showSources}>
+          Sources
+        </button>
         <Button size="sm" variant="secondary" disabled={busy} onClick={onPull} iconLeft={<Icon name="refresh-cw" size={13} />}>
           Pull now
         </Button>
       </div>
+      {showSources && (
+        <div className="mr-srcpop" role="dialog" aria-label="Data sources">
+          <div className="mr-srcpop__head">
+            <h4 className="mr-section__title">Where the data was pulled from</h4>
+            <button className="mr-top__back" onClick={() => setShowSources(false)} aria-label="Close sources">
+              <Icon name="x" size={14} />
+            </button>
+          </div>
+          {overview.sources.map((s) => {
+            const { src, tab } = sourceLabel(s.platform);
+            return (
+              <div className="mr-srcpop__row" key={s.platform}>
+                <span>{src}{tab ? ` · ${tab}` : ""}</span>
+                <span>{s.metrics} metrics · pulled {fmtTime(s.generated_at)}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="mr-mast">
         <span className="mr-mast__eyebrow">Marketing desk · 2026 plan</span>
