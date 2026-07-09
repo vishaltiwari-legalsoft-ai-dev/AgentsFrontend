@@ -215,6 +215,8 @@ export function VendorsView({ snapshots, onToast }: {
   const vendors = useMemo(() => {
     const by: Record<string, { vendor: string; days: number }> = {};
     for (const s of snapshots) {
+      // The consolidated roll-up tab is captured for totals but is not a vendor.
+      if (s.vendor_slug.includes("overall")) continue;
       const e = by[s.vendor_slug] ?? { vendor: s.vendor, days: 0 };
       e.days += 1;
       by[s.vendor_slug] = e;
