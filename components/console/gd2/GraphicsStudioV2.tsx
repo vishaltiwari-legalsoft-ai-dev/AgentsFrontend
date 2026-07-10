@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { DragMarker, TextNodeSpec } from "@/components/console/stage3/KonvaCanvas";
+// Non-social types route to the existing Creative Agent rail — same engine
+// contract the classic studio uses; V2 only supplies the entry point.
+import { CreativeAgent } from "@/components/console/CreativeAgent";
 import {
+  creativeTypes,
   gdApprove,
   gdArtifactBlob,
   gdBack,
@@ -20,6 +24,7 @@ import {
   gdSuggestPlacement,
   gdTextPreview,
   gdUpdateConfig,
+  type CreativeTypeMeta,
   type GdBrandLogoVariant,
   type GdBrandOption,
   type GdChatMessage,
@@ -141,6 +146,12 @@ export function GraphicsStudioV2({
   const [run, setRun] = useState<GdRun | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
+  // Creative-type routing: "social" stays in this 4-step studio; any other
+  // key opens the dedicated Creative Agent (brochure / carousel / PPTX / blog).
+  const [creaTypes, setCreaTypes] = useState<CreativeTypeMeta[]>([]);
+  const [creaType, setCreaType] = useState<string>("social");
+  const [launchedCreative, setLaunchedCreative] = useState(false);
+
   const [sel1, setSel1] = useState<string | null>(null);
   const [aiSteer, setAiSteer] = useState("");
   const [sel2, setSel2] = useState<string | null>(null);
@@ -196,6 +207,14 @@ export function GraphicsStudioV2({
       })
       .catch(fail);
   }, [fail]);
+
+  // Creative-Agent types for the setup picker (additive; failure is silent so
+  // the social studio still works if the rail isn't reachable).
+  useEffect(() => {
+    creativeTypes()
+      .then((d) => setCreaTypes(d.types))
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (!brandId) return;
@@ -814,8 +833,22 @@ export function GraphicsStudioV2({
     setAiSteer("");
   };
 
+  /* ------------- Creative Agent route (non-social types) ------------- */
+  if (launchedCreative && creaType !== "social") {
+    return (
+      <CreativeAgent
+        brandId={brandId || null}
+        brandName={brands.find((b) => b.id === brandId)?.name}
+        creativeType={creaType}
+        onToast={onToast}
+        onBack={() => setLaunchedCreative(false)}
+      />
+    );
+  }
+
   /* ---------------- setup screen ---------------- */
   if (phase === "setup" || !run || !cfg) {
+    const isSocial = creaType === "social";
     return (
       <div className="gd2">
         <div className="gd2-setup">
@@ -844,39 +877,51 @@ export function GraphicsStudioV2({
               <div className="gd2-fldrow">
                 <div className="gd2-fld">
                   <label htmlFor="gd2type">Type of creative</label>
-                  <select id="gd2type" defaultValue="social">
+                  <select id="gd2type" value={creaType} onChange={(e) => setCreaType(e.target.value)}>
                     <option value="social">Social post</option>
-                    <option disabled>Carousel — coming to this studio</option>
-                    <option disabled>Brochure (PDF) — via Creative Agent</option>
-                    <option disabled>PPTX deck — via Creative Agent</option>
-                  </select>
-                </div>
-                <div className="gd2-fld">
-                  <label htmlFor="gd2aspect">Aspect ratio</label>
-                  <select id="gd2aspect" value={aspect} onChange={(e) => setAspect(e.target.value)}>
-                    {cfg?.aspect_ratios.map((a) => (
-                      <option key={a.ar} value={a.ar}>
-                        {a.label} · {a.dimensions}
+                    {creaTypes.map((t) => (
+                      <option key={t.key} value={t.key}>
+                        {t.label}
                       </option>
                     ))}
                   </select>
                 </div>
+                {isSocial ? (
+                  <div className="gd2-fld">
+                    <label htmlFor="gd2aspect">Aspect ratio</label>
+                    <select id="gd2aspect" value={aspect} onChange={(e) => setAspect(e.target.value)}>
+                      {cfg?.aspect_ratios.map((a) => (
+                        <option key={a.ar} value={a.ar}>
+                          {a.label} · {a.dimensions}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
               </div>
-              <div className="gd2-fld">
-                <label htmlFor="gd2brief">
-                  What’s this about? <span className="gd2-opt">optional</span>
-                </label>
-                <textarea
-                  id="gd2brief"
-                  rows={2}
-                  value={brief}
-                  placeholder="e.g. Diwali offer — 20% off contract review for new clients"
-                  onChange={(e) => setBrief(e.target.value)}
-                />
-              </div>
-              <button className="gd2-btn" onClick={start} disabled={busy !== null || !cfg}>
-                {busy ?? "Start creating →"}
-              </button>
+              {isSocial ? (
+                <div className="gd2-fld">
+                  <label htmlFor="gd2brief">
+                    What’s this about? <span className="gd2-opt">optional</span>
+                  </label>
+                  <textarea
+                    id="gd2brief"
+                    rows={2}
+                    value={brief}
+                    placeholder="e.g. Diwali offer — 20% off contract review for new clients"
+                    onChange={(e) => setBrief(e.target.value)}
+                  />
+                </div>
+              ) : null}
+              {isSocial ? (
+                <button className="gd2-btn" onClick={start} disabled={busy !== null || !cfg}>
+                  {busy ?? "Start creating →"}
+                </button>
+              ) : (
+                <button className="gd2-btn" onClick={() => setLaunchedCreative(true)}>
+                  Open the Creative Agent →
+                </button>
+              )}
             </div>
             <p className="gd2-sub" style={{ marginTop: 18, fontSize: 12.5 }}>
               <button className="gd2-ghost" onClick={onExitV2}>Back to classic Studio</button>
