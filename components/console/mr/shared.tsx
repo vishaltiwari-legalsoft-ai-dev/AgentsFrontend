@@ -13,6 +13,7 @@ export const fmtMonth = (ym: string | null) =>
 
 export function sourceLabel(platform: string): { src: string; tab: string } {
   if (platform?.startsWith("sheets:")) return { src: "Google Sheets", tab: platform.slice(7) };
+  if (platform?.startsWith("pdf:")) return { src: "PDF upload", tab: platform.slice(4) };
   const map: Record<string, string> = { google_ads: "Google Ads", meta: "META Ads", hubspot: "HubSpot" };
   return { src: `${map[platform] ?? platform} · CSV upload`, tab: "" };
 }

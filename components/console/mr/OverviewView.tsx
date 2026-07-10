@@ -1,12 +1,68 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { mrTrends, type MrOverview, type MrTrends } from "@/lib/api";
+import { mrPortfolio, mrTrends, type MrOverview, type MrPortfolio, type MrTrends } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
 import { ChannelCard, Dot, fmtMoney, fmtMonth, fmtNum, fmtTime, sourceLabel } from "./shared";
 import { DailyMovement } from "./DailyMovement";
 import { DeskBoard } from "./DeskBoard";
 import { Spark } from "./charts";
+
+/* Green "official" vendor summary — the eight agreed metrics in two rows.
+   Sourced from the vendor snapshots (portfolio); falls back to the pulled
+   tracker totals when no snapshot exists yet. */
+function VendorSummaryGreen({ p, t }: { p: MrPortfolio | null; t: MrOverview["totals"] }) {
+  const cells: { label: string; value: string }[][] = p
+    ? [
+        [
+          { label: "Spend", value: fmtMoney(p.total_spend) },
+          { label: "Qualified Leads", value: fmtNum(p.qualified_leads) },
+          { label: "Qualified Demos Booked", value: fmtNum(p.qual_demos_booked) },
+          { label: "Demos Completed", value: fmtNum(p.demos_completed) },
+        ],
+        [
+          { label: "Cost per Qualified Lead", value: fmtMoney(p.cost_per_qualified_lead) },
+          { label: "Cost per Qualified Demo", value: fmtMoney(p.cost_per_qual_demo_booked) },
+          { label: "Cost per Completed Demo", value: fmtMoney(p.cost_per_demo_completed) },
+          { label: "Total Services Sold (Act.)", value: fmtNum(p.services_sold) },
+        ],
+      ]
+    : t
+      ? [
+          [
+            { label: "Spend", value: fmtMoney(t.spend) },
+            { label: "Qualified Leads", value: fmtNum(t.qualified_leads) },
+            { label: "Qualified Demos Booked", value: fmtNum(t.demos_booked) },
+            { label: "Demos Completed", value: fmtNum(t.demos_completed) },
+          ],
+          [
+            { label: "Cost per Qualified Lead", value: fmtMoney(t.cost_per_qualified_lead) },
+            { label: "Cost per Qualified Demo", value: fmtMoney(t.cost_per_demo_booked) },
+            { label: "Cost per Completed Demo", value: fmtMoney(t.cost_per_demo_completed) },
+            { label: "Total Services Sold (Act.)", value: "—" },
+          ],
+        ]
+      : [];
+  if (!cells.length) return null;
+  return (
+    <div className="mr-vsum">
+      <div className="mr-vsum__head">
+        <h3 className="mr-section__title">Vendor summary · official</h3>
+        {p && <span className="mr-vsum__meta">{p.vendors} vendors · {p.month} MTD · as of {p.date}</span>}
+      </div>
+      {cells.map((row, i) => (
+        <div className="mr-vsum__row" key={i}>
+          {row.map((c) => (
+            <div className="mr-vsum__cell" key={c.label}>
+              <b>{c.value}</b>
+              <span>{c.label}</span>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const KPIS = [
   { key: "spend", label: "Spend", money: true },
@@ -28,10 +84,12 @@ export function OverviewView({ overview, busy, onPull, onAsk, onGotoData, onToas
 }) {
   const [teaser, setTeaser] = useState("");
   const [trends, setTrends] = useState<MrTrends | null>(null);
+  const [portfolio, setPortfolio] = useState<MrPortfolio | null>(null);
   const [showSources, setShowSources] = useState(false);
 
   useEffect(() => {
     mrTrends().then(setTrends).catch(() => setTrends(null));
+    mrPortfolio().then(setPortfolio).catch(() => setPortfolio(null));
   }, []);
 
   if (!overview) {
@@ -67,8 +125,6 @@ export function OverviewView({ overview, busy, onPull, onAsk, onGotoData, onToas
   }
 
   const t = overview.totals;
-  const reds = overview.flag_summary.filter((f) => f.level === "red");
-  const warns = overview.flag_summary.filter((f) => f.level !== "red");
   const latestPull = overview.sources.reduce<string | null>(
     (m, s) => (s.generated_at && (!m || s.generated_at > m) ? s.generated_at : m), null);
 
@@ -132,18 +188,9 @@ export function OverviewView({ overview, busy, onPull, onAsk, onGotoData, onToas
         </div>
       )}
 
-      <DeskBoard trends={trends} />
+      <VendorSummaryGreen p={portfolio} t={t} />
 
-      {(reds.length > 0 || warns.length > 0) && (
-        <div className="mr-attn">
-          {[...reds, ...warns].map((g, i) => (
-            <div className="mr-attn__item" key={i}>
-              <span className={`mr-attn__badge mr-attn__badge--${g.level === "red" ? "red" : "warn"}`}>{g.count}</span>
-              {g.text}
-            </div>
-          ))}
-        </div>
-      )}
+      <DeskBoard trends={trends} />
 
       <DailyMovement onToast={onToast} />
 

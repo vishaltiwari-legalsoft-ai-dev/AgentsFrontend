@@ -10,6 +10,16 @@ import { REPORT_META } from "./reportMeta";
 import { MrReportDoc } from "./MrReportDoc";
 import { fmtTime } from "./shared";
 
+/* The four recurring report views; everything else lives under "Other reports". */
+const PERIOD_VIEWS: { kind: MrReportKind; label: string }[] = [
+  { kind: "daily_summary", label: "Daily" },
+  { kind: "weekly_summary", label: "Weekly" },
+  { kind: "monthly_summary", label: "Monthly" },
+  { kind: "quarterly_summary", label: "Quarterly" },
+];
+const PERIOD_KINDS = PERIOD_VIEWS.map((p) => p.kind);
+const OTHER_KINDS = MR_REPORT_KINDS.filter((k) => !PERIOD_KINDS.includes(k));
+
 export function ReportsView({ runs, onRunsChanged, onToast }: {
   runs: MrRunSummary[];
   onRunsChanged: () => Promise<void>;
@@ -38,12 +48,32 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
     }
   }
 
+  const activePeriod = report && PERIOD_KINDS.includes(report.kind) ? report.kind : null;
+
   return (
     <div className="mr-rpts">
       <aside className="mr-rpts__rail">
-        <h3 className="mr-section__title">Generate</h3>
+        <h3 className="mr-section__title">Report views</h3>
+        <div className="mr-viewnav" role="tablist" aria-label="Report period">
+          {PERIOD_VIEWS.map((p) => (
+            <button
+              key={p.kind} className="mr-viewnav__btn" role="tab" disabled={busy}
+              aria-selected={activePeriod === p.kind}
+              onClick={() => void generate(p.kind)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <p className="mr-viewnav__hint">
+          {activePeriod
+            ? REPORT_META[activePeriod].desc
+            : "Pick a period — the report is built fresh from the latest data, through yesterday."}
+        </p>
+
+        <h3 className="mr-section__title" style={{ marginTop: 14 }}>Other reports</h3>
         <div className="mr-gen">
-          {MR_REPORT_KINDS.map((k) => {
+          {OTHER_KINDS.map((k) => {
             const m = REPORT_META[k];
             return (
               <button className="mr-gencard" key={k} disabled={busy} onClick={() => void generate(k)}>
@@ -76,7 +106,7 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
         ) : report ? (
           <MrReportDoc report={report} />
         ) : (
-          <div className="mr-empty">Pick a report to generate, or open one from the history.</div>
+          <div className="mr-empty">Pick a report view (Daily / Weekly / Monthly / Quarterly), generate one of the other reports, or open one from the history.</div>
         )}
       </div>
     </div>

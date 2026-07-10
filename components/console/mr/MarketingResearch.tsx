@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  mrConfig, mrConnectors, mrDatasets, mrIngest, mrIngestSheet, mrListRuns,
-  mrOverview, mrSnapshots, mrWorkbook, mrWorkbookScan,
+  mrConfig, mrConnectors, mrDatasets, mrDeleteDataset, mrIngest, mrIngestPdf,
+  mrIngestSheet, mrListRuns, mrOverview, mrSnapshots, mrWorkbook, mrWorkbookScan,
   type MrConfig, type MrConnector, type MrDataset, type MrOverview,
   type MrPlatform, type MrRunSummary, type MrSnapshotMeta, type MrTabProfile,
 } from "@/lib/api";
@@ -80,6 +80,33 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
     }
   }
 
+  async function uploadPdf(file: File) {
+    setBusy(true);
+    try {
+      const res = await mrIngestPdf(file);
+      onToast(res.gaps.length ? `PDF stored — ${res.gaps[0].message}` : `Parsed ${res.metrics} metric rows from the PDF`);
+      await refresh();
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "PDF upload failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeDataset(d: MrDataset) {
+    if (!window.confirm("Remove this file? Its numbers leave the dashboard and future reports.")) return;
+    setBusy(true);
+    try {
+      await mrDeleteDataset(d.id);
+      onToast("File removed");
+      await refresh();
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "Remove failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function deepScan() {
     setBusy(true);
     onToast("Profiling every tab with the LLM…");
@@ -147,7 +174,10 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
             onYear={setYear}
             onPull={pullSheet}
             onUpload={uploadCsv}
+            onUploadPdf={uploadPdf}
+            onRemove={removeDataset}
             onScan={deepScan}
+            onToast={onToast}
           />
         )}
       </div>

@@ -1350,6 +1350,8 @@ export type MrPlatform = "google_ads" | "meta" | "hubspot";
 export const MR_REPORT_KINDS = [
   "daily_summary",
   "weekly_summary",
+  "monthly_summary",
+  "quarterly_summary",
   "threshold_alert",
   "competitor_digest",
   "opportunity_report",
@@ -1366,7 +1368,7 @@ export interface MrDataGap {
 
 export interface MrIngestResult {
   dataset_id: string;
-  platform: MrPlatform;
+  platform: string; // MrPlatform for CSVs, "pdf:<filename>" for PDF uploads
   metrics: number;
   leads: number;
   gaps: MrDataGap[];
@@ -1531,7 +1533,8 @@ export interface MrPortfolio {
   total_budget: number; total_spend: number; budget_utilized_pct: number | null;
   leads: number; qualified_leads: number; cost_per_qualified_lead: number | null;
   qual_demos_booked: number; cost_per_qual_demo_booked: number | null;
-  demos_completed: number; show_rate_pct: number | null; services_sold: number;
+  demos_completed: number; cost_per_demo_completed: number | null;
+  show_rate_pct: number | null; services_sold: number;
   pacing: { day: number; days_in_month: number; expected_pct: number };
   benchmarks: { cpqdb_max: number; ql_ratio_min: number; show_rate_min: number; cac_target: number; cpql_red: number };
 }
@@ -1566,9 +1569,41 @@ export const mrIngestSheet = (body: { gid?: string; brand?: string; year?: numbe
 
 export const mrDatasets = () => getJson<MrDataset[]>("/api/mr/datasets");
 
+/** Remove one ingested file/pull; its numbers leave the dashboard immediately. */
+export async function mrDeleteDataset(id: string): Promise<void> {
+  const response = await request(`/api/mr/datasets/${id}`, { method: "DELETE" });
+  if (!response.ok) throw new Error(await parseError(response));
+}
+
+/** Upload a PDF report — text is extracted and metrics parsed into a dataset. */
+export async function mrIngestPdf(file: File): Promise<MrIngestResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await request("/api/mr/ingest-pdf", { method: "POST", body: form });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as MrIngestResult;
+}
+
 export const mrConnectors = () => getJson<MrConnector[]>("/api/mr/connectors");
 
 export const mrConfig = () => getJson<MrConfig>("/api/mr/config");
+
+export interface MrChannelGoalFields {
+  cpd_booked_low: number; cpd_booked_high: number;
+  cpd_completed_low: number; cpd_completed_high: number;
+  completed_demo_pct: number;
+}
+export interface MrTargets {
+  thresholds: Record<string, number>;
+  channel_goals: Record<string, MrChannelGoalFields>;
+  edited: boolean;
+}
+export const mrGetTargets = () => getJson<MrTargets>("/api/mr/targets");
+export const mrSaveTargets = (body: {
+  thresholds?: Record<string, number>;
+  channel_goals?: Record<string, Partial<MrChannelGoalFields>>;
+  reset?: boolean;
+}) => postJson<MrTargets>("/api/mr/targets", body);
 
 export interface MrTabProfile {
   title: string;

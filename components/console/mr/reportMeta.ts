@@ -5,11 +5,19 @@ export interface ReportMeta { label: string; eyebrow: string; desc: string }
 export const REPORT_META: Record<MrReportKind, ReportMeta> = {
   daily_summary: {
     label: "Daily Performance Summary", eyebrow: "Daily · Marketing",
-    desc: "Yesterday's spend, leads and demos per channel, flagged against the 2026 goals.",
+    desc: "Month-to-date through yesterday — spend, leads and demos per channel, flagged against the 2026 goals.",
   },
   weekly_summary: {
     label: "Weekly Performance Summary", eyebrow: "Weekly · Marketing",
-    desc: "The week's blended KPIs with week-over-week movement per channel.",
+    desc: "The last 7 days' blended KPIs with per-channel and per-vendor movement.",
+  },
+  monthly_summary: {
+    label: "Monthly Performance Summary", eyebrow: "Monthly · Marketing",
+    desc: "The month's blended KPIs, vendor detail and flags against the 2026 goals.",
+  },
+  quarterly_summary: {
+    label: "Quarterly Performance Summary", eyebrow: "Quarterly · Marketing",
+    desc: "Quarter-to-date performance and pacing for the leadership read.",
   },
   threshold_alert: {
     label: "Campaign Threshold Alert", eyebrow: "Triggered · Alert",

@@ -4,7 +4,25 @@ import type { MrChannelAgg, MrFlagGroup, MrReport, MrReportKind, MrSource } from
 import { ChannelCard, fmtMoney, fmtNum, fmtTime, readNarrative, sourceLabel, verdict } from "./shared";
 import { REPORT_META } from "./reportMeta";
 
-const CAMPAIGN_KINDS: MrReportKind[] = ["daily_summary", "weekly_summary", "threshold_alert"];
+const CAMPAIGN_KINDS: MrReportKind[] = [
+  "daily_summary", "weekly_summary", "monthly_summary", "quarterly_summary", "threshold_alert",
+];
+
+interface VendorRow {
+  vendor: string;
+  spend: number;
+  leads: number;
+  qualified_leads: number;
+  demos_booked: number;
+  demos_completed: number;
+  cost_per_qualified_lead: number | null;
+  cost_per_demo_booked: number | null;
+  cost_per_demo_completed: number | null;
+}
+
+interface RedFlagVendor { vendor: string; reasons: string[] }
+interface VendorInsight { vendor: string; insights: string[]; actions: string[] }
+interface ReportPeriod { start: string; end: string; label: string; basis?: string }
 
 /* Narrative renderer: paragraphs, bullet groups and simple "| a | b |" table
    rows survive as structure instead of collapsing into one wall of text. */
@@ -135,6 +153,46 @@ function CompetitorDetail({ s }: { s: Record<string, unknown> }) {
   );
 }
 
+function VendorCards({ vendors }: { vendors: VendorRow[] }) {
+  return (
+    <div className="mr-cards">
+      {vendors.map((v) => (
+        <div className="mr-card" key={v.vendor}>
+          <div className="mr-card__top"><span className="mr-card__chan">{v.vendor}</span></div>
+          <div className="mr-card__spend">{fmtMoney(v.spend)}<small>Spend</small></div>
+          <div className="mr-counts">
+            <div className="mr-count"><b>{fmtNum(v.qualified_leads)}</b><span>Qualified</span></div>
+            <div className="mr-count"><b>{fmtNum(v.demos_booked)}</b><span>Booked</span></div>
+            <div className="mr-count"><b>{fmtNum(v.demos_completed)}</b><span>Completed</span></div>
+          </div>
+          <div className="mr-rows">
+            <div className="mr-row"><span className="mr-row__label">Cost / Qualified Lead</span><span className="mr-row__val">{fmtMoney(v.cost_per_qualified_lead)}</span></div>
+            <div className="mr-row"><span className="mr-row__label">Cost / Demo Booked</span><span className="mr-row__val">{fmtMoney(v.cost_per_demo_booked)}</span></div>
+            <div className="mr-row"><span className="mr-row__label">Cost / Demo Completed</span><span className="mr-row__val">{fmtMoney(v.cost_per_demo_completed)}</span></div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function VendorInsightsTable({ rows }: { rows: VendorInsight[] }) {
+  return (
+    <table className="mr-table mr-ia">
+      <thead><tr><th>Vendor</th><th>Insights</th><th>Actions</th></tr></thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.vendor}>
+            <td className="mr-ia__vendor">{r.vendor}</td>
+            <td><ul className="mr-ia__list">{r.insights.map((s, i) => <li key={i}>{s}</li>)}</ul></td>
+            <td><ul className="mr-ia__list mr-ia__list--act">{r.actions.map((s, i) => <li key={i}>{s}</li>)}</ul></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function DailyMovementDetail({ s }: { s: Record<string, unknown> }) {
   const vendors = (s.vendors ?? []) as {
     vendor: string; date: string; since: string | null; days: number; month_start: boolean; corrected: boolean;
@@ -176,6 +234,10 @@ export function MrReportDoc({ report }: { report: MrReport }) {
   const warns = groups.filter((g) => g.level !== "red").reduce((n, g) => n + g.count, 0);
   const v = verdict(reds, warns);
   const sources = (report.sources ?? []) as MrSource[];
+  const period = s.period as ReportPeriod | undefined;
+  const redVendors = (s.red_flag_vendors ?? []) as RedFlagVendor[];
+  const vendors = (s.vendors ?? []) as VendorRow[];
+  const vendorInsights = (s.vendor_insights ?? []) as VendorInsight[];
 
   let n = 0;
   const next = () => ++n;
@@ -189,6 +251,12 @@ export function MrReportDoc({ report }: { report: MrReport }) {
           {isCampaign && <span className={`mr-doc__stamp mr-doc__stamp--${v.cls}`}>{v.label}</span>}
         </div>
         <div className="mr-doc__meta">
+          {period && (
+            <>
+              <span className="mr-doc__period">Reporting period {period.label}</span>
+              <span>·</span>
+            </>
+          )}
           <span>Generated {fmtTime(report.generated_at)}</span>
           <span>·</span>
           <span>Marketing Research agent</span>
@@ -198,6 +266,16 @@ export function MrReportDoc({ report }: { report: MrReport }) {
       {summary && (
         <Section n={next()} title="Executive summary">
           <Prose text={summary} />
+          {redVendors.length > 0 && (
+            <div className="mr-doc__redflags">
+              <b>Vendors on red flag</b>
+              <ul className="mr-doc__list">
+                {redVendors.map((r) => (
+                  <li key={r.vendor}><b>{r.vendor}</b> — {r.reasons.join("; ")}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           {recommend && <div className="mr-doc__callout"><b>Recommend</b><span>{recommend}</span></div>}
         </Section>
       )}
@@ -222,6 +300,18 @@ export function MrReportDoc({ report }: { report: MrReport }) {
         {report.kind === "competitor_digest" && <CompetitorDetail s={s} />}
         {report.kind === "daily_movement" && <DailyMovementDetail s={s} />}
       </Section>
+
+      {vendors.length > 0 && (
+        <Section n={next()} title="Vendor detail">
+          <VendorCards vendors={vendors} />
+        </Section>
+      )}
+
+      {vendorInsights.length > 0 && (
+        <Section n={next()} title="Vendor insights & actions">
+          <VendorInsightsTable rows={vendorInsights} />
+        </Section>
+      )}
 
       <Section n={next()} title="Appendix — data & provenance">
         <div className="mr-doc__foot">
