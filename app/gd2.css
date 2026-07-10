@@ -372,22 +372,27 @@
 /* ---- Step-3 text toolbar ---- */
 .gd2-tt {
   width: 100%;
-  max-width: 880px;
+  max-width: min(100%, 980px);
   background: var(--gd2-card);
   border: 1px solid var(--gd2-line);
   border-radius: 12px;
   box-shadow: var(--gd2-sh-md);
-  padding: 6px 8px;
+  padding: 5px 8px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   flex: none;
 }
 
-.gd2-tt-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.gd2-tt-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+
+/* row 1: what you're editing (left) + view/AI actions (right) */
+.gd2-tt-row--top { justify-content: space-between; }
+.gd2-tt-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
 
 .gd2-tt-tabs {
   display: flex;
+  align-items: center;
   gap: 2px;
   padding: 2px;
   background: var(--gd2-paper);
@@ -395,29 +400,42 @@
   flex-wrap: wrap;
 }
 .gd2-tt-tabs button {
-  padding: 5px 10px;
+  padding: 4px 8px;
   border-radius: 7px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--gd2-soft);
+  white-space: nowrap;
 }
 .gd2-tt-tabs button.on { background: #fff; color: var(--gd2-ink); box-shadow: var(--gd2-sh-sm); }
 
+.gd2-tt-add {
+  padding: 3px 8px !important;
+  margin-left: 2px;
+  border-radius: 7px;
+  border: 1px dashed var(--gd2-line2) !important;
+  font-size: 11.5px !important;
+  font-weight: 600;
+  color: var(--gd2-soft) !important;
+}
+.gd2-tt-add:hover:not(:disabled) { color: var(--gd2-ink) !important; border-color: var(--gd2-soft) !important; background: #fff; }
+
 .gd2-tt-btn {
-  padding: 6px 10px;
+  padding: 4px 8px;
   border-radius: 8px;
   border: 1px solid var(--gd2-line);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   background: var(--gd2-card);
+  white-space: nowrap;
 }
 .gd2-tt-btn:hover:not(:disabled) { background: var(--gd2-paper); }
 
 .gd2-tt-btn--on { background: var(--gd2-ink); color: #fff; border-color: var(--gd2-ink); }
 
 .gd2-tt-num {
-  width: 64px !important;
-  padding: 6px 6px !important;
+  width: 52px !important;
+  padding: 5px 4px !important;
   font-size: 12px;
   font-weight: 600;
   border-radius: 8px !important;
@@ -446,36 +464,43 @@
 .gd2-editpop input:focus { outline: 2px solid var(--gd2-s3); outline-offset: 1px; }
 
 .gd2-tt-ai {
-  margin-left: auto;
   color: var(--gd2-s3);
   border-color: rgba(109, 77, 242, 0.4);
 }
 .gd2-tt-ai:hover:not(:disabled) { border-color: var(--gd2-s3); background: rgba(109, 77, 242, 0.06); }
 
-.gd2-tt-sep { width: 1px; height: 20px; background: var(--gd2-line); }
+.gd2-tt-sep { width: 1px; height: 18px; background: var(--gd2-line); flex: none; }
 
 .gd2-tt-select {
   width: auto;
-  max-width: 210px;
-  padding: 6px 8px !important;
+  max-width: 150px;
+  min-width: 0;
+  flex: 0 1 auto;
+  padding: 5px 7px !important;
   font-size: 12px;
   font-weight: 600;
   border-radius: 8px !important;
 }
 
-.gd2-seg--tt { flex: none; }
-.gd2-seg--tt button { min-width: 28px; padding: 5px 8px; font-size: 11.5px; }
+.gd2-seg--tt { flex: none; padding: 2px; }
+.gd2-seg--tt button { min-width: 26px; padding: 4px 7px; font-size: 11.5px; }
+
+/* placement glyphs — the shaded half of the square = where the text goes */
+.gd2-seg--place button { font-size: 14px; line-height: 1; padding: 3px 7px; }
 
 .gd2-tog {
-  width: 27px; height: 27px;
+  width: 26px; height: 26px;
   border-radius: 8px;
   display: grid;
   place-items: center;
   font-size: 13px;
   color: var(--gd2-soft);
+  flex: none;
 }
 .gd2-tog:hover:not(:disabled) { background: var(--gd2-paper); }
 .gd2-tog.on { background: var(--gd2-ink); color: #fff; }
+/* serif italic "I" so the toggle reads as italic, not a stray slash */
+.gd2-tog i { font-family: Georgia, "Times New Roman", serif; font-style: italic; font-weight: 600; }
 
 .gd2-swatch--custom {
   background: conic-gradient(#e85c4a, #d9a441, #0e9a89, #2e6be6, #6d4df2, #e85c4a);
@@ -486,15 +511,19 @@
 }
 .gd2-swatch--custom input { position: absolute; inset: -6px; opacity: 0; cursor: pointer; }
 
-.gd2-tt-emojis { display: flex; gap: 1px; }
+.gd2-tt-emojis { display: flex; gap: 0; flex: none; }
 .gd2-emoji {
-  width: 26px; height: 26px;
+  width: 22px; height: 22px;
   border-radius: 7px;
   display: grid;
   place-items: center;
-  font-size: 14px;
+  font-size: 13px;
 }
 .gd2-emoji:hover { background: var(--gd2-paper); }
+
+/* tighter swatches inside the toolbar */
+.gd2-swatches--tt { gap: 4px; flex-wrap: nowrap; flex: none; }
+.gd2-swatches--tt .gd2-swatch { width: 20px; height: 20px; }
 
 .gd2-elchip {
   display: inline-flex;

@@ -57,6 +57,16 @@ const STEPS = [
 
 const DEFAULT_LAYOUT_W = 0.42;
 
+/* Compact glyphs for the Step-3 placement segment — the shaded half of each
+   square shows which zone of the image the text will occupy. */
+const PLACEMENT_ICON: Record<string, string> = {
+  left: "◧",
+  right: "◨",
+  center: "▣",
+  top: "⬒",
+  bottom: "⬓",
+};
+
 /* Collision-free defaults for un-dragged lines. X follows the element's
    placement preference; Y is STAGGERED per line so nothing ever starts on
    top of anything else. Every line gets pinned to exactly these coords (or
@@ -260,7 +270,8 @@ export function GraphicsStudioV2({
           const hit = r.emoji.find((e) => e.name.toLowerCase() === w) ?? r.emoji.find((e) => e.name.toLowerCase().includes(w));
           if (hit && !picks.includes(hit.char)) picks.push(hit.char);
         }
-        setEmojiQuick(picks.length ? picks.slice(0, 8) : r.emoji.slice(0, 8).map((e) => e.char));
+        // Cap at 5 so the strip fits the single-line toolbar.
+        setEmojiQuick(picks.length ? picks.slice(0, 5) : r.emoji.slice(0, 5).map((e) => e.char));
       })
       .catch(() => setEmojiQuick([]));
   }, [cur, emojiQuick.length]);
@@ -1378,7 +1389,7 @@ export function GraphicsStudioV2({
             const hex = typeof st.color === "string" && st.color.startsWith("#") ? st.color : "#FFFFFF";
             return (
               <div className="gd2-tt">
-                <div className="gd2-tt-row">
+                <div className="gd2-tt-row gd2-tt-row--top">
                   <div className="gd2-tt-tabs">
                     {cfg.stage3_elements.map((e) => (
                       <button key={e.key} className={activeLine === e.key ? "on" : ""} onClick={() => setActiveLine(e.key)}>
@@ -1390,11 +1401,53 @@ export function GraphicsStudioV2({
                         Text {i + 1}
                       </button>
                     ))}
+                    <button
+                      className="gd2-tt-add"
+                      onClick={addTextBox}
+                      disabled={subheadings.length >= 5}
+                      title={subheadings.length >= 5 ? "Up to 5 extra text boxes" : "Add another text box"}
+                    >
+                      + Text box
+                    </button>
                   </div>
-                  <button className="gd2-tt-btn" onClick={addTextBox} disabled={subheadings.length >= 5}>
-                    + Text box
-                  </button>
-                  <span className="gd2-tt-sep" />
+                  <div className="gd2-tt-actions">
+                    <div className="gd2-tt-emojis" title="Tap to drop an emoji on the design">
+                      {emojiQuick.map((c) => (
+                        <button key={c} className="gd2-emoji" title={`Add ${c} to the design`} onClick={() => addEmoji(c)}>
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                    {(run.config.elements ?? []).map((e2) => (
+                      <span key={e2.id} className="gd2-elchip">
+                        {e2.kind === "emoji" ? e2.ref : e2.kind}
+                        <button onClick={() => removeElement(e2.id)} title="Remove">×</button>
+                      </span>
+                    ))}
+                    <span className="gd2-tt-sep" />
+                    <button
+                      className={`gd2-tt-btn ${exactPreview ? "gd2-tt-btn--on" : ""}`}
+                      title={exactPreview ? "Back to drag-and-edit mode" : "Preview the final pixel-perfect render"}
+                      onClick={() => {
+                        // Pin everything first so the exact render matches the
+                        // edit canvas 1:1 (no zone-stack surprises).
+                        if (!exactPreview) patch({ layout: pinAllLayout() });
+                        setExactPreview((v) => !v);
+                      }}
+                    >
+                      {exactPreview ? "✎ Edit mode" : "👁 Preview"}
+                    </button>
+                    <button
+                      className="gd2-tt-btn gd2-tt-ai"
+                      title="Let AI arrange the text on the image"
+                      onClick={aiPlacement}
+                      disabled={busy !== null}
+                    >
+                      ✦ AI placement
+                    </button>
+                  </div>
+                </div>
+                <div className="gd2-tt-row gd2-tt-row--tools">
                   <select
                     className="gd2-tt-select"
                     title="Brand fonts only"
@@ -1458,28 +1511,29 @@ export function GraphicsStudioV2({
                   >
                     <i>I</i>
                   </button>
-                </div>
-                <div className="gd2-tt-row">
                   {canPlace ? (
-                    <div className="gd2-seg gd2-seg--tt">
-                      {cfg.text_placements.map((p) => (
-                        <button
-                          key={p.key}
-                          title={`Place on the ${p.label.toLowerCase()}`}
-                          className={st.placement === p.key ? "on" : ""}
-                          onClick={() => setLineField("placement", p.key)}
-                        >
-                          {p.label}
-                        </button>
-                      ))}
-                    </div>
+                    <>
+                      <span className="gd2-tt-sep" />
+                      <div className="gd2-seg gd2-seg--tt gd2-seg--place" title="Where this text sits on the image">
+                        {cfg.text_placements.map((p) => (
+                          <button
+                            key={p.key}
+                            title={`Place on the ${p.label.toLowerCase()}`}
+                            className={st.placement === p.key ? "on" : ""}
+                            onClick={() => setLineField("placement", p.key)}
+                          >
+                            {PLACEMENT_ICON[p.key] ?? p.label}
+                          </button>
+                        ))}
+                      </div>
+                    </>
                   ) : null}
                   {activeLine === "headline" || activeLine.startsWith("sub-") ? (
-                    <div className="gd2-seg gd2-seg--tt" title="Text alignment inside the box">
+                    <div className="gd2-seg gd2-seg--tt">
                       {([["left", "⇤"], ["center", "≡"], ["right", "⇥"]] as const).map(([a, icon]) => (
                         <button
                           key={a}
-                          title={`Align ${a}`}
+                          title={`Align text ${a}`}
                           className={((st as { align?: string }).align ?? "left") === a ? "on" : ""}
                           onClick={() => setLineField("align", a)}
                         >
@@ -1489,50 +1543,24 @@ export function GraphicsStudioV2({
                     </div>
                   ) : null}
                   {canColor ? (
-                    <div className="gd2-swatches">
-                      {cfg.text_colors.map((c) => (
-                        <button
-                          key={c.key}
-                          title={c.label}
-                          className={`gd2-swatch ${st.color === c.key ? "on" : ""}`}
-                          style={{ background: c.swatch }}
-                          onClick={() => setLineField("color", c.key)}
-                        />
-                      ))}
-                      <label className="gd2-swatch gd2-swatch--custom" title="Custom color">
-                        <input type="color" value={hex} onChange={(e) => setLineField("color", e.target.value.toUpperCase())} />
-                      </label>
-                    </div>
+                    <>
+                      <span className="gd2-tt-sep" />
+                      <div className="gd2-swatches gd2-swatches--tt">
+                        {cfg.text_colors.map((c) => (
+                          <button
+                            key={c.key}
+                            title={c.label}
+                            className={`gd2-swatch ${st.color === c.key ? "on" : ""}`}
+                            style={{ background: c.swatch }}
+                            onClick={() => setLineField("color", c.key)}
+                          />
+                        ))}
+                        <label className="gd2-swatch gd2-swatch--custom" title="Pick a custom color">
+                          <input type="color" value={hex} onChange={(e) => setLineField("color", e.target.value.toUpperCase())} />
+                        </label>
+                      </div>
+                    </>
                   ) : null}
-                  <span className="gd2-tt-sep" />
-                  <div className="gd2-tt-emojis">
-                    {emojiQuick.map((c) => (
-                      <button key={c} className="gd2-emoji" title="Add as a design element" onClick={() => addEmoji(c)}>
-                        {c}
-                      </button>
-                    ))}
-                  </div>
-                  {(run.config.elements ?? []).map((e2) => (
-                    <span key={e2.id} className="gd2-elchip">
-                      {e2.kind === "emoji" ? e2.ref : e2.kind}
-                      <button onClick={() => removeElement(e2.id)} title="Remove">×</button>
-                    </span>
-                  ))}
-                  <button
-                    className={`gd2-tt-btn ${exactPreview ? "gd2-tt-btn--on" : ""}`}
-                    title="Toggle the engine's pixel-perfect render"
-                    onClick={() => {
-                      // Pin everything first so the exact render matches the
-                      // edit canvas 1:1 (no zone-stack surprises).
-                      if (!exactPreview) patch({ layout: pinAllLayout() });
-                      setExactPreview((v) => !v);
-                    }}
-                  >
-                    {exactPreview ? "✎ Edit mode" : "👁 Exact render"}
-                  </button>
-                  <button className="gd2-tt-btn gd2-tt-ai" onClick={aiPlacement} disabled={busy !== null}>
-                    ✦ AI placement
-                  </button>
                 </div>
               </div>
             );
