@@ -28,6 +28,7 @@ import {
   type GdElement,
   type GdElementStyle,
   type GdGradientSuggestion,
+  type GdPlacementSuggestion,
   type GdRun,
   type GdSubheading,
 } from "@/lib/api";
@@ -670,14 +671,70 @@ export function GraphicsStudioV2({
       setSel1("AI");
     });
 
+  // Latest run, readable from async callbacks (the background vision suggestion
+  // resolves after renders, so its guards must see the CURRENT config).
+  const runRef = useRef<GdRun | null>(null);
+  runRef.current = run;
+
+  // Apply an AI placement proposal in one config patch: layout + (when the
+  // vision brain judged the image) headline colour/size and the matching
+  // sub-heading colour, so the whole copy stack stays legible together.
+  const applyPlacement = async (res: GdPlacementSuggestion) => {
+    const r0 = runRef.current;
+    if (!r0) return;
+    const body: Parameters<typeof gdUpdateConfig>[1] = {
+      layout: res.layout,
+      ...(res.shapes ? { shapes: res.shapes } : {}),
+      ...(res.element_styles ? { element_styles: res.element_styles } : {}),
+    };
+    if (res.text_color && (r0.config.subheadings ?? []).length) {
+      body.subheadings = (r0.config.subheadings ?? []).map((s) => ({ ...s, color: res.text_color! }));
+    }
+    setRun(await gdUpdateConfig(r0.id, body));
+  };
+
   const aiPlacement = () =>
     guard("Finding a cleaner arrangement…", async () => {
       if (!run) return;
       const res = await gdSuggestPlacement(run.id);
-      const r = await gdUpdateConfig(run.id, { layout: res.layout, ...(res.shapes ? { shapes: res.shapes } : {}) });
-      setRun(r);
-      onToast("Arranged — Generate preview to see it.");
+      await applyPlacement(res);
+      onToast(
+        res.source === "vision" && res.reason
+          ? `Arranged — ${res.reason}`
+          : "Arranged — Generate preview to see it.",
+      );
     });
+
+  // Vision auto-arrange: the placement micro-subagent looks at the approved
+  // image the moment Step 3 opens and proposes the starting layout in the
+  // background. Non-blocking, and manual intent wins — if the user pinned
+  // anything before the response lands, the suggestion is dropped (still
+  // available behind the arrange button).
+  const autoArrangedRun = useRef<string | null>(null);
+  useEffect(() => {
+    if (!run || run.state !== "STAGE3_CONFIG") return;
+    if (autoArrangedRun.current === run.id) return;
+    autoArrangedRun.current = run.id;
+    if (Object.keys(run.config.layout ?? {}).length) return; // already placed (e.g. back-nav)
+    let alive = true;
+    gdSuggestPlacement(run.id)
+      .then(async (res) => {
+        const latest = runRef.current;
+        if (!alive || !latest || latest.state !== "STAGE3_CONFIG") return;
+        if (Object.keys(latest.config.layout ?? {}).length) return; // user dragged meanwhile
+        await applyPlacement(res);
+        onToast(
+          res.source === "vision" && res.reason
+            ? `AI arranged your text — ${res.reason}`
+            : "Arranged a starting layout — drag anything to adjust.",
+        );
+      })
+      .catch(() => undefined); // advisory only — never surface an error
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run?.id, run?.state]);
 
   const sendChat = () => {
     const text = chatInput.trim();

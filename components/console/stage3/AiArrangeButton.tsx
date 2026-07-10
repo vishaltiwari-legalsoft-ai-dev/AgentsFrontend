@@ -1,39 +1,36 @@
 "use client";
 
 import { useState } from "react";
-import { gdSuggestPlacement, type GdLayoutEntry } from "../../../lib/api";
+import { gdSuggestPlacement, type GdPlacementSuggestion } from "../../../lib/api";
 
 /**
  * One-click "AI Suggest Placement" — a refinement, never the default flow.
- * Fetches a proposed arrangement, applies it, and offers a one-step Undo that
- * restores the previous coordinates (and clears any pins the arrange added).
+ * Vision-first: the backend looks at the approved Stage-2 image and returns the
+ * zone / text colour / density judgment turned into exact coordinates (with a
+ * deterministic fallback). The parent applies the proposal and hands back a
+ * revert closure so Undo restores layout AND colours, not just positions.
  */
 export function AiArrangeButton({
   runId,
-  currentLayout,
   onApply,
   onError,
   disabled,
 }: {
   runId: string;
-  currentLayout: Record<string, GdLayoutEntry>;
-  onApply: (layout: Record<string, GdLayoutEntry | null>) => Promise<void> | void;
+  /** Apply the proposal; return a revert closure for one-step Undo. */
+  onApply: (res: GdPlacementSuggestion) => Promise<(() => Promise<void>) | void>;
   onError?: (msg: string) => void;
   disabled?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
-  const [undo, setUndo] = useState<Record<string, GdLayoutEntry | null> | null>(null);
+  const [undo, setUndo] = useState<(() => Promise<void>) | null>(null);
 
   const arrange = async () => {
     setBusy(true);
     try {
       const r = await gdSuggestPlacement(runId);
-      const u: Record<string, GdLayoutEntry | null> = {};
-      Object.keys(r.layout).forEach((id) => {
-        u[id] = currentLayout[id] ?? null; // restore prior coord, or unpin if it was auto
-      });
-      setUndo(u);
-      await onApply(r.layout);
+      const revert = await onApply(r);
+      setUndo(() => revert ?? null);
     } catch (e) {
       onError?.(e instanceof Error ? e.message : "Couldn't arrange the layout");
     } finally {
@@ -43,7 +40,7 @@ export function AiArrangeButton({
 
   const revert = async () => {
     if (!undo) return;
-    await onApply(undo);
+    await undo();
     setUndo(null);
   };
 
@@ -54,7 +51,7 @@ export function AiArrangeButton({
         className="gdminibtn gdminibtn--primary"
         onClick={arrange}
         disabled={busy || disabled}
-        title="Auto-arrange all elements into a polished layout"
+        title="Look at the image and auto-arrange all elements into a polished layout"
       >
         <Sparkle /> {busy ? "Arranging…" : "AI Suggest Placement"}
       </button>

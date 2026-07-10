@@ -1105,13 +1105,21 @@ export const gdUpdateConfig = (
 export const gdGenerate = (id: string, stage: number, variant?: string) =>
   postJson<{ attempt: GdAttempt; run: GdRun }>(`/api/gd/runs/${id}/generate`, { stage, variant });
 
-// AI Suggest Placement — returns a proposed Stage-3 layout (and optional shapes);
-// the caller applies it via gdUpdateConfig or discards. Does not persist server-side.
+// AI Suggest Placement — vision-first: a micro-subagent looks at the approved
+// Stage-2 image and judges zone / text colour / density; the arranger computes
+// exact coords ("source": "vision"). Falls back to the metadata-only arranger
+// ("source": "deterministic"). The caller applies it via gdUpdateConfig or
+// discards. Does not persist server-side.
+export type GdPlacementSuggestion = {
+  layout: Record<string, GdLayoutEntry>;
+  shapes?: GdShape[];
+  element_styles?: Record<string, GdElementStyle>;
+  text_color?: string;
+  source?: "vision" | "deterministic";
+  reason?: string;
+};
 export const gdSuggestPlacement = (id: string) =>
-  postJson<{ layout: Record<string, GdLayoutEntry>; shapes?: GdShape[] }>(
-    `/api/gd/runs/${id}/suggest-placement`,
-    {},
-  );
+  postJson<GdPlacementSuggestion>(`/api/gd/runs/${id}/suggest-placement`, {});
 
 export const gdApprove = (id: string, stage: number, attempt?: number) =>
   postJson<GdRun>(`/api/gd/runs/${id}/approve`, { stage, attempt });

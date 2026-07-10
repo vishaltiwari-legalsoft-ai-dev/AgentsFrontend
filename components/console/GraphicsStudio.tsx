@@ -21,6 +21,7 @@ import {
   gdListBrands,
   gdStage4,
   gdSuggest,
+  gdSuggestPlacement,
   gdTextPreview,
   gdUpdateConfig,
   type GdBrandOption,
@@ -29,6 +30,8 @@ import {
   type GdConfig,
   type GdElement,
   type GdElementStyle,
+  type GdLayoutEntry,
+  type GdPlacementSuggestion,
   type GdSubheading,
   type GdLogoLayout,
   type GdChatMessage,
@@ -726,6 +729,85 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
     }
   };
 
+  // Latest run, readable from async callbacks (the background vision suggestion
+  // resolves after renders, so its guards must see the CURRENT config).
+  const runRef = useRef<GdRun | null>(null);
+  runRef.current = run;
+
+  // Apply an AI placement proposal (layout + the vision colour/size judgment)
+  // in one config patch. Returns a revert closure so "Undo arrange" restores
+  // everything it overwrote — positions, headline style and sub-heading colours.
+  const applyArrangement = async (res: GdPlacementSuggestion): Promise<(() => Promise<void>) | void> => {
+    const cur = runRef.current;
+    if (!cur) return;
+    const prevLayout: Record<string, GdLayoutEntry | null> = {};
+    Object.keys(res.layout).forEach((id) => {
+      prevLayout[id] = cur.config.layout?.[id] ?? null; // null = unpin on undo
+    });
+    const body: Parameters<typeof gdUpdateConfig>[1] = { layout: res.layout };
+    let prevStyles: Record<string, GdElementStyle> | null = null;
+    if (res.element_styles) {
+      prevStyles = {};
+      Object.entries(res.element_styles).forEach(([key, patch]) => {
+        const before = cur.config.element_styles?.[key] ?? {};
+        const restore: GdElementStyle = {};
+        (Object.keys(patch) as (keyof GdElementStyle)[]).forEach((f) => {
+          (restore as Record<string, unknown>)[f] = before[f];
+        });
+        prevStyles![key] = restore;
+      });
+      body.element_styles = res.element_styles;
+    }
+    // The vision legibility call applies to the whole copy stack — mirror the
+    // colour onto every sub-heading line (merging local text drafts first).
+    let prevSubs: GdSubheading[] | null = null;
+    if (res.text_color && (cur.config.subheadings ?? []).length) {
+      prevSubs = (cur.config.subheadings ?? []).map((s, i) => ({ ...s, text: subTexts[i] ?? s.text }));
+      body.subheadings = prevSubs.map((s) => ({ ...s, color: res.text_color! }));
+    }
+    await patchConfig(body);
+    return async () => {
+      const undoBody: Parameters<typeof gdUpdateConfig>[1] = { layout: prevLayout };
+      if (prevStyles) undoBody.element_styles = prevStyles;
+      if (prevSubs) undoBody.subheadings = prevSubs;
+      await patchConfig(undoBody);
+    };
+  };
+  const applyArrangementRef = useRef(applyArrangement);
+  applyArrangementRef.current = applyArrangement;
+
+  // Vision auto-arrange: the placement micro-subagent looks at the approved
+  // Stage-2 image the moment Stage 3 opens and, in the background, proposes the
+  // starting layout. Non-blocking (the panel opens instantly with defaults) and
+  // manual intent wins — if the user pinned anything before the response lands,
+  // the suggestion is dropped (still available behind "AI Suggest Placement").
+  const autoArrangedRun = useRef<string | null>(null);
+  useEffect(() => {
+    if (!run || run.state !== "STAGE3_CONFIG") return;
+    if (autoArrangedRun.current === run.id) return;
+    autoArrangedRun.current = run.id;
+    if (Object.keys(run.config.layout ?? {}).length) return; // already placed (e.g. back-nav)
+    let alive = true;
+    gdSuggestPlacement(run.id)
+      .then((res) => {
+        const latest = runRef.current;
+        if (!alive || !latest || latest.state !== "STAGE3_CONFIG") return;
+        if (Object.keys(latest.config.layout ?? {}).length) return; // user dragged meanwhile
+        void applyArrangementRef.current(res).then(() => {
+          onToast(
+            res.source === "vision" && res.reason
+              ? `AI arranged your text — ${res.reason}`
+              : "Arranged a starting layout — drag anything to adjust.",
+          );
+        });
+      })
+      .catch(() => undefined); // advisory only — never surface an error
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run?.id, run?.state]);
+
   // Stage-3 free elements — debounced persist so dragging/resizing doesn't
   // fire a request per pointer move; the server then re-renders the
   // authoritative preview once edits settle.
@@ -864,7 +946,7 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
     gradSugg, setGradSugg, gradSteer, setGradSteer, gradExclude, setGradExclude,
     elemSugg, setElemSugg, elemSteer, setElemSteer, elemExclude, setElemExclude,
     hooks, setHooks, logoFile, setLogoFile, brandLogo, logoLib, selLogoId, setSelLogoId, fileRef,
-    patchConfig, doGenerate, doStage4, onToast,
+    patchConfig, applyArrangement, doGenerate, doStage4, onToast,
   };
 
   return (
@@ -1091,6 +1173,7 @@ function StageControls(props: {
   setSelLogoId: (v: string | null) => void;
   fileRef: React.MutableRefObject<HTMLInputElement | null>;
   patchConfig: (b: Parameters<typeof gdUpdateConfig>[1]) => Promise<void>;
+  applyArrangement: (res: GdPlacementSuggestion) => Promise<(() => Promise<void>) | void>;
   doGenerate: () => void;
   doStage4: () => void;
   onToast: (m: string) => void;
@@ -1105,7 +1188,7 @@ function StageControls(props: {
     answers, setAnswers, direction, setDirection, conceptSugg, setConceptSugg, exploreSugg, setExploreSugg, hooks, setHooks,
     gradSugg, setGradSugg, gradSteer, setGradSteer, gradExclude, setGradExclude,
     elemSugg, setElemSugg, elemSteer, setElemSteer, elemExclude, setElemExclude,
-    logoFile, setLogoFile, brandLogo, logoLib, selLogoId, setSelLogoId, fileRef, patchConfig, doGenerate, doStage4, onToast, slot,
+    logoFile, setLogoFile, brandLogo, logoLib, selLogoId, setSelLogoId, fileRef, patchConfig, applyArrangement, doGenerate, doStage4, onToast, slot,
   } = props;
   const ai = slot === "ai";
   const opt = slot === "options";
@@ -1933,12 +2016,12 @@ function StageControls(props: {
           );
         })()}
 
-        {/* one-click AI arrange — a refinement over the live preview, not the default */}
+        {/* one-click AI arrange — vision-powered (looks at the actual image),
+            re-runnable on demand; a refinement over the live preview */}
         <AiArrangeButton
             runId={run.id}
-            currentLayout={run.config.layout ?? {}}
             disabled={busy || !((tokens.headline ?? "").trim() && (tokens.cta ?? "").trim())}
-            onApply={(layout) => patchConfig({ layout })}
+            onApply={applyArrangement}
             onError={onToast}
           />
         </div>
