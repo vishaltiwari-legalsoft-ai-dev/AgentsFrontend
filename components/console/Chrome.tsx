@@ -77,6 +77,7 @@ export function Sidebar({
   // the secondary nav so only privileged accounts ever see them.
   let nav2 = NAV2;
   if (isCreator) nav2 = [...nav2, { id: "agentcfg", label: "Agent config", icon: "sliders-horizontal" }];
+  if (isAdmin) nav2 = [...nav2, { id: "imagelib", label: "Image library", icon: "images" }];
   if (isAdmin) nav2 = [...nav2, { id: "database", label: "Database", icon: "database" }];
   if (isAdmin) nav2 = [...nav2, { id: "admin", label: "Admin", icon: "shield" }];
 

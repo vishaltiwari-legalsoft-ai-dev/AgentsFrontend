@@ -409,6 +409,36 @@ export function testOpenRouterKey(): Promise<{ ok: boolean; label?: string; is_f
   return postJson("/api/admin/settings/test", {});
 }
 
+/* ----------------------------- Image library ----------------------------- */
+/* Admin-only gallery: the final creative of every COMPLETED Graphics Designer
+   run, archived to GCS at Stage-4 approval and listed newest-first. */
+
+export interface ImageLibraryItem {
+  run_id: string;
+  user_id: string;
+  user_email: string;
+  brand: string | null;
+  brand_id: string | null;
+  summary: string;
+  headline: string;
+  aspect_ratio: string | null;
+  completed_at: string;
+  /** A fresh signed GCS URL, or an API proxy path (starts with "/api/"). */
+  view_url: string;
+}
+
+export function getImageLibrary(limit = 200): Promise<{ items: ImageLibraryItem[]; total: number }> {
+  return getJson(`/api/admin/image-library?limit=${limit}`);
+}
+
+/** Proxy-served gallery images need the Bearer header, so fetch as a blob and
+ *  hand back an object URL (callers should revoke it on unmount). */
+export async function imageLibraryBlob(path: string): Promise<string> {
+  const response = await request(path);
+  if (!response.ok) throw new Error(await parseError(response));
+  return URL.createObjectURL(await response.blob());
+}
+
 /* --------------------------- Database viewer ----------------------------- */
 /* Admin-only, read-only inspection of the Firestore collections, rendered as  */
 /* tables — so the team can see the data really living in the database.        */

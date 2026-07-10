@@ -12,6 +12,7 @@ import { MarketingResearch } from "@/components/console/mr/MarketingResearch";
 import { LibraryView } from "@/components/console/LibraryView";
 import { AdminView } from "@/components/console/AdminView";
 import { DatabaseView } from "@/components/console/DatabaseView";
+import { ImageLibraryView } from "@/components/console/ImageLibraryView";
 import { AgentConfigView } from "@/components/console/AgentConfigView";
 import { Icon } from "@/lib/kit-ui";
 import { WorkProvider, useIsWorking } from "@/lib/work";
@@ -35,6 +36,7 @@ const NAV_VIEWS = [
   "studio",
   "marketing",
   "library",
+  "imagelib",
   "admin",
   "database",
   "agentcfg",
@@ -50,7 +52,7 @@ function isNavView(value: string): value is NavView {
 
 // Some views are permission-gated; don't restore one the user can't access.
 function canAccess(view: NavView, user: { is_admin?: boolean; is_creator?: boolean }): boolean {
-  if (view === "admin" || view === "database") return !!user.is_admin;
+  if (view === "admin" || view === "database" || view === "imagelib") return !!user.is_admin;
   if (view === "agentcfg") return !!user.is_creator;
   return true;
 }
@@ -153,6 +155,7 @@ export default function ConsoleApp() {
           {nav === "studio" && <StudioSwitch onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "marketing" && <MarketingResearch onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "library" && <LibraryView onBack={() => setNav("workspace")} />}
+          {nav === "imagelib" && user.is_admin && <ImageLibraryView onBack={() => setNav("home")} />}
           {nav === "admin" && user.is_admin && <AdminView onBack={() => setNav("home")} />}
           {nav === "database" && user.is_admin && <DatabaseView onBack={() => setNav("home")} />}
           {nav === "agentcfg" && user.is_creator && <AgentConfigView onBack={() => setNav("home")} />}
