@@ -749,15 +749,16 @@ export function GraphicsStudioV2({
     let alive = true;
     gdSuggestPlacement(run.id)
       .then(async (res) => {
+        // Only a VISION-sourced arrangement earns auto-apply: the deterministic
+        // fallback never looked at the image, so force-pinning it on open would
+        // be worse than the renderer's own defaults. It stays available behind
+        // the arrange button, where the user asks for it.
+        if (res.source !== "vision") return;
         const latest = runRef.current;
         if (!alive || !latest || latest.state !== "STAGE3_CONFIG") return;
         if (Object.keys(latest.config.layout ?? {}).length) return; // user dragged meanwhile
         await applyPlacement(res);
-        onToast(
-          res.source === "vision" && res.reason
-            ? `AI arranged your text — ${res.reason}`
-            : "Arranged a starting layout — drag anything to adjust.",
-        );
+        onToast(res.reason ? `AI arranged your text — ${res.reason}` : "AI arranged your text from the image.");
       })
       .catch(() => undefined); // advisory only — never surface an error
     return () => {
