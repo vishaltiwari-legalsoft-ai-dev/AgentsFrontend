@@ -816,6 +816,9 @@ export interface GdGradientSuggestion {
   ai: boolean;
   gradient: GdCustomGradient;
   note: string;
+  // Set when the LLM path failed and a curated brand preset was served instead
+  // (ai is false) — surfaced to the user so a preset is never passed off as AI.
+  fallback_reason?: string;
 }
 
 // A per-creative, temporary AI element (Stage 2). Lives on the run config only —

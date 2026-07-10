@@ -790,15 +790,16 @@ export function GraphicsStudio({ onToast, onBack }: { onToast: (m: string) => vo
     let alive = true;
     gdSuggestPlacement(run.id)
       .then((res) => {
+        // Only a VISION-sourced arrangement earns auto-apply: the deterministic
+        // fallback never looked at the image, so force-pinning it on open would
+        // be worse than the renderer's own defaults. It stays available behind
+        // the "AI Suggest Placement" button, where the user asks for it.
+        if (res.source !== "vision") return;
         const latest = runRef.current;
         if (!alive || !latest || latest.state !== "STAGE3_CONFIG") return;
         if (Object.keys(latest.config.layout ?? {}).length) return; // user dragged meanwhile
         void applyArrangementRef.current(res).then(() => {
-          onToast(
-            res.source === "vision" && res.reason
-              ? `AI arranged your text — ${res.reason}`
-              : "Arranged a starting layout — drag anything to adjust.",
-          );
+          onToast(res.reason ? `AI arranged your text — ${res.reason}` : "AI arranged your text from the image.");
         });
       })
       .catch(() => undefined); // advisory only — never surface an error
@@ -1265,6 +1266,8 @@ function StageControls(props: {
         })) as unknown as GdGradientSuggestion;
         setGradSugg(r);
         if (r.gradient.cid) setGradExclude([...gradExclude, r.gradient.cid]);
+        // Never pass a curated preset off as an AI result — say what happened.
+        if (!r.ai) onToast(r.fallback_reason ?? "AI unavailable — showing a curated brand preset instead.");
       } catch (e) {
         onToast(e instanceof Error ? e.message : "Couldn't suggest a gradient");
       }
@@ -1317,7 +1320,7 @@ function StageControls(props: {
               className="gdselect"
               value={gradSteer}
               onChange={(e) => setGradSteer(e.target.value)}
-              placeholder="Optional steer — e.g. warmer, more minimal"
+              placeholder="Describe it — e.g. diagonal aurora waves, soft grain"
             />
             <Button
               size="sm"
@@ -1343,7 +1346,10 @@ function StageControls(props: {
                   <span className="gdvariant__chip" style={{ background: aiGrad.css_gradient }} />
                   <span className="gdvariant__body">
                     <span className="gdvariant__title">
-                      {aiGrad.title} <span className="gdfield__lock">AI · temporary</span>
+                      {aiGrad.title}{" "}
+                      <span className="gdfield__lock">
+                        {aiGrad.cid === "llm" ? "AI · temporary" : "Preset · AI unavailable"}
+                      </span>
                     </span>
                     <span className="gdvariant__desc">{aiGrad.desc}</span>
                   </span>

@@ -164,6 +164,9 @@ export function GraphicsStudioV2({
 
   const [sel1, setSel1] = useState<string | null>(null);
   const [aiSteer, setAiSteer] = useState("");
+  // Every AI-gradient cid seen this session (duplicates kept — the backend
+  // rotates by count), so "Dream up another" never repeats itself.
+  const [gradExclude, setGradExclude] = useState<string[]>([]);
   const [sel2, setSel2] = useState<string | null>(null);
   const [tok, setTok] = useState<Record<string, string>>({});
   const [logos, setLogos] = useState<GdBrandLogoVariant[]>([]);
@@ -691,11 +694,18 @@ export function GraphicsStudioV2({
   const dreamGradient = () =>
     guard("Dreaming up a fresh on-brand gradient…", async () => {
       if (!run) return;
+      // Accumulate every seen cid (duplicates included) — the backend rotates
+      // compositions/curated picks by the exclude count, so a single-element
+      // exclude made "Dream up another" return the SAME design every time.
+      const exclude = [...gradExclude, ...(run.config.custom_gradient?.cid ? [run.config.custom_gradient.cid] : [])];
       const res = (await gdSuggest(run.id, {
         kind: "gradient",
         ...(aiSteer.trim() ? { steer: aiSteer.trim() } : {}),
-        ...(run.config.custom_gradient?.cid ? { exclude: [run.config.custom_gradient.cid] } : {}),
+        ...(exclude.length ? { exclude } : {}),
       })) as unknown as GdGradientSuggestion;
+      if (res.gradient.cid) setGradExclude([...exclude, res.gradient.cid]);
+      // Never pass a curated preset off as an AI result — say what happened.
+      if (!res.ai) onToast(res.fallback_reason ?? "AI unavailable — showing a curated brand preset instead.");
       const r = await gdUpdateConfig(run.id, { custom_gradient: res.gradient });
       setRun(r);
       setSel1("AI");
@@ -1010,7 +1020,7 @@ export function GraphicsStudioV2({
                   onClick={() => setSel1("AI")}
                 >
                   <span className="gd2-tileart" style={{ background: custom.css_gradient }}>
-                    <span className="gd2-aichip">✦ AI</span>
+                    <span className="gd2-aichip">{custom.cid === "llm" ? "✦ AI" : "Preset"}</span>
                   </span>
                   <span className="gd2-tiletxt"><b>{custom.title}</b></span>
                   <span className="gd2-tiledesc">{custom.desc}</span>
@@ -1023,7 +1033,7 @@ export function GraphicsStudioV2({
             <input
               type="text"
               value={aiSteer}
-              placeholder="Optional steer — e.g. warmer, more minimal"
+              placeholder="Describe it — e.g. diagonal aurora waves, soft grain"
               onChange={(e) => setAiSteer(e.target.value)}
             />
             <button className="gd2-btn gd2-btn--ai" style={{ width: "100%", marginTop: 8 }} onClick={dreamGradient} disabled={busy !== null}>
