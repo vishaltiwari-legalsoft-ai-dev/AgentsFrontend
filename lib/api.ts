@@ -625,6 +625,8 @@ export interface GdAttempt {
   warnings?: string[];
   provider?: string;
   method?: string;
+  // Honest per-generation remix metadata: ai=true only for a real LLM rewrite.
+  remix?: { ai: boolean; axis: string; fallback_reason?: string };
   created_at: string;
 }
 
@@ -663,6 +665,8 @@ export interface GdRun {
     custom_gradient?: GdCustomGradient | null;
     custom_element?: GdCustomElement | null;
     subject_asset_ref?: string | null;
+    background_asset_ref?: string | null;
+    remix_enabled?: boolean;
     creative_brief?: Record<string, string>;
     creative_type?: string;
     use_ai_compositor: boolean;
@@ -983,6 +987,19 @@ export interface GdHookSuggestion {
 export const gdListBrands = () =>
   getJson<{ brands: GdBrandOption[]; default: string }>("/api/gd/brands");
 
+/** Brands whose kit data has been ingested — the setup-screen readiness strip. */
+export interface GdIngestedBrand {
+  id: string;
+  name: string;
+  logo_url: string | null;
+  primary_colors: string[];
+  counts: { fonts: number; logos: number; reference_assets?: number };
+  source?: string | null;
+}
+
+export const gdIngestedBrands = () =>
+  getJson<{ brands: GdIngestedBrand[] }>("/api/gd/ingested-brands");
+
 const _brandQuery = (brand?: string | null) =>
   brand ? `?brand=${encodeURIComponent(brand)}` : "";
 
@@ -996,7 +1013,7 @@ export const gdGetPrompts = (brand?: string | null) =>
 
 export const gdCreateRun = (
   brandId?: string | null,
-  init?: { aspect_ratio?: string; creative_type?: string; creative_brief?: Record<string, string> },
+  init?: { aspect_ratio?: string; creative_type?: string; creative_brief?: Record<string, string>; remix_enabled?: boolean },
 ) => postJson<GdRun>("/api/gd/runs", { brand_id: brandId ?? null, ...(init ?? {}) });
 
 /* ---------------- Brand Reference Library (ingestion + retrieval) --------- */
@@ -1096,6 +1113,8 @@ export const gdUpdateConfig = (
     custom_gradient?: GdCustomGradient | null;
     custom_element?: GdCustomElement | null;
     subject_asset_ref?: string | null;
+    background_asset_ref?: string | null;
+    remix_enabled?: boolean;
     creative_brief?: Record<string, string>;
     use_ai_compositor?: boolean;
     tokens?: Record<string, string>;
@@ -1133,6 +1152,21 @@ export const gdPromptPreview = (id: string, stage: number, variant: string) =>
 
 export const gdSuggest = (id: string, body: Record<string, unknown>) =>
   postJson<Record<string, unknown>>(`/api/gd/runs/${id}/suggest`, body);
+
+/** Auto-mode plan: the AI's picks for all four stages, validated server-side
+ *  against the run's real pack inventory. */
+export interface GdPlan {
+  version: number;
+  brief: string;
+  concept: string;
+  gradient: { cid: string; reason: string };
+  element: { cid: string; reason: string };
+  text: { headline: string; highlight: string; subline: string; cta: string; reason: string };
+  logo: { logo_id: string | null; reason: string };
+}
+
+export const gdPlan = (id: string, brief: string) =>
+  postJson<{ plan: GdPlan; run: GdRun }>(`/api/gd/runs/${id}/plan`, { brief });
 
 /** Whether the run's brand has a logo on file (so Stage 4 can skip the upload). */
 export interface GdBrandLogo {
@@ -1228,17 +1262,22 @@ export async function gdFontBlob(name: string, brand?: string | null): Promise<s
   return URL.createObjectURL(await response.blob());
 }
 
-/** Upload an image to use as the Stage-2 SUBJECT (composite mode). Accepts
+/** Upload an image to use as the Stage-2 SUBJECT or BACKGROUND (composite mode). Accepts
  *  PNG/WebP/JPEG; the backend normalizes to PNG. Store the returned `ref` via
- *  gdUpdateConfig({ subject_asset_ref }) and generate Stage 2 with variant
- *  "UPLOAD" — a deterministic Pillow composite, no image model involved. */
-export async function gdSubjectUpload(runId: string, file: File): Promise<{ ref: string }> {
+ *  gdUpdateConfig({ subject_asset_ref }) or gdUpdateConfig({ background_asset_ref }) and generate Stage 2 with variant
+ *  "UPLOAD" — a deterministic Pillow composite, no image model involved. The `role` param defaults to "subject"
+ *  and can be overridden to "background" for multi-layer compositing. */
+export async function gdSubjectUpload(
+  runId: string,
+  file: File,
+  role: "subject" | "background" = "subject",
+): Promise<{ ref: string }> {
   const form = new FormData();
   form.append("file", file);
-  const response = await request(`/api/gd/runs/${runId}/subject/upload`, {
-    method: "POST",
-    body: form,
-  });
+  const response = await request(
+    `/api/gd/runs/${runId}/subject/upload?role=${role}`,
+    { method: "POST", body: form },
+  );
   if (!response.ok) throw new Error(await parseError(response));
   return (await response.json()) as { ref: string };
 }
