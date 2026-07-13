@@ -805,6 +805,31 @@
 }
 .gd2-logotile-art img { max-width: 82%; max-height: 46px; object-fit: contain; }
 
+/* ── setup-screen ingested-brands strip ─────────────────────────────────── */
+.gd2-brandstrip {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 0 0 14px;
+}
+.gd2-bstrip-lbl { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.6; }
+.gd2-bstrip-empty { font-size: 12.5px; opacity: 0.65; }
+.gd2-bchip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 10px; border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.gd2-bchip img, .gd2-bchip-mark {
+  width: 22px; height: 22px; border-radius: 6px; object-fit: contain;
+  background: #fff;
+}
+.gd2-bchip-mark { display: inline-grid; place-items: center; font-weight: 700; color: #1746a2; }
+.gd2-bchip-body { display: flex; flex-direction: column; line-height: 1.15; }
+.gd2-bchip-body b { font-size: 12.5px; }
+.gd2-bchip-body span { font-size: 10.5px; opacity: 0.65; }
+.gd2-bchip-dots { display: inline-flex; gap: 3px; }
+.gd2-bchip-dots i { width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.15); }
+.gd2-bchip--skeleton { width: 150px; height: 36px; opacity: 0.35; animation: gd2pulse 1.2s ease-in-out infinite; }
+@keyframes gd2pulse { 50% { opacity: 0.15; } }
+
 @media (max-width: 1120px) {
   .gd2-body { grid-template-columns: 220px 1fr 300px; }
   .gd2-chips { display: none; }

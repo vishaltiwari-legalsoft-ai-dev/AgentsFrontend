@@ -6,6 +6,7 @@ import type { DragMarker, TextNodeSpec } from "@/components/console/stage3/Konva
 // Non-social types route to the existing Creative Agent rail — same engine
 // contract the classic studio uses; V2 only supplies the entry point.
 import { CreativeAgent } from "@/components/console/CreativeAgent";
+import { BrandStrip } from "./BrandStrip";
 import {
   creativeTypes,
   gdApprove,
@@ -881,6 +882,7 @@ export function GraphicsStudioV2({
               Tell the studio what you’re making. It walks you through four quick steps — you approve
               each one, and your brand stays locked in the whole way.
             </p>
+            <BrandStrip />
             <div className="gd2-setupcard">
               <div className="gd2-fld">
                 <label htmlFor="gd2brand">Brand</label>
