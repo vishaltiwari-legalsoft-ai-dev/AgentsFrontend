@@ -805,28 +805,6 @@
 }
 .gd2-logotile-art img { max-width: 82%; max-height: 46px; object-fit: contain; }
 
-/* the floating pill shown over the classic UI */
-.gd2-classic-host { position: relative; height: 100%; min-height: 0; display: flex; flex-direction: column; }
-.gd2-classic-host > :last-child { flex: 1; min-height: 0; }
-
-.gd2-try {
-  position: absolute;
-  right: 18px;
-  bottom: 18px;
-  z-index: 40;
-  padding: 11px 18px;
-  border-radius: 999px;
-  background: #0f1a24;
-  color: #fff;
-  font-weight: 700;
-  font-size: 13px;
-  box-shadow: 0 8px 24px rgba(15, 26, 36, 0.35);
-  border: none;
-  cursor: pointer;
-  transition: transform 0.15s ease;
-}
-.gd2-try:hover { transform: translateY(-2px); }
-
 @media (max-width: 1120px) {
   .gd2-body { grid-template-columns: 220px 1fr 300px; }
   .gd2-chips { display: none; }

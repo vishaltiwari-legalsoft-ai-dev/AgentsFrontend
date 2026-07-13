@@ -39,10 +39,8 @@ import {
 } from "@/lib/api";
 
 /* --------------------------------------------------------------------------
-   Graphics Studio V2 — the designer-friendly skin over the SAME 4-stage
-   engine. Approved prototype: test-ui-graphics-designer/ + the team wireframe.
-   Everything here talks to the existing /api/gd/* contracts; the classic
-   console stays available behind the StudioSwitch toggle.
+   Graphics Studio — the designer-friendly skin over the SAME 4-stage engine.
+   Everything here talks to the existing /api/gd/* contracts.
    -------------------------------------------------------------------------- */
 
 // react-konva touches the browser canvas at import time — client-only.
@@ -140,11 +138,9 @@ const STAGE_HINTS: Record<number, string> = {
 export function GraphicsStudioV2({
   onToast,
   onBack,
-  onExitV2,
 }: {
   onToast: (m: string) => void;
   onBack?: () => void;
-  onExitV2: () => void;
 }) {
   /* ---------------- state ---------------- */
   const [phase, setPhase] = useState<"setup" | "studio">("setup");
@@ -945,10 +941,11 @@ export function GraphicsStudioV2({
                 </button>
               )}
             </div>
-            <p className="gd2-sub" style={{ marginTop: 18, fontSize: 12.5 }}>
-              <button className="gd2-ghost" onClick={onExitV2}>Back to classic Studio</button>
-              {onBack ? <button className="gd2-ghost" onClick={onBack}>Exit to console</button> : null}
-            </p>
+            {onBack ? (
+              <p className="gd2-sub" style={{ marginTop: 18, fontSize: 12.5 }}>
+                <button className="gd2-ghost" onClick={onBack}>Exit to console</button>
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1301,7 +1298,6 @@ export function GraphicsStudioV2({
           })}
         </div>
         <div className="gd2-topright">
-          <button className="gd2-ghost" onClick={onExitV2}>Classic UI</button>
           <button
             className="gd2-ghost"
             onClick={() => {

@@ -1079,8 +1079,6 @@ export const gdRefRetrieve = (
   );
 };
 
-export const gdGetRun = (id: string) => getJson<GdRun>(`/api/gd/runs/${id}`);
-
 export const gdUpdateConfig = (
   id: string,
   body: {
@@ -1342,11 +1340,6 @@ export const creativeCreate = (body: {
 }) => postJson<CreativeRun>("/api/creative/runs", body);
 
 export const creativeGet = (id: string) => getJson<CreativeRun>(`/api/creative/runs/${id}`);
-
-export const creativeIntent = (
-  id: string,
-  body: { brief?: string; answers?: Record<string, unknown> },
-) => postJson<CreativeRun>(`/api/creative/runs/${id}/intent`, body);
 
 export const creativeAcknowledge = (id: string) =>
   postJson<CreativeRun>(`/api/creative/runs/${id}/acknowledge`, {});

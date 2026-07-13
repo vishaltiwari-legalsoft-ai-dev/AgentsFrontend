@@ -7,7 +7,7 @@ import { HomeView, AgentsView, TeamsView, SettingsView } from "@/components/cons
 import { IntegrationsView } from "@/components/console/IntegrationsView";
 import { isAgentLive, LIVE_AGENTS } from "@/lib/console-data";
 import { AgentChat } from "@/components/console/AgentChat";
-import { StudioSwitch } from "@/components/console/gd2/StudioSwitch";
+import { GraphicsStudioV2 } from "@/components/console/gd2/GraphicsStudioV2";
 import { MarketingResearch } from "@/components/console/mr/MarketingResearch";
 import { LibraryView } from "@/components/console/LibraryView";
 import { AdminView } from "@/components/console/AdminView";
@@ -152,7 +152,7 @@ export default function ConsoleApp() {
           {nav === "agents" && <AgentsView onOpenAgent={onOpenAgent} />}
           {nav === "teams" && <TeamsView />}
           {nav === "workspace" && <AgentChat onToast={fire} onBack={() => setNav("agents")} />}
-          {nav === "studio" && <StudioSwitch onToast={fire} onBack={() => setNav("agents")} />}
+          {nav === "studio" && <GraphicsStudioV2 onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "marketing" && <MarketingResearch onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "library" && <LibraryView onBack={() => setNav("workspace")} />}
           {nav === "imagelib" && user.is_admin && <ImageLibraryView onBack={() => setNav("home")} />}
