@@ -830,6 +830,13 @@
 .gd2-bchip--skeleton { width: 150px; height: 36px; opacity: 0.35; animation: gd2pulse 1.2s ease-in-out infinite; }
 @keyframes gd2pulse { 50% { opacity: 0.15; } }
 
+/* remix toggle */
+.gd2-remixtog {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; opacity: 0.85; cursor: pointer; margin-top: 4px;
+}
+.gd2-remixtog input { accent-color: var(--gd2-accent, #1746a2); }
+
 @media (max-width: 1120px) {
   .gd2-body { grid-template-columns: 220px 1fr 300px; }
   .gd2-chips { display: none; }

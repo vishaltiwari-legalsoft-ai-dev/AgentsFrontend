@@ -601,6 +601,7 @@ export function GraphicsStudioV2({
       const created = await gdCreateRun(brandId || null, {
         ...(aspect ? { aspect_ratio: aspect } : {}),
         creative_type: "social",
+        remix_enabled: true,
         ...(brief.trim() ? { creative_brief: { goal: brief.trim() } } : {}),
       });
       setRun(created);
@@ -975,6 +976,29 @@ export function GraphicsStudioV2({
   const done = cur >= 5;
   const hue = done ? "#0E9A89" : STEPS[cur - 1].hue;
 
+  const remixControls = () => {
+    const last = curStage?.attempts[curStage.attempts.length - 1];
+    return (
+      <>
+        <label className="gd2-remixtog" title="Rewrites the preset's prompt a little differently on every Generate">
+          <input
+            type="checkbox"
+            checked={run.config.remix_enabled ?? false}
+            onChange={(e) => patch({ remix_enabled: e.target.checked })}
+          />
+          Variety remix — every Generate comes out a little different
+        </label>
+        {last?.remix ? (
+          <p className="gd2-note">
+            {last.remix.ai
+              ? `✦ Remixed for variety — axis: ${last.remix.axis}`
+              : (last.remix.fallback_reason ?? "Deterministic variation applied (AI remix unavailable).")}
+          </p>
+        ) : null}
+      </>
+    );
+  };
+
   const stepPanel = () => {
     if (done) {
       const recap: [string, string][] = [
@@ -1066,6 +1090,7 @@ export function GraphicsStudioV2({
               ✦ {custom ? "Dream up another" : "Generate AI gradient"}
             </button>
           </div>
+          {remixControls()}
         </>
       );
     }
@@ -1122,6 +1147,7 @@ export function GraphicsStudioV2({
               </div>
             </div>
           ) : null}
+          {remixControls()}
         </>
       );
     }
