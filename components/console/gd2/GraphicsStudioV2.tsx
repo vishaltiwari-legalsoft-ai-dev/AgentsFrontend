@@ -1,9 +1,9 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { DragMarker, TextNodeSpec } from "@/components/console/stage3/KonvaCanvas";
-// Non-social types route to the existing Creative Agent rail - same engine
+// Non-social types route to the existing Creative Agent rail — same engine
 // contract the classic studio uses; V2 only supplies the entry point.
 import { CreativeAgent } from "@/components/console/CreativeAgent";
 import { BrandStrip } from "./BrandStrip";
@@ -40,11 +40,11 @@ import {
 } from "@/lib/api";
 
 /* --------------------------------------------------------------------------
-   Graphics Studio - the designer-friendly skin over the SAME 4-stage engine.
+   Graphics Studio — the designer-friendly skin over the SAME 4-stage engine.
    Everything here talks to the existing /api/gd/* contracts.
    -------------------------------------------------------------------------- */
 
-// react-konva touches the browser canvas at import time - client-only.
+// react-konva touches the browser canvas at import time — client-only.
 const KonvaCanvas = dynamic(() => import("@/components/console/stage3/KonvaCanvas"), { ssr: false });
 
 const STEPS = [
@@ -56,7 +56,7 @@ const STEPS = [
 
 const DEFAULT_LAYOUT_W = 0.42;
 
-/* Compact glyphs for the Step-3 placement segment - the shaded half of each
+/* Compact glyphs for the Step-3 placement segment — the shaded half of each
    square shows which zone of the image the text will occupy. */
 const PLACEMENT_ICON: Record<string, string> = {
   left: "◧",
@@ -69,7 +69,7 @@ const PLACEMENT_ICON: Record<string, string> = {
 /* Collision-free defaults for un-dragged lines. X follows the element's
    placement preference; Y is STAGGERED per line so nothing ever starts on
    top of anything else. Every line gets pinned to exactly these coords (or
-   wherever the user dragged it) before Generate - the engine's legacy
+   wherever the user dragged it) before Generate — the engine's legacy
    zone-stacking heuristic is never mixed with pinned items in V2, which is
    what caused pinned/auto overlaps. */
 function defaultPos(id: string, place?: string, subIndex = 0) {
@@ -88,7 +88,7 @@ function stageNum(state: string): number {
   return m ? Number(m[1]) : 1;
 }
 
-/* Artifacts need the Bearer header - fetch as blob, render as object URL. */
+/* Artifacts need the Bearer header — fetch as blob, render as object URL. */
 function AuthImg({ path, alt }: { path: string | null; alt: string }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
@@ -161,7 +161,7 @@ export function GraphicsStudioV2({
 
   const [sel1, setSel1] = useState<string | null>(null);
   const [aiSteer, setAiSteer] = useState("");
-  // Every AI-gradient cid seen this session (duplicates kept - the backend
+  // Every AI-gradient cid seen this session (duplicates kept — the backend
   // rotates by count), so "Dream up another" never repeats itself.
   const [gradExclude, setGradExclude] = useState<string[]>([]);
   const [sel2, setSel2] = useState<string | null>(null);
@@ -371,7 +371,7 @@ export function GraphicsStudioV2({
   }, [stage2Ref, cur]);
 
   // Exact-render preview: the REAL deterministic text engine (debounced).
-  // Only fetched while the user is in exact mode - editing mode is fully
+  // Only fetched while the user is in exact mode — editing mode is fully
   // client-side and instant.
   const subheadings = run?.config.subheadings ?? [];
   useEffect(() => {
@@ -451,7 +451,7 @@ export function GraphicsStudioV2({
     }
     list.push({ text: "New text" });
     // Drop the new box mid-canvas so it lands under the cursor's world,
-    // instantly draggable - not buried in a form.
+    // instantly draggable — not buried in a form.
     patch({
       subheadings: list,
       layout: { [`subheading-${list.length - 1}`]: { x: 0.5, y: 0.5, w: DEFAULT_LAYOUT_W, anchor: "mc" } },
@@ -487,7 +487,7 @@ export function GraphicsStudioV2({
   const setSubText = (idx: number, text: string) => {
     if (!run) return;
     const cur = run.config.subheadings ?? [];
-    // Emptying a box deletes it (Canva behavior) - unless it's the last one,
+    // Emptying a box deletes it (Canva behavior) — unless it's the last one,
     // which the engine requires to exist (it skips empty text anyway).
     if (!text.trim() && cur.length > 1) {
       patch({ subheadings: cur.filter((_, i) => i !== idx) });
@@ -521,7 +521,7 @@ export function GraphicsStudioV2({
   const isItalicStyle = (s?: string) => !!s && s !== "normal";
   /* Pin EVERY visible text line to explicit coords (dragged position or the
      staggered default the edit canvas shows). Sent before Generate so the
-     engine renders exactly what the user saw - never the zone-stack path. */
+     engine renders exactly what the user saw — never the zone-stack path. */
   const pinAllLayout = useCallback(() => {
     if (!run) return {};
     const lay = run.config.layout ?? {};
@@ -597,7 +597,7 @@ export function GraphicsStudioV2({
     )?.name ?? null;
 
   const start = () =>
-    guard("Studio is getting your brand kit ready...", async () => {
+    guard("Studio is getting your brand kit ready…", async () => {
       const created = await gdCreateRun(brandId || null, {
         ...(aspect ? { aspect_ratio: aspect } : {}),
         creative_type: "social",
@@ -612,8 +612,8 @@ export function GraphicsStudioV2({
         {
           role: "agent",
           text: brief.trim()
-            ? `Working from your brief: "${brief.trim()}". Pick a background to start - I'll chip in at every step.`
-            : "Pick a background to start - I'll chip in with suggestions at every step.",
+            ? `Working from your brief: “${brief.trim()}”. Pick a background to start — I'll chip in at every step.`
+            : "Pick a background to start — I'll chip in with suggestions at every step.",
         },
       ]);
       setPhase("studio");
@@ -624,7 +624,7 @@ export function GraphicsStudioV2({
     const variant = cur === 1 ? sel1 : cur === 2 ? sel2 : undefined;
     if (cur <= 2 && !variant) return;
     if (cur === 4) {
-      void guard("Compositing your real logo...", async () => {
+      void guard("Compositing your real logo…", async () => {
         const res = await gdStage4(run.id, null, run.config.use_ai_compositor ?? false, logoId);
         setRun(res.run);
         setExactPreview(true); // show the engine's composite
@@ -632,7 +632,7 @@ export function GraphicsStudioV2({
       return;
     }
     void guard(
-      cur === 1 ? "Painting your brand background..." : cur === 2 ? "Creating your main image..." : "Placing your words, pixel-perfect...",
+      cur === 1 ? "Painting your brand background…" : cur === 2 ? "Creating your main image…" : "Placing your words, pixel-perfect…",
       async () => {
         if (cur === 3) await signAndPin();
         const res = await gdGenerate(run.id, cur, variant ?? undefined);
@@ -641,7 +641,7 @@ export function GraphicsStudioV2({
     );
   };
 
-  /* V2 has no per-token checkmarks - the user's Generate/Approve click IS the
+  /* V2 has no per-token checkmarks — the user's Generate/Approve click IS the
      human sign-off. One call signs every token + text line and pins every
      visible line to the coords the edit canvas shows. */
   const signAndPin = useCallback(async () => {
@@ -657,11 +657,11 @@ export function GraphicsStudioV2({
 
   const approve = () => {
     if (!run) return;
-    void guard("Locking this layer in...", async () => {
+    void guard("Locking this layer in…", async () => {
       if (cur === 3) {
         // The approved artifact must be the CURRENT arrangement, not the last
         // render. Stage-3 generation is deterministic and free, so always
-        // re-render right before approving - no stale-attempt trap.
+        // re-render right before approving — no stale-attempt trap.
         await signAndPin();
         const g = await gdGenerate(run.id, 3);
         setRun((await gdApprove(run.id, 3, g.attempt.attempt)) as GdRun);
@@ -681,17 +681,17 @@ export function GraphicsStudioV2({
 
   const gotoStage = (n: number) => {
     if (!run || n >= cur) return;
-    if (!window.confirm(`Go back to "${STEPS[n - 1].name}"? Later layers will be regenerated after your change.`)) return;
-    void guard("Rewinding to that layer...", async () => {
+    if (!window.confirm(`Go back to “${STEPS[n - 1].name}”? Later layers will be regenerated after your change.`)) return;
+    void guard("Rewinding to that layer…", async () => {
       const r = await gdBack(run.id, n);
       setRun(r);
     });
   };
 
   const dreamGradient = () =>
-    guard("Dreaming up a fresh on-brand gradient...", async () => {
+    guard("Dreaming up a fresh on-brand gradient…", async () => {
       if (!run) return;
-      // Accumulate every seen cid (duplicates included) - the backend rotates
+      // Accumulate every seen cid (duplicates included) — the backend rotates
       // compositions/curated picks by the exclude count, so a single-element
       // exclude made "Dream up another" return the SAME design every time.
       const exclude = [...gradExclude, ...(run.config.custom_gradient?.cid ? [run.config.custom_gradient.cid] : [])];
@@ -701,8 +701,8 @@ export function GraphicsStudioV2({
         ...(exclude.length ? { exclude } : {}),
       })) as unknown as GdGradientSuggestion;
       if (res.gradient.cid) setGradExclude([...exclude, res.gradient.cid]);
-      // Never pass a curated preset off as an AI result - say what happened.
-      if (!res.ai) onToast(res.fallback_reason ?? "AI unavailable - showing a curated brand preset instead.");
+      // Never pass a curated preset off as an AI result — say what happened.
+      if (!res.ai) onToast(res.fallback_reason ?? "AI unavailable — showing a curated brand preset instead.");
       const r = await gdUpdateConfig(run.id, { custom_gradient: res.gradient });
       setRun(r);
       setSel1("AI");
@@ -731,20 +731,20 @@ export function GraphicsStudioV2({
   };
 
   const aiPlacement = () =>
-    guard("Finding a cleaner arrangement...", async () => {
+    guard("Finding a cleaner arrangement…", async () => {
       if (!run) return;
       const res = await gdSuggestPlacement(run.id);
       await applyPlacement(res);
       onToast(
         res.source === "vision" && res.reason
-          ? `Arranged - ${res.reason}`
-          : "Arranged - Generate preview to see it.",
+          ? `Arranged — ${res.reason}`
+          : "Arranged — Generate preview to see it.",
       );
     });
 
   // Vision auto-arrange: the placement micro-subagent looks at the approved
   // image the moment Step 3 opens and proposes the starting layout in the
-  // background. Non-blocking, and manual intent wins - if the user pinned
+  // background. Non-blocking, and manual intent wins — if the user pinned
   // anything before the response lands, the suggestion is dropped (still
   // available behind the arrange button).
   const autoArrangedRun = useRef<string | null>(null);
@@ -765,9 +765,9 @@ export function GraphicsStudioV2({
         if (!alive || !latest || latest.state !== "STAGE3_CONFIG") return;
         if (Object.keys(latest.config.layout ?? {}).length) return; // user dragged meanwhile
         await applyPlacement(res);
-        onToast(res.reason ? `AI arranged your text - ${res.reason}` : "AI arranged your text from the image.");
+        onToast(res.reason ? `AI arranged your text — ${res.reason}` : "AI arranged your text from the image.");
       })
-      .catch(() => undefined); // advisory only - never surface an error
+      .catch(() => undefined); // advisory only — never surface an error
     return () => {
       alive = false;
     };
@@ -797,23 +797,23 @@ export function GraphicsStudioV2({
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      onToast("That image is over 10 MB - please use a smaller file.");
+      onToast("That image is over 10 MB — please use a smaller file.");
       return;
     }
     const role = cur === 1 ? "background" : "subject";
-    void guard(`Uploading "${file.name}"...`, async () => {
+    void guard(`Uploading “${file.name}”…`, async () => {
       const { ref } = await gdSubjectUpload(run.id, file, role);
       if (role === "background") {
         await gdUpdateConfig(run.id, { background_asset_ref: ref });
         setSel1("UPLOAD");
-        // Cover-fit immediately - deterministic and free - so the photo IS
+        // Cover-fit immediately — deterministic and free — so the photo IS
         // the background the moment the upload lands. No dead clicks.
         const res = await gdGenerate(run.id, 1, "UPLOAD");
         setRun(res.run);
-        onToast("Your photo is the background - Approve it, or pick a preset card to switch back.");
+        onToast("Your photo is the background — Approve it, or pick a preset card to switch back.");
         setChat((c) => [
           ...c,
-          { role: "agent", text: `"${file.name}" is your background now. Approve it, or pick any preset card to switch back.` },
+          { role: "agent", text: `“${file.name}” is your background now. Approve it, or pick any preset card to switch back.` },
         ]);
         return;
       }
@@ -823,9 +823,9 @@ export function GraphicsStudioV2({
       if (stageNum(r.state) === 2) {
         const res = await gdGenerate(r.id, 2, "UPLOAD");
         setRun(res.run);
-        onToast("Your photo is on the design - move it with the Position grid, then Approve.");
+        onToast("Your photo is on the design — move it with the Position grid, then Approve.");
       } else {
-        onToast(`"${file.name}" saved - it becomes your main image in Step 2.`);
+        onToast(`“${file.name}” saved — it becomes your main image in Step 2.`);
       }
       setChat((c) => [
         ...c,
@@ -833,8 +833,8 @@ export function GraphicsStudioV2({
           role: "agent",
           text:
             stageNum(r.state) === 2
-              ? `"${file.name}" is composited onto your background. Nudge it with the Position grid and Regenerate, or Approve if it looks right.`
-              : `Got it - "${file.name}" is saved. Once the background is approved, it appears in Step 2 as "Your upload".`,
+              ? `“${file.name}” is composited onto your background. Nudge it with the Position grid and Regenerate, or Approve if it looks right.`
+              : `Got it — “${file.name}” is saved. Once the background is approved, it appears in Step 2 as “Your upload”.`,
         },
       ]);
     });
@@ -892,7 +892,7 @@ export function GraphicsStudioV2({
               <em>unmistakably yours.</em>
             </h1>
             <p className="gd2-sub">
-              Tell the studio what you’re making. It walks you through four quick steps - you approve
+              Tell the studio what you’re making. It walks you through four quick steps — you approve
               each one, and your brand stays locked in the whole way.
             </p>
             <BrandStrip />
@@ -941,7 +941,7 @@ export function GraphicsStudioV2({
                     id="gd2brief"
                     rows={2}
                     value={brief}
-                    placeholder="e.g. Diwali offer - 20% off contract review for new clients"
+                    placeholder="e.g. Diwali offer — 20% off contract review for new clients"
                     onChange={(e) => setBrief(e.target.value)}
                   />
                 </div>
@@ -978,8 +978,8 @@ export function GraphicsStudioV2({
   const stepPanel = () => {
     if (done) {
       const recap: [string, string][] = [
-        ["#D9930F", `Background · ${run.stages["1"]?.approved?.variant ?? "-"}`],
-        ["#E85C4A", `Main image · ${run.stages["2"]?.approved?.variant ?? "-"}`],
+        ["#D9930F", `Background · ${run.stages["1"]?.approved?.variant ?? "—"}`],
+        ["#E85C4A", `Main image · ${run.stages["2"]?.approved?.variant ?? "—"}`],
         ["#6D4DF2", `Words · ${run.config.text_placement ?? "auto"}`],
         ["#0E9A89", `Logo · ${run.config.logo_layout?.position ?? "auto"}`],
       ];
@@ -1011,7 +1011,7 @@ export function GraphicsStudioV2({
         <>
           <span className="gd2-step-eyebrow">Step 1 of 4</span>
           <h2 className="gd2-paneltitle">Pick a background</h2>
-          <p className="gd2-help">Start from a brand preset - or ask the studio to dream up a gradient nobody’s used yet. Either way it can’t leave your palette.</p>
+          <p className="gd2-help">Start from a brand preset — or ask the studio to dream up a gradient nobody’s used yet. Either way it can’t leave your palette.</p>
           <div>
             <p className="gd2-lbl">From your brand kit</p>
             <div className="gd2-grid2">
@@ -1026,7 +1026,7 @@ export function GraphicsStudioV2({
                       alt="Your photo"
                     />
                   </span>
-                  <span className="gd2-tilelabel">Your photo - used as-is as the background</span>
+                  <span className="gd2-tilelabel">Your photo — used as-is as the background</span>
                 </button>
               ) : null}
               {cfg.stage1_variants.map((v) => (
@@ -1059,7 +1059,7 @@ export function GraphicsStudioV2({
             <input
               type="text"
               value={aiSteer}
-              placeholder="Describe it - e.g. diagonal aurora waves, soft grain"
+              placeholder="Describe it — e.g. diagonal aurora waves, soft grain"
               onChange={(e) => setAiSteer(e.target.value)}
             />
             <button className="gd2-btn gd2-btn--ai" style={{ width: "100%", marginTop: 8 }} onClick={dreamGradient} disabled={busy !== null}>
@@ -1090,7 +1090,7 @@ export function GraphicsStudioV2({
                       alt="Your upload"
                     />
                   </span>
-                  <span className="gd2-tilelabel">Your upload - placed as-is, no AI drawing</span>
+                  <span className="gd2-tilelabel">Your upload — placed as-is, no AI drawing</span>
                 </button>
               ) : null}
               {cfg.stage2_variants.map((v) => (
@@ -1137,7 +1137,7 @@ export function GraphicsStudioV2({
           <span className="gd2-step-eyebrow">Step 3 of 4</span>
           <h2 className="gd2-paneltitle">Say it in your words</h2>
           <p className="gd2-help">
-            Type your lines here; style the selected line with the toolbar above the canvas -
+            Type your lines here; style the selected line with the toolbar above the canvas —
             brand fonts only, so it always looks like you. The canvas preview updates live.
           </p>
           {fields.map(([key, label]) => (
@@ -1194,7 +1194,7 @@ export function GraphicsStudioV2({
       <>
         <span className="gd2-step-eyebrow">Step 4 of 4</span>
         <h2 className="gd2-paneltitle">Place your logo</h2>
-        <p className="gd2-help">Drag the logo on the design, resize from its corners - or use the sliders for a pixel-perfect nudge. Real logo files, never redrawn by AI.</p>
+        <p className="gd2-help">Drag the logo on the design, resize from its corners — or use the sliders for a pixel-perfect nudge. Real logo files, never redrawn by AI.</p>
         {logos.length ? (
           <div>
             <p className="gd2-lbl">From your brand library</p>
@@ -1218,7 +1218,7 @@ export function GraphicsStudioV2({
             </div>
           </div>
         ) : (
-          <p className="gd2-help">Loading your logo library...</p>
+          <p className="gd2-help">Loading your logo library…</p>
         )}
         <div>
           <p className="gd2-lbl">Position</p>
@@ -1229,7 +1229,7 @@ export function GraphicsStudioV2({
                 title={p.label}
                 className={(run.config.logo_layout?.position ?? "top-left") === p.key ? "on" : ""}
                 onClick={() => {
-                  // A new corner resets the manual nudge - least surprising.
+                  // A new corner resets the manual nudge — least surprising.
                   patch({ logo_layout: { position: p.key, offset_x: 0, offset_y: 0 } });
                   setExactPreview(false);
                 }}
@@ -1238,10 +1238,10 @@ export function GraphicsStudioV2({
           </div>
         </div>
         <div>
-          <p className="gd2-lbl">Size &amp; position - fine-tune</p>
+          <p className="gd2-lbl">Size &amp; position — fine-tune</p>
           <div className="gd2-finegrid">
             <label>
-              <span>Size (% of width) - blank = Auto</span>
+              <span>Size (% of width) — blank = Auto</span>
               <input
                 className="gd2-tt-num"
                 type="number"
@@ -1342,7 +1342,7 @@ export function GraphicsStudioV2({
       </header>
 
       <div className="gd2-body">
-        {/* left rail - assistant chat + brand kit */}
+        {/* left rail — assistant chat + brand kit */}
         <aside className="gd2-rail">
           <div className="gd2-chatcard">
             <p className="gd2-chattitle"><span>✦</span> Studio assistant</p>
@@ -1357,7 +1357,7 @@ export function GraphicsStudioV2({
               <input
                 type="text"
                 value={chatInput}
-                placeholder="Ask anything..."
+                placeholder="Ask anything…"
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") sendChat();
@@ -1387,7 +1387,7 @@ export function GraphicsStudioV2({
               />
               <div className="gd2-uploadprev-body">
                 <b>Background photo ✓</b>
-                <span>{cur === 1 ? "Select \"Your photo\" and Generate - or it’s already on the canvas." : "Used in Step 1."}</span>
+                <span>{cur === 1 ? "Select “Your photo” and Generate — or it’s already on the canvas." : "Used in Step 1."}</span>
                 {cur > 1 ? (
                   <button className="gd2-uploadprev-go" onClick={() => gotoStage(1)}>
                     ← Back to Step 1
@@ -1408,7 +1408,7 @@ export function GraphicsStudioV2({
                   {cur === 2
                     ? "It’s on your design →"
                     : cur < 2
-                      ? "Approve the background first - then it drops into Step 2."
+                      ? "Approve the background first — then it drops into Step 2."
                       : "Placed as your main image."}
                 </span>
                 {cur > 2 ? (
@@ -1420,8 +1420,8 @@ export function GraphicsStudioV2({
             </div>
           ) : null}
           <div className="gd2-kitcard">
-            <b>Brand kit - {cfg.brand_name}</b>
-            <p>Colors, fonts and the logo are locked to brand - nothing goes off-brand here.</p>
+            <b>Brand kit — {cfg.brand_name}</b>
+            <p>Colors, fonts and the logo are locked to brand — nothing goes off-brand here.</p>
           </div>
         </aside>
 
@@ -1630,7 +1630,7 @@ export function GraphicsStudioV2({
           >
             {cur === 3 ? (() => {
               // Direct manipulation: the REAL text lines are Konva nodes over
-              // the approved Stage-2 image - instant 60fps drag, dblclick to
+              // the approved Stage-2 image — instant 60fps drag, dblclick to
               // edit in place. "Exact render" flips to the engine's output.
               const lay = run.config.layout ?? {};
               const es = run.config.element_styles ?? {};
@@ -1882,7 +1882,7 @@ export function GraphicsStudioV2({
                 {cur <= 2
                   ? "Approve locks this layer and moves to the next one. You can come back any time."
                   : cur === 3
-                    ? "Generate renders your words with real brand fonts - nothing is drawn by the image AI."
+                    ? "Generate renders your words with real brand fonts — nothing is drawn by the image AI."
                     : "Auto style picks the logo treatment with the best contrast against your background."}
               </p>
             </>
