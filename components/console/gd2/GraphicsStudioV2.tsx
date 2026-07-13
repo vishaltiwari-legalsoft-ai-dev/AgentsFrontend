@@ -9,6 +9,8 @@ import { CreativeAgent } from "@/components/console/CreativeAgent";
 import { BrandStrip } from "./BrandStrip";
 import { runAutoPilot, type AutoAccept, type AutoPilotApi, type AutoStage } from "./autoPilot";
 import { PlanReview } from "./PlanReview";
+import { StyleGallery } from "./StyleGallery";
+import { pickDefaultStyle } from "./styleChoice";
 import {
   creativeTypes,
   gdApprove,
@@ -31,6 +33,7 @@ import {
   type CreativeTypeMeta,
   type GdBrandLogoVariant,
   type GdBrandOption,
+  type GdAttempt,
   type GdChatMessage,
   type GdChatTurn,
   type GdConfig,
@@ -197,6 +200,12 @@ export function GraphicsStudioV2({
   const fontsRequested = useRef<Set<string>>(new Set());
   const [bg3Url, setBg3Url] = useState<string | null>(null); // Stage-4 edit background
   const [logoDim, setLogoDim] = useState<{ w: number; h: number } | null>(null);
+
+  // Text Optimizer (Stage 3): the latest 3-style generate set + the user's pick,
+  // and the optional free-text notes woven into the polish prompts.
+  const [styleSet, setStyleSet] = useState<GdAttempt[] | null>(null);
+  const [styleSel, setStyleSel] = useState<number | null>(null);
+  const [polishNotes, setPolishNotes] = useState("");
 
   const fail = useCallback(
     (e: unknown) => onToast(e instanceof Error ? e.message : String(e)),
@@ -661,11 +670,22 @@ export function GraphicsStudioV2({
       return;
     }
     void guard(
-      cur === 1 ? "Painting your brand background…" : cur === 2 ? "Creating your main image…" : "Placing your words, pixel-perfect…",
+      cur === 1 ? "Painting your brand background…" : cur === 2 ? "Creating your main image…" : "Placing your words, then polishing 3 styles…",
       async () => {
         if (cur === 3) await signAndPin();
         const res = await gdGenerate(run.id, cur, variant ?? undefined);
         setRun(res.run);
+        if (cur === 3) {
+          // Text Optimizer set → show the 3-up gallery (brand_strict preselected).
+          if (res.attempts && res.attempts.length > 1) {
+            setStyleSet(res.attempts);
+            setStyleSel(pickDefaultStyle(res.attempts));
+            setExactPreview(true);
+          } else {
+            setStyleSet(null);
+            setStyleSel(null);
+          }
+        }
       },
     );
   };
@@ -681,8 +701,9 @@ export function GraphicsStudioV2({
       token_approvals: { headline: sign, highlight: sign, cta: sign },
       subheadings: (run.config.subheadings ?? []).map((s) => ({ ...s, approved: true })),
       layout: pinAllLayout(),
+      polish_notes: polishNotes,
     });
-  }, [run, tok, pinAllLayout]);
+  }, [run, tok, pinAllLayout, polishNotes]);
 
   /* Auto mode drives the EXISTING per-stage endpoints; each stage's pick is
      applied, generated, then approved — no new execution rail. */
@@ -752,11 +773,33 @@ export function GraphicsStudioV2({
     if (!run) return;
     void guard("Locking this layer in…", async () => {
       if (cur === 3) {
-        // The approved artifact must be the CURRENT arrangement, not the last
-        // render. Stage-3 generation is deterministic and free, so always
-        // re-render right before approving — no stale-attempt trap.
+        // Text Optimizer flow: a style was generated and picked → approve exactly
+        // that attempt. The backend rejects it (409) if the arrangement changed
+        // after the render, instead of silently re-billing 3 polish calls.
+        if (styleSet && styleSel != null) {
+          try {
+            setRun(await gdApprove(run.id, 3, styleSel));
+            setStyleSet(null);
+            setStyleSel(null);
+          } catch (e) {
+            onToast("Your layout changed since these styles — hit Generate again, then approve.");
+            throw e;
+          }
+          return;
+        }
+        // No styled set yet: render the CURRENT arrangement first (legacy
+        // deterministic path renders free; the optimizer path instead returns a
+        // 3-style set the user must pick from).
         await signAndPin();
         const g = await gdGenerate(run.id, 3);
+        setRun(g.run);
+        if (g.attempts && g.attempts.length > 1) {
+          setStyleSet(g.attempts);
+          setStyleSel(pickDefaultStyle(g.attempts));
+          setExactPreview(true);
+          onToast("3 polished styles are ready — pick one, then Approve.");
+          return;
+        }
         setRun((await gdApprove(run.id, 3, g.attempt.attempt)) as GdRun);
         return;
       }
@@ -775,6 +818,8 @@ export function GraphicsStudioV2({
   const gotoStage = (n: number) => {
     if (!run || n >= cur) return;
     if (!window.confirm(`Go back to “${STEPS[n - 1].name}”? Later layers will be regenerated after your change.`)) return;
+    setStyleSet(null);
+    setStyleSel(null);
     void guard("Rewinding to that layer…", async () => {
       const r = await gdBack(run.id, n);
       setRun(r);
@@ -1084,7 +1129,9 @@ export function GraphicsStudioV2({
 
   /* ---------------- studio ---------------- */
   const arInfo = cfg.aspect_ratios.find((a) => a.ar === run.config.aspect_ratio);
-  const canvasPath = previewPath(run, cur);
+  // With a style set on screen, the exact preview follows the SELECTED style.
+  const selectedStyle = styleSet?.find((a) => a.attempt === styleSel) ?? null;
+  const canvasPath = (cur === 3 && selectedStyle?.url) || previewPath(run, cur);
   const curStage = run.stages[String(Math.min(cur, 4))];
   const hasAttempt = !!curStage && curStage.attempts.length > 0;
   const done = cur >= 5;
@@ -1650,6 +1697,7 @@ export function GraphicsStudioV2({
                     value={fontName}
                     onChange={(e) => setLineField("font", e.target.value)}
                   >
+                    <option value="auto">Auto — agent picks</option>
                     {cfg.fonts.map((f) => (
                       <option key={f} value={f}>{f}</option>
                     ))}
@@ -1778,7 +1826,9 @@ export function GraphicsStudioV2({
               // Per-variant family: each brand cut is registered under its own
               // name via FontFace, so picking a font visibly changes the face.
               const famFor = (fontName?: string) => {
-                const name = fontName ?? run.config.font;
+                // "auto" = the agent picks at generate time — edit canvas shows
+                // the run's base font as the stand-in.
+                const name = fontName && fontName !== "auto" ? fontName : run.config.font;
                 return `"${name}", "${cfg.font_family}", Inter, sans-serif`;
               };
               const faceLoaded = (fontName?: string) => {
@@ -2041,6 +2091,22 @@ export function GraphicsStudioV2({
                   </button>
                 </div>
               ) : null}
+              {cur === 3 ? (
+                <>
+                  {styleSet ? (
+                    <StyleGallery attempts={styleSet} selected={styleSel} onSelect={setStyleSel} />
+                  ) : null}
+                  <label className="gd2-lbl" htmlFor="gd2polishnotes">Polish notes (optional)</label>
+                  <textarea
+                    id="gd2polishnotes"
+                    className="gd2-polishnotes"
+                    placeholder="e.g. keep the headline airy, extra pop on the CTA"
+                    maxLength={500}
+                    value={polishNotes}
+                    onChange={(e) => setPolishNotes(e.target.value)}
+                  />
+                </>
+              ) : null}
               <div className="gd2-actionrow">
                 <button className="gd2-btn gd2-btn--soft" onClick={generate} disabled={busy !== null || (cur <= 2 && !(cur === 1 ? sel1 : sel2))}>
                   {hasAttempt ? "↻ Regenerate" : cur === 4 ? "Generate composite" : "Generate preview"}
@@ -2063,7 +2129,7 @@ export function GraphicsStudioV2({
                 {cur <= 2
                   ? "Approve locks this layer and moves to the next one. You can come back any time."
                   : cur === 3
-                    ? "Generate renders your words with real brand fonts — nothing is drawn by the image AI."
+                    ? "Generate renders your words with real brand fonts, then the Text Optimizer polishes 3 styles. Your text, gradient and photo are never redrawn."
                     : "Auto style picks the logo treatment with the best contrast against your background."}
               </p>
             </>

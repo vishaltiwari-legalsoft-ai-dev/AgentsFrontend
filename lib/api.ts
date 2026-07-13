@@ -627,6 +627,15 @@ export interface GdAttempt {
   method?: string;
   // Honest per-generation remix metadata: ai=true only for a real LLM rewrite.
   remix?: { ai: boolean; axis: string; fallback_reason?: string };
+  // Stage-3 Text Optimizer: one attempt per style, sharing a set_id. ai=true
+  // only when the image really came from the model; fallbacks carry the reason.
+  style?: string;
+  style_label?: string;
+  ai?: boolean;
+  fallback_reason?: string | null;
+  qa?: string;
+  set_id?: string;
+  fonts?: Record<string, string>;
   created_at: string;
 }
 
@@ -669,6 +678,8 @@ export interface GdRun {
     remix_enabled?: boolean;
     creative_brief?: Record<string, string>;
     creative_type?: string;
+    // Stage-3 Text Optimizer: free-text placement/style notes for the polish prompts.
+    polish_notes?: string;
     use_ai_compositor: boolean;
     tokens: Record<string, string>;
     tokens_approved: Record<string, boolean>;
@@ -1116,14 +1127,18 @@ export const gdUpdateConfig = (
     background_asset_ref?: string | null;
     remix_enabled?: boolean;
     creative_brief?: Record<string, string>;
+    polish_notes?: string;
     use_ai_compositor?: boolean;
     tokens?: Record<string, string>;
     token_approvals?: Record<string, { approved: boolean; source?: string; original_suggestion?: string }>;
   },
 ) => postJson<GdRun>(`/api/gd/runs/${id}/config`, body);
 
+// Stage 3 with the Text Optimizer returns the brand_strict attempt as `attempt`
+// plus ALL styled siblings in `attempts` (absent on single-attempt generates).
 export const gdGenerate = (id: string, stage: number, variant?: string) =>
-  postJson<{ attempt: GdAttempt; run: GdRun }>(`/api/gd/runs/${id}/generate`, { stage, variant });
+  postJson<{ attempt: GdAttempt; attempts?: GdAttempt[]; run: GdRun }>(
+    `/api/gd/runs/${id}/generate`, { stage, variant });
 
 // AI Suggest Placement — vision-first: a micro-subagent looks at the approved
 // Stage-2 image and judges zone / text colour / density; the arranger computes
