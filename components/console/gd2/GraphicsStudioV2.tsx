@@ -724,7 +724,7 @@ export function GraphicsStudioV2({
         setRun(await gdApprove(r0.id, 3, g.attempt.attempt));
       } else {
         if (p.logo.logo_id) setLogoId(p.logo.logo_id);
-        const res = await gdStage4(r0.id, null, false, p.logo.logo_id ?? logoId);
+        const res = await gdStage4(r0.id, null, r0.config.use_ai_compositor ?? false, p.logo.logo_id ?? logoId);
         setRun(res.run);
         setRun(await gdApprove(r0.id, 4, res.attempt.attempt));
       }
@@ -2033,6 +2033,7 @@ export function GraphicsStudioV2({
                       autoStopped.current = true;
                       setAutoAccept(null);
                       setPausedStage(null);
+                      setPlan(null);
                       onToast("Auto mode stopped — you’re in full manual control.");
                     }}
                   >
