@@ -841,3 +841,20 @@
   .gd2-body { grid-template-columns: 220px 1fr 300px; }
   .gd2-chips { display: none; }
 }
+
+/* ── Auto mode ──────────────────────────────────────────────────────────── */
+.gd2-planrow { border: 1px solid var(--gd2-line); border-radius: 10px; padding: 10px; margin-bottom: 8px; }
+.gd2-planrow--off { opacity: 0.55; }
+.gd2-planrow-head { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.gd2-planrow-body { margin: 6px 0 0 24px; font-size: 12.5px; }
+.gd2-planrow-why { margin: 4px 0 0 24px; font-size: 11.5px; opacity: 0.65; }
+.gd2-planpick { display: inline-flex; align-items: center; gap: 8px; }
+.gd2-planswatch { width: 26px; height: 18px; border-radius: 5px; display: inline-block; }
+.gd2-plantext { display: flex; flex-direction: column; gap: 6px; }
+.gd2-plantext input { width: 100%; }
+.gd2-autobar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 12px; padding: 8px 10px; border-radius: 10px;
+  background: rgba(109, 77, 242, 0.12); border: 1px solid rgba(109, 77, 242, 0.35);
+  margin-bottom: 8px;
+}

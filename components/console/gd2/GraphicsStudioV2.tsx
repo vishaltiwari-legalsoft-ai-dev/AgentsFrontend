@@ -7,6 +7,8 @@ import type { DragMarker, TextNodeSpec } from "@/components/console/stage3/Konva
 // contract the classic studio uses; V2 only supplies the entry point.
 import { CreativeAgent } from "@/components/console/CreativeAgent";
 import { BrandStrip } from "./BrandStrip";
+import { runAutoPilot, type AutoAccept, type AutoPilotApi, type AutoStage } from "./autoPilot";
+import { PlanReview } from "./PlanReview";
 import {
   creativeTypes,
   gdApprove,
@@ -19,6 +21,7 @@ import {
   gdGenerate,
   gdGetConfig,
   gdListBrands,
+  gdPlan,
   gdStage4,
   gdSubjectUpload,
   gdSuggest,
@@ -35,6 +38,7 @@ import {
   type GdElementStyle,
   type GdGradientSuggestion,
   type GdPlacementSuggestion,
+  type GdPlan,
   type GdRun,
   type GdSubheading,
 } from "@/lib/api";
@@ -152,6 +156,11 @@ export function GraphicsStudioV2({
   const [brief, setBrief] = useState("");
   const [run, setRun] = useState<GdRun | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [autoMode, setAutoMode] = useState(false);
+  const [plan, setPlan] = useState<GdPlan | null>(null);
+  const [autoAccept, setAutoAccept] = useState<AutoAccept | null>(null);
+  const [pausedStage, setPausedStage] = useState<AutoStage | null>(null);
+  const autoStopped = useRef(false);
 
   // Creative-type routing: "social" stays in this 4-step studio; any other
   // key opens the dedicated Creative Agent (brochure / carousel / PPTX / blog).
@@ -596,8 +605,12 @@ export function GraphicsStudioV2({
       (v) => (v.weight >= 600) === bold && isItalicStyle(v.style) === italic,
     )?.name ?? null;
 
-  const start = () =>
-    guard("Studio is getting your brand kit ready…", async () => {
+  const start = () => {
+    if (autoMode && !brief.trim()) {
+      onToast("Auto mode needs a brief — tell the studio what this is about.");
+      return;
+    }
+    return guard("Studio is getting your brand kit ready…", async () => {
       const created = await gdCreateRun(brandId || null, {
         ...(aspect ? { aspect_ratio: aspect } : {}),
         creative_type: "social",
@@ -609,6 +622,10 @@ export function GraphicsStudioV2({
       setSel2(null);
       setLogos([]);
       setLogoId(null);
+      setPlan(null);
+      setAutoAccept(null);
+      setPausedStage(null);
+      autoStopped.current = false;
       setChat([
         {
           role: "agent",
@@ -618,7 +635,18 @@ export function GraphicsStudioV2({
         },
       ]);
       setPhase("studio");
+      if (autoMode) {
+        try {
+          const res = await gdPlan(created.id, brief.trim());
+          setPlan(res.plan);
+          setRun(res.run);
+        } catch (e) {
+          fail(e);
+          onToast("Auto mode couldn’t plan — continuing in manual mode.");
+        }
+      }
     });
+  };
 
   const generate = () => {
     if (!run) return;
@@ -655,6 +683,70 @@ export function GraphicsStudioV2({
       layout: pinAllLayout(),
     });
   }, [run, tok, pinAllLayout]);
+
+  /* Auto mode drives the EXISTING per-stage endpoints; each stage's pick is
+     applied, generated, then approved — no new execution rail. */
+  const autoApi: AutoPilotApi = {
+    runStage: async (stage, p) => {
+      const r0 = runRef.current;
+      if (!r0) throw new Error("Run not available");
+      if (stage === 1) {
+        setSel1(p.gradient.cid);
+        await gdGenerate(r0.id, 1, p.gradient.cid);
+        setRun(await gdApprove(r0.id, 1));
+      } else if (stage === 2) {
+        setSel2(p.element.cid);
+        await gdGenerate(r0.id, 2, p.element.cid);
+        setRun(await gdApprove(r0.id, 2));
+      } else if (stage === 3) {
+        const sign = { approved: true, source: "user" as const };
+        const tokens = {
+          ...r0.config.tokens,
+          headline: p.text.headline,
+          highlight: p.text.highlight,
+          cta: p.text.cta,
+        };
+        setTok(tokens);
+        const first = (r0.config.subheadings ?? [])[0] ?? { text: "" };
+        const subText = p.text.subline.trim() || first.text || " ";
+        const r1 = await gdUpdateConfig(r0.id, {
+          tokens,
+          token_approvals: { headline: sign, highlight: sign, cta: sign },
+          subheadings: [{ ...first, text: subText, approved: true }],
+          layout: {
+            headline: { ...defaultPos("headline"), w: DEFAULT_LAYOUT_W, anchor: "mc" },
+            "subheading-0": { ...defaultPos("subheading-0", undefined, 0), w: DEFAULT_LAYOUT_W, anchor: "mc" },
+            cta: { ...defaultPos("cta"), w: DEFAULT_LAYOUT_W, anchor: "mc" },
+          },
+        });
+        setRun(r1);
+        const g = await gdGenerate(r0.id, 3);
+        setRun(await gdApprove(r0.id, 3, g.attempt.attempt));
+      } else {
+        if (p.logo.logo_id) setLogoId(p.logo.logo_id);
+        const res = await gdStage4(r0.id, null, false, p.logo.logo_id ?? logoId);
+        setRun(res.run);
+        setRun(await gdApprove(r0.id, 4, res.attempt.attempt));
+      }
+    },
+    pause: (stage) => setPausedStage(stage),
+  };
+
+  const AUTO_STAGE_MSG: Record<AutoStage, string> = {
+    1: "Auto: painting your background…",
+    2: "Auto: creating your main image…",
+    3: "Auto: placing your words…",
+    4: "Auto: compositing your logo…",
+  };
+
+  const driveAuto = (accept: AutoAccept, p: GdPlan, from: AutoStage) =>
+    guard(AUTO_STAGE_MSG[from], async () => {
+      const out = await runAutoPilot(p, accept, from, autoApi, () => autoStopped.current);
+      if (out.status === "done") onToast("Auto plan complete — tweak anything, then download.");
+      else if (out.status === "paused")
+        onToast(`Auto paused — choose your own ${STEPS[out.stage - 1].name.toLowerCase()}, approve it, and it resumes.`);
+      else if (out.status === "error") throw out.error;
+    });
 
   const approve = () => {
     if (!run) return;
@@ -775,6 +867,18 @@ export function GraphicsStudioV2({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run?.id, run?.state]);
 
+  // Auto-mode resume: when the user finishes the manual step Auto paused on,
+  // the run advances past it — continue the remaining accepted stages.
+  useEffect(() => {
+    if (!plan || !autoAccept || pausedStage === null || autoStopped.current) return;
+    if (cur > pausedStage && cur <= 4) {
+      const resumeFrom = cur as AutoStage;
+      setPausedStage(null);
+      void driveAuto(autoAccept, plan, resumeFrom);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cur]);
+
   const sendChat = () => {
     const text = chatInput.trim();
     if (!text || !run) return;
@@ -864,6 +968,10 @@ export function GraphicsStudioV2({
     setLogoId(null);
     setChat([]);
     setAiSteer("");
+    setPlan(null);
+    setAutoAccept(null);
+    setPausedStage(null);
+    autoStopped.current = false;
   };
 
   /* ------------- Creative Agent route (non-social types) ------------- */
@@ -946,6 +1054,12 @@ export function GraphicsStudioV2({
                     onChange={(e) => setBrief(e.target.value)}
                   />
                 </div>
+              ) : null}
+              {isSocial ? (
+                <label className="gd2-remixtog" title="The studio plans all four steps from your brief; you review before anything runs">
+                  <input type="checkbox" checked={autoMode} onChange={(e) => setAutoMode(e.target.checked)} />
+                  ✦ Auto mode — plan the whole creative from my brief
+                </label>
               ) : null}
               {isSocial ? (
                 <button className="gd2-btn" onClick={start} disabled={busy !== null || !cfg}>
@@ -1883,9 +1997,49 @@ export function GraphicsStudioV2({
 
         {/* right panel */}
         <aside className="gd2-panel" style={{ ["--hue" as never]: hue } as React.CSSProperties}>
-          {stepPanel()}
+          {plan && !autoAccept && !done ? (
+            <PlanReview
+              plan={plan}
+              stage1={cfg.stage1_variants}
+              stage2={cfg.stage2_variants}
+              busy={busy !== null}
+              onRun={(accept, text) => {
+                const merged = { ...plan, text };
+                setPlan(merged);
+                setAutoAccept(accept);
+                autoStopped.current = false;
+                void driveAuto(accept, merged, cur as AutoStage);
+              }}
+              onSkip={() => {
+                setPlan(null);
+                onToast("Plan dismissed — you’re in the normal studio.");
+              }}
+            />
+          ) : (
+            stepPanel()
+          )}
           {!done ? (
             <>
+              {autoAccept && !done ? (
+                <div className="gd2-autobar">
+                  {pausedStage !== null ? (
+                    <span>⏸ Auto paused — pick your own {STEPS[pausedStage - 1].name.toLowerCase()}, then Approve to resume.</span>
+                  ) : (
+                    <span>✦ Auto mode is driving the approved steps.</span>
+                  )}
+                  <button
+                    className="gd2-ghost"
+                    onClick={() => {
+                      autoStopped.current = true;
+                      setAutoAccept(null);
+                      setPausedStage(null);
+                      onToast("Auto mode stopped — you’re in full manual control.");
+                    }}
+                  >
+                    Stop auto
+                  </button>
+                </div>
+              ) : null}
               <div className="gd2-actionrow">
                 <button className="gd2-btn gd2-btn--soft" onClick={generate} disabled={busy !== null || (cur <= 2 && !(cur === 1 ? sel1 : sel2))}>
                   {hasAttempt ? "↻ Regenerate" : cur === 4 ? "Generate composite" : "Generate preview"}
