@@ -1054,7 +1054,7 @@ export function GraphicsStudioV2({
   /* ---------------- setup screen ---------------- */
   if (phase === "setup" || !run || !cfg) {
     const isSocial = creaType === "social";
-    const briefMax = 300;
+    const briefMax = 1500;
     const overBrief = brief.length >= briefMax;
     return (
       <div className="gd2">
@@ -1157,7 +1157,7 @@ export function GraphicsStudioV2({
                           }
                         }}
                       />
-                      <span className={`gdx-counter${overBrief ? " gdx-counter--max" : brief.length >= 250 ? " gdx-counter--warn" : ""}`}>
+                      <span className={`gdx-counter${overBrief ? " gdx-counter--max" : brief.length >= briefMax - 150 ? " gdx-counter--warn" : ""}`}>
                         {brief.length} / {briefMax}
                       </span>
                     </div>
