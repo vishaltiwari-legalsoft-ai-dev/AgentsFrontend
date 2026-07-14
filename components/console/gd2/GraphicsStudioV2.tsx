@@ -1054,7 +1054,7 @@ export function GraphicsStudioV2({
   /* ---------------- setup screen ---------------- */
   if (phase === "setup" || !run || !cfg) {
     const isSocial = creaType === "social";
-    const briefMax = 1500;
+    const briefMax = 10000;
     const overBrief = brief.length >= briefMax;
     return (
       <div className="gd2">
