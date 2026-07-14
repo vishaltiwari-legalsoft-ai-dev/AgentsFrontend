@@ -63,6 +63,11 @@ const STEPS = [
 
 const DEFAULT_LAYOUT_W = 0.42;
 
+/* Visible build stamp on the setup screen — the fast answer to "we're seeing
+   different things": two people reading different stamps are on different
+   deployments, no matter what the URL bar says. Bump on notable releases. */
+const STUDIO_BUILD = "2026-07-14.7";
+
 /* Compact glyphs for the Step-3 placement segment — the shaded half of each
    square shows which zone of the image the text will occupy. */
 const PLACEMENT_ICON: Record<string, string> = {
@@ -1194,6 +1199,9 @@ export function GraphicsStudioV2({
                 {isSocial ? (
                   <p className="gdx-hint"><kbd>Ctrl + Enter</kbd> to generate instantly</p>
                 ) : null}
+                <p className="gdx-hint" style={{ opacity: 0.45 }} title="Which frontend build this browser is running">
+                  build {STUDIO_BUILD}
+                </p>
               </form>
 
               {/* side card */}
