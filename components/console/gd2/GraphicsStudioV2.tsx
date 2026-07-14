@@ -6,7 +6,6 @@ import type { DragMarker, TextNodeSpec } from "@/components/console/stage3/Konva
 // Non-social types route to the existing Creative Agent rail — same engine
 // contract the classic studio uses; V2 only supplies the entry point.
 import { CreativeAgent } from "@/components/console/CreativeAgent";
-import { BrandStrip } from "./BrandStrip";
 import { runAutoPilot, type AutoAccept, type AutoPilotApi, type AutoStage, type StageOutcome } from "./autoPilot";
 import { PlanReview } from "./PlanReview";
 import { StyleGallery } from "./StyleGallery";
@@ -1050,92 +1049,219 @@ export function GraphicsStudioV2({
   /* ---------------- setup screen ---------------- */
   if (phase === "setup" || !run || !cfg) {
     const isSocial = creaType === "social";
+    const briefMax = 300;
+    const overBrief = brief.length >= briefMax;
     return (
       <div className="gd2">
-        <div className="gd2-setup">
-          <div className="gd2-setup-inner">
-            <p className="gd2-eyebrow">{cfg?.brand_name ?? "Creative"} Studio · New design</p>
-            <h1 className="gd2-h1">
-              Let’s make something
-              <br />
-              <em>unmistakably yours.</em>
-            </h1>
-            <p className="gd2-sub">
-              Tell the studio what you’re making. It walks you through four quick steps — you approve
-              each one, and your brand stays locked in the whole way.
-            </p>
-            <BrandStrip />
-            <div className="gd2-setupcard">
-              <div className="gd2-fld">
-                <label htmlFor="gd2brand">Brand</label>
-                <select id="gd2brand" value={brandId} onChange={(e) => setBrandId(e.target.value)}>
-                  {brands.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="gd2-fldrow">
-                <div className="gd2-fld">
-                  <label htmlFor="gd2type">Type of creative</label>
-                  <select id="gd2type" value={creaType} onChange={(e) => setCreaType(e.target.value)}>
-                    <option value="social">Social post</option>
-                    {creaTypes.map((t) => (
-                      <option key={t.key} value={t.key}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {isSocial ? (
-                  <div className="gd2-fld">
-                    <label htmlFor="gd2aspect">Aspect ratio</label>
-                    <select id="gd2aspect" value={aspect} onChange={(e) => setAspect(e.target.value)}>
-                      {cfg?.aspect_ratios.map((a) => (
-                        <option key={a.ar} value={a.ar}>
-                          {a.label} · {a.dimensions}
-                        </option>
+        <div className="gdx-scroll">
+          <div className="gdx-wrap">
+            {/* hero */}
+            <div className="gdx-hero">
+              <span className="gdx-badge">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 1.5c.5 4.6 4.4 8.5 9 9-4.6.9-8.5 4.4-9 9-.5-4.6-4.4-8.5-9-9 4.6-.9 8.5-4.4 9-9z" /></svg>
+                AI-Powered Creative Studio
+              </span>
+              <h1 className="gdx-h1">
+                Create branded content<br />
+                that’s <span className="gdx-accent">unmistakably yours</span>
+              </h1>
+              <p className="gdx-sub">
+                Describe your idea in simple words.<br className="gdx-subbr" />
+                Our AI crafts the design, the copy, and the visuals — in seconds.
+              </p>
+            </div>
+
+            {/* form + side card */}
+            <div className="gdx-layout">
+              <form
+                className="gdx-card gdx-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (isSocial) start();
+                  else setLaunchedCreative(true);
+                }}
+              >
+                <div className="gdx-field">
+                  <label className="gdx-label" htmlFor="gd2brand">Brand</label>
+                  <div className="gdx-control">
+                    <span className="gdx-lead gdx-ic--violet" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="3" width="12" height="18" rx="1.5" /><path d="M16 8h4v13H4M8 7h2M12 7h.01M8 11h2M12 11h.01M8 15h2M12 15h.01" /></svg>
+                    </span>
+                    <select id="gd2brand" value={brandId} onChange={(e) => setBrandId(e.target.value)}>
+                      {brands.map((b) => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
                       ))}
                     </select>
+                    <svg className="gdx-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+                  </div>
+                </div>
+
+                <div className="gdx-field">
+                  <div className={isSocial ? "gdx-row" : undefined}>
+                    <div>
+                      <label className="gdx-label" htmlFor="gd2type">Type of creative</label>
+                      <div className="gdx-control">
+                        <span className="gdx-lead gdx-ic--violet" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M16.5 3.5l4 4L8 20l-4.5 1L4.5 16.5 16.5 3.5z" /><path d="M14 6l4 4" /></svg>
+                        </span>
+                        <select id="gd2type" value={creaType} onChange={(e) => setCreaType(e.target.value)}>
+                          <option value="social">Social Post</option>
+                          {creaTypes.map((t) => (
+                            <option key={t.key} value={t.key}>{t.label}</option>
+                          ))}
+                        </select>
+                        <svg className="gdx-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+                      </div>
+                    </div>
+                    {isSocial ? (
+                      <div>
+                        <label className="gdx-label" htmlFor="gd2aspect">Aspect ratio</label>
+                        <div className="gdx-control">
+                          <span className="gdx-lead gdx-ic--blue" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="2.5" /><circle cx="9" cy="9.5" r="1.6" /><path d="M20 15l-4.5-4L6 20" /></svg>
+                          </span>
+                          <select id="gd2aspect" value={aspect} onChange={(e) => setAspect(e.target.value)}>
+                            {cfg?.aspect_ratios.map((a) => (
+                              <option key={a.ar} value={a.ar}>{a.label} · {a.dimensions}</option>
+                            ))}
+                          </select>
+                          <svg className="gdx-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                {isSocial ? (
+                  <div className="gdx-field">
+                    <label className="gdx-label" htmlFor="gd2brief">
+                      What’s this about? <span className="gdx-opt">(optional)</span>
+                    </label>
+                    <div className="gdx-briefwrap">
+                      <textarea
+                        id="gd2brief"
+                        rows={2}
+                        maxLength={briefMax}
+                        value={brief}
+                        placeholder="e.g. Diwali offer — 20% off contract review for new clients"
+                        onChange={(e) => setBrief(e.target.value)}
+                        onKeyDown={(e) => {
+                          if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                            e.preventDefault();
+                            start();
+                          }
+                        }}
+                      />
+                      <span className={`gdx-counter${overBrief ? " gdx-counter--max" : brief.length >= 250 ? " gdx-counter--warn" : ""}`}>
+                        {brief.length} / {briefMax}
+                      </span>
+                    </div>
                   </div>
                 ) : null}
-              </div>
-              {isSocial ? (
-                <div className="gd2-fld">
-                  <label htmlFor="gd2brief">
-                    What’s this about? <span className="gd2-opt">optional</span>
+
+                {isSocial ? (
+                  <label className="gdx-auto" title="The studio plans all four steps from your brief; you review before anything runs">
+                    <input type="checkbox" checked={autoMode} onChange={(e) => setAutoMode(e.target.checked)} />
+                    <span className="gdx-auto-txt"><b>✦ Auto mode</b> — plan the whole creative from my brief</span>
                   </label>
-                  <textarea
-                    id="gd2brief"
-                    rows={2}
-                    value={brief}
-                    placeholder="e.g. Diwali offer — 20% off contract review for new clients"
-                    onChange={(e) => setBrief(e.target.value)}
-                  />
+                ) : null}
+
+                {isSocial ? (
+                  <button className="gdx-generate" type="submit" disabled={busy !== null || !cfg}>
+                    {busy ? (
+                      <><span className="gdx-spin" aria-hidden="true" />{busy}</>
+                    ) : (
+                      <>
+                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 1.5c.5 4.6 4.4 8.5 9 9-4.6.9-8.5 4.4-9 9-.5-4.6-4.4-8.5-9-9 4.6-.9 8.5-4.4 9-9z" /></svg>
+                        Generate Design
+                        <svg className="gdx-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6" /></svg>
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button className="gdx-generate" type="submit">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 1.5c.5 4.6 4.4 8.5 9 9-4.6.9-8.5 4.4-9 9-.5-4.6-4.4-8.5-9-9 4.6-.9 8.5-4.4 9-9z" /></svg>
+                    Open the Creative Agent
+                    <svg className="gdx-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6" /></svg>
+                  </button>
+                )}
+
+                {isSocial ? (
+                  <p className="gdx-hint"><kbd>Ctrl + Enter</kbd> to generate instantly</p>
+                ) : null}
+              </form>
+
+              {/* side card */}
+              <aside className="gdx-card gdx-side" aria-label="What the AI will generate">
+                <p className="gdx-side-title">AI will generate</p>
+                <div className="gdx-promise">
+                  <span className="gdx-ic gdx-ic--violet" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>
+                  </span>
+                  <b>Eye-catching<br />Layout</b>
                 </div>
-              ) : null}
-              {isSocial ? (
-                <label className="gd2-remixtog" title="The studio plans all four steps from your brief; you review before anything runs">
-                  <input type="checkbox" checked={autoMode} onChange={(e) => setAutoMode(e.target.checked)} />
-                  ✦ Auto mode — plan the whole creative from my brief
-                </label>
-              ) : null}
-              {isSocial ? (
-                <button className="gd2-btn" onClick={start} disabled={busy !== null || !cfg}>
-                  {busy ?? "Start creating →"}
-                </button>
-              ) : (
-                <button className="gd2-btn" onClick={() => setLaunchedCreative(true)}>
-                  Open the Creative Agent →
-                </button>
-              )}
+                <div className="gdx-promise">
+                  <span className="gdx-ic gdx-ic--blue" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M4 6.5V4.5h16v2M12 4.5v15M8.5 19.5h7" /></svg>
+                  </span>
+                  <b>Engaging<br />Copy</b>
+                </div>
+                <div className="gdx-promise">
+                  <span className="gdx-ic gdx-ic--green" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="9" cy="10" r="1.7" /><path d="M20 16l-5-4.5L5.5 19.5" /></svg>
+                  </span>
+                  <b>Stunning<br />Images</b>
+                </div>
+                <div className="gdx-promise">
+                  <span className="gdx-ic gdx-ic--peach" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-1 2-2 0-1.4-1.3-1.5-1.3-3 0-1 .8-1.5 2-1.5H17a4 4 0 0 0 4-4c0-4.4-4-7.5-9-7.5z" /><circle cx="7.5" cy="11.5" r="1" /><circle cx="10" cy="7.5" r="1" /><circle cx="15" cy="7.5" r="1" /></svg>
+                  </span>
+                  <b>On-brand<br />Colors</b>
+                </div>
+                <div className="gdx-side-div" />
+                <div className="gdx-side-foot">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 2.5l7.5 3v5.5c0 5-3.4 8.6-7.5 10-4.1-1.4-7.5-5-7.5-10V5.5L12 2.5z" /><path d="M9 12l2 2 4-4.5" /></svg>
+                  100% on-brand. Always.
+                </div>
+              </aside>
             </div>
+
             {onBack ? (
-              <p className="gd2-sub" style={{ marginTop: 18, fontSize: 12.5 }}>
-                <button className="gd2-ghost" onClick={onBack}>Exit to console</button>
-              </p>
+              <div className="gdx-subnav">
+                <button type="button" onClick={onBack}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 3.5h4a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2h-4M9 8l4 4-4 4M13 12H3" /></svg>
+                  Exit to console
+                </button>
+              </div>
             ) : null}
+
+            {/* trust strip */}
+            <div className="gdx-features">
+              <div className="gdx-feature">
+                <span className="gdx-ic gdx-ic--violet" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M12 2.5l7.5 3v5.5c0 5-3.4 8.6-7.5 10-4.1-1.4-7.5-5-7.5-10V5.5L12 2.5z" /></svg>
+                </span>
+                <div><h4>Your brand, always</h4><p>Consistent fonts, colors and messaging</p></div>
+              </div>
+              <div className="gdx-feature">
+                <span className="gdx-ic gdx-ic--peach" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L4.5 13.5H11l-1 8.5L19.5 10H13l0-8z" /></svg>
+                </span>
+                <div><h4>Blazing fast</h4><p>From idea to finished in under 30 seconds</p></div>
+              </div>
+              <div className="gdx-feature">
+                <span className="gdx-ic gdx-ic--green" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5" /><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" /><circle cx="12" cy="15.5" r="1.4" /></svg>
+                </span>
+                <div><h4>Secure &amp; private</h4><p>Your data is encrypted and never shared</p></div>
+              </div>
+              <div className="gdx-feature">
+                <span className="gdx-ic gdx-ic--peach" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9.5" /><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0" /><path d="M9 9.5h.01M15 9.5h.01" /></svg>
+                </span>
+                <div><h4>Loved by creators</h4><p>Trusted by 10,000+ brands worldwide</p></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
