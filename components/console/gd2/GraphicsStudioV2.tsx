@@ -7,10 +7,11 @@ import type { DragMarker, TextNodeSpec } from "@/components/console/stage3/Konva
 // contract the classic studio uses; V2 only supplies the entry point.
 import { CreativeAgent } from "@/components/console/CreativeAgent";
 import { BrandStrip } from "./BrandStrip";
-import { runAutoPilot, type AutoAccept, type AutoPilotApi, type AutoStage } from "./autoPilot";
+import { runAutoPilot, type AutoAccept, type AutoPilotApi, type AutoStage, type StageOutcome } from "./autoPilot";
 import { PlanReview } from "./PlanReview";
 import { StyleGallery } from "./StyleGallery";
 import { pickDefaultStyle } from "./styleChoice";
+import { DEFAULT_PLAN_LAYOUT, wireframeToLayout } from "./wireframe";
 import {
   creativeTypes,
   gdApprove,
@@ -708,7 +709,7 @@ export function GraphicsStudioV2({
   /* Auto mode drives the EXISTING per-stage endpoints; each stage's pick is
      applied, generated, then approved — no new execution rail. */
   const autoApi: AutoPilotApi = {
-    runStage: async (stage, p) => {
+    runStage: async (stage, p): Promise<StageOutcome | void> => {
       const r0 = runRef.current;
       if (!r0) throw new Error("Run not available");
       if (stage === 1) {
@@ -717,6 +718,8 @@ export function GraphicsStudioV2({
         setRun(await gdApprove(r0.id, 1));
       } else if (stage === 2) {
         setSel2(p.element.cid);
+        // The wireframe's subject cell steers the Stage-2 prompt placement.
+        if (p.layout) await gdUpdateConfig(r0.id, { element_placement: p.layout.subject_cell });
         await gdGenerate(r0.id, 2, p.element.cid);
         setRun(await gdApprove(r0.id, 2));
       } else if (stage === 3) {
@@ -730,24 +733,32 @@ export function GraphicsStudioV2({
         setTok(tokens);
         const first = (r0.config.subheadings ?? [])[0] ?? { text: "" };
         const subText = p.text.subline.trim() || first.text || " ";
+        const wire = p.layout ?? DEFAULT_PLAN_LAYOUT;
         const r1 = await gdUpdateConfig(r0.id, {
           tokens,
           token_approvals: { headline: sign, highlight: sign, cta: sign },
           subheadings: [{ ...first, text: subText, approved: true }],
-          layout: {
-            headline: { ...defaultPos("headline"), w: DEFAULT_LAYOUT_W, anchor: "mc" },
-            "subheading-0": { ...defaultPos("subheading-0", undefined, 0), w: DEFAULT_LAYOUT_W, anchor: "mc" },
-            cta: { ...defaultPos("cta"), w: DEFAULT_LAYOUT_W, anchor: "mc" },
-          },
+          // The wireframe's text zones ARE the pinned layout.
+          layout: wireframeToLayout(wire, 1),
+          // Pre-seed the logo gate with the planned corner + variant.
+          logo_layout: { position: wire.logo_corner },
         });
         setRun(r1);
+        if (p.logo.logo_id) setLogoId(p.logo.logo_id);
         const g = await gdGenerate(r0.id, 3);
+        setRun(g.run);
+        if (g.attempts && g.attempts.length > 1) {
+          // Text Optimizer styles ready → mandatory style gate: show the
+          // gallery and hand control back; the user's Approve resumes auto.
+          setStyleSet(g.attempts);
+          setStyleSel(pickDefaultStyle(g.attempts));
+          setExactPreview(true);
+          return "gate";
+        }
         setRun(await gdApprove(r0.id, 3, g.attempt.attempt));
       } else {
-        if (p.logo.logo_id) setLogoId(p.logo.logo_id);
-        const res = await gdStage4(r0.id, null, r0.config.use_ai_compositor ?? false, p.logo.logo_id ?? logoId);
-        setRun(res.run);
-        setRun(await gdApprove(r0.id, 4, res.attempt.attempt));
+        // Stage 4 is user-gated in auto mode — the machine pauses before it.
+        throw new Error("stage 4 is user-gated");
       }
     },
     pause: (stage) => setPausedStage(stage),
@@ -764,6 +775,10 @@ export function GraphicsStudioV2({
     guard(AUTO_STAGE_MSG[from], async () => {
       const out = await runAutoPilot(p, accept, from, autoApi, () => autoStopped.current);
       if (out.status === "done") onToast("Auto plan complete — tweak anything, then download.");
+      else if (out.status === "gated")
+        onToast(out.stage === 3
+          ? "3 polished styles are ready — pick one, then Approve to continue."
+          : "Your turn: choose the logo and where it goes, then Generate composite.");
       else if (out.status === "paused")
         onToast(`Auto paused — choose your own ${STEPS[out.stage - 1].name.toLowerCase()}, approve it, and it resumes.`);
       else if (out.status === "error") throw out.error;
@@ -2053,8 +2068,8 @@ export function GraphicsStudioV2({
               stage1={cfg.stage1_variants}
               stage2={cfg.stage2_variants}
               busy={busy !== null}
-              onRun={(accept, text) => {
-                const merged = { ...plan, text };
+              onRun={(accept, text, layout) => {
+                const merged = { ...plan, text, layout };
                 setPlan(merged);
                 setAutoAccept(accept);
                 autoStopped.current = false;
@@ -2072,7 +2087,11 @@ export function GraphicsStudioV2({
             <>
               {autoAccept && !done ? (
                 <div className="gd2-autobar">
-                  {pausedStage !== null ? (
+                  {pausedStage === 3 && styleSet ? (
+                    <span>✦ Pick one of the 3 styles below, then Approve — auto continues.</span>
+                  ) : pausedStage === 4 ? (
+                    <span>✦ Choose your logo and its corner, then Generate composite to finish.</span>
+                  ) : pausedStage !== null ? (
                     <span>⏸ Auto paused — pick your own {STEPS[pausedStage - 1].name.toLowerCase()}, then Approve to resume.</span>
                   ) : (
                     <span>✦ Auto mode is driving the approved steps.</span>

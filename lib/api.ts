@@ -1178,6 +1178,16 @@ export interface GdPlan {
   element: { cid: string; reason: string };
   text: { headline: string; highlight: string; subline: string; cta: string; reason: string };
   logo: { logo_id: string | null; reason: string };
+  layout?: GdPlanLayout;
+}
+
+/** Binding wireframe zones planned from the brief (spec 2026-07-14). */
+export interface GdPlanLayout {
+  subject_cell: string;
+  headline_zone: string;
+  sub_zone: string;
+  cta_zone: string;
+  logo_corner: string;
 }
 
 export const gdPlan = (id: string, brief: string) =>

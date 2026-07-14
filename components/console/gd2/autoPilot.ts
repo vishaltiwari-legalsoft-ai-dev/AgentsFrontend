@@ -20,17 +20,21 @@ export const STAGE_KEY: Record<AutoStage, keyof AutoAccept> = {
   4: "logo",
 };
 
+export type StageOutcome = "continue" | "gate";
+
 export interface AutoPilotApi {
-  /** Apply the plan's pick for one stage, then generate and approve it.
-   *  The component wires the real per-stage endpoint calls. */
-  runStage(stage: AutoStage, plan: GdPlan): Promise<void>;
-  /** Auto mode reached a stage the user rejected — hand control back. */
+  /** Apply the plan's pick for one stage, then generate (and approve when the
+   *  stage has no gate). Return "gate" to pause AFTER the stage's work — used
+   *  by the mandatory Stage-3 style pick. The component wires the endpoints. */
+  runStage(stage: AutoStage, plan: GdPlan): Promise<StageOutcome | void>;
+  /** Auto mode hands control back at this stage (rejected row or gate). */
   pause(stage: AutoStage): void;
 }
 
 export type AutoOutcome =
   | { status: "done" }
   | { status: "paused"; stage: AutoStage }
+  | { status: "gated"; stage: AutoStage }
   | { status: "stopped"; stage: AutoStage }
   | { status: "error"; stage: AutoStage; error: unknown };
 
@@ -51,8 +55,18 @@ export async function runAutoPilot(
       api.pause(stage);
       return { status: "paused", stage };
     }
+    if (stage === 4) {
+      // Mandatory logo gate: auto NEVER composites the logo itself — the user
+      // picks the variant + position in the Step-4 panel, which finishes the run.
+      api.pause(4);
+      return { status: "gated", stage: 4 };
+    }
     try {
-      await api.runStage(stage, plan);
+      const outcome = await api.runStage(stage, plan);
+      if (outcome === "gate") {
+        api.pause(stage);
+        return { status: "gated", stage };
+      }
     } catch (error) {
       return { status: "error", stage, error };
     }
