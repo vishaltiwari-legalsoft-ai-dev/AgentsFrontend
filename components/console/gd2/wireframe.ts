@@ -20,37 +20,13 @@ export function cycleZone(current: string, vocab: readonly string[]): string {
   return vocab[(i + 1) % vocab.length] ?? vocab[0];
 }
 
+/* Zone → preview-box geometry. The RUN no longer uses pinned coords from the
+   wireframe — zones map to the engine's zone-stack placements, which stack
+   blocks with real font metrics so wrapped headlines can never overlap the sub
+   text. These tables position the plan-card preview boxes only. */
 const ZONE_X: Record<string, number> = { left: 0.27, right: 0.73, top: 0.5, bottom: 0.5, center: 0.5 };
 const HEAD_Y: Record<string, number> = { top: 0.16, bottom: 0.62, left: 0.3, right: 0.3, center: 0.3 };
 const SUB_Y: Record<string, number> = { top: 0.3, bottom: 0.66, left: 0.48, right: 0.48, center: 0.48 };
-const W = 0.42;
-
-/** Pinned fractional coords for the run's `layout` config from wireframe zones.
- *  Sub lines stagger +0.08 each, capped at y=0.8 so they never leave canvas. */
-export function wireframeToLayout(
-  layout: GdPlanLayout, subCount: number,
-): Record<string, { x: number; y: number; w: number; anchor: string }> {
-  const out: Record<string, { x: number; y: number; w: number; anchor: string }> = {
-    headline: {
-      x: ZONE_X[layout.headline_zone] ?? 0.27,
-      y: HEAD_Y[layout.headline_zone] ?? 0.3,
-      w: W, anchor: "mc",
-    },
-    cta: {
-      x: ZONE_X[layout.cta_zone] ?? 0.5,
-      y: layout.cta_zone === "top" ? 0.14 : 0.86,
-      w: W, anchor: "mc",
-    },
-  };
-  for (let i = 0; i < Math.max(1, subCount); i += 1) {
-    out[`subheading-${i}`] = {
-      x: ZONE_X[layout.sub_zone] ?? 0.27,
-      y: Math.min(0.8, Math.round(((SUB_Y[layout.sub_zone] ?? 0.48) + i * 0.08) * 100) / 100),
-      w: W, anchor: "mc",
-    };
-  }
-  return out;
-}
 
 /** Percent CSS box for one wireframe element on the plan-card mini canvas. */
 export function wireBoxStyle(
