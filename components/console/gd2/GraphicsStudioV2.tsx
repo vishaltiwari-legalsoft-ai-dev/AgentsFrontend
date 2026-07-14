@@ -10,7 +10,7 @@ import { runAutoPilot, type AutoAccept, type AutoPilotApi, type AutoStage, type 
 import { PlanReview } from "./PlanReview";
 import { StyleGallery } from "./StyleGallery";
 import { pickDefaultStyle } from "./styleChoice";
-import { DEFAULT_PLAN_LAYOUT, wireframeToLayout } from "./wireframe";
+import { DEFAULT_PLAN_LAYOUT } from "./wireframe";
 import {
   creativeTypes,
   gdApprove,
@@ -736,9 +736,14 @@ export function GraphicsStudioV2({
         const r1 = await gdUpdateConfig(r0.id, {
           tokens,
           token_approvals: { headline: sign, highlight: sign, cta: sign },
-          subheadings: [{ ...first, text: subText, approved: true }],
-          // The wireframe's text zones ARE the pinned layout.
-          layout: wireframeToLayout(wire, 1),
+          // The wireframe's zones map to the engine's zone-stack PLACEMENTS
+          // (not pinned coords): the renderer stacks blocks with real font
+          // metrics, so a long wrapped headline can never overlap the sub text.
+          subheadings: [{ ...first, text: subText, placement: wire.sub_zone, approved: true }],
+          element_styles: {
+            headline: { placement: wire.headline_zone },
+            cta: { placement: wire.cta_zone },
+          },
           // Pre-seed the logo gate with the planned corner + variant.
           logo_layout: { position: wire.logo_corner },
         });
