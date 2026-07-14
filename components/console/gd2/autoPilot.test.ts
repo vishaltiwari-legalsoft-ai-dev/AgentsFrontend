@@ -23,11 +23,13 @@ function api(ran: AutoStage[], paused: AutoStage[], failAt?: AutoStage): AutoPil
 }
 
 describe("runAutoPilot", () => {
-  it("runs all four accepted stages in order and finishes", async () => {
+  it("runs stages 1-3 then lands on the mandatory logo gate", async () => {
     const ran: AutoStage[] = [];
-    const out = await runAutoPilot(PLAN, ALL, 1, api(ran, []), () => false);
-    expect(out).toEqual({ status: "done" });
-    expect(ran).toEqual([1, 2, 3, 4]);
+    const paused: AutoStage[] = [];
+    const out = await runAutoPilot(PLAN, ALL, 1, api(ran, paused), () => false);
+    expect(out).toEqual({ status: "gated", stage: 4 });
+    expect(ran).toEqual([1, 2, 3]); // stage 4 is never auto-run
+    expect(paused).toEqual([4]);
   });
 
   it("pauses at the first rejected stage without running it", async () => {
@@ -39,11 +41,44 @@ describe("runAutoPilot", () => {
     expect(paused).toEqual([2]);
   });
 
-  it("resumes from a later stage after the manual step", async () => {
+  it("resumes from a later stage and still gates at the logo", async () => {
     const ran: AutoStage[] = [];
-    const out = await runAutoPilot(PLAN, { ...ALL, element: false }, 3, api(ran, []), () => false);
-    expect(out).toEqual({ status: "done" });
-    expect(ran).toEqual([3, 4]);
+    const paused: AutoStage[] = [];
+    const out = await runAutoPilot(PLAN, { ...ALL, element: false }, 3, api(ran, paused), () => false);
+    expect(out).toEqual({ status: "gated", stage: 4 });
+    expect(ran).toEqual([3]);
+    expect(paused).toEqual([4]);
+  });
+
+  it("stage 4 always gates before running", async () => {
+    const ran: AutoStage[] = [];
+    const paused: AutoStage[] = [];
+    const out = await runAutoPilot(PLAN, ALL, 4, api(ran, paused), () => false);
+    expect(out).toEqual({ status: "gated", stage: 4 });
+    expect(ran).toEqual([]); // never auto-composites
+    expect(paused).toEqual([4]);
+  });
+
+  it("a runStage returning 'gate' pauses after the stage work", async () => {
+    const paused: AutoStage[] = [];
+    const out = await runAutoPilot(
+      PLAN, ALL, 3,
+      { runStage: async (s) => (s === 3 ? "gate" : undefined), pause: (s) => paused.push(s) },
+      () => false,
+    );
+    expect(out).toEqual({ status: "gated", stage: 3 });
+    expect(paused).toEqual([3]);
+  });
+
+  it("'continue' outcome keeps walking to the stage-4 gate", async () => {
+    const ran: AutoStage[] = [];
+    const out = await runAutoPilot(
+      PLAN, ALL, 3,
+      { runStage: async (s) => { ran.push(s); return "continue"; }, pause: () => {} },
+      () => false,
+    );
+    expect(ran).toEqual([3]);
+    expect(out).toEqual({ status: "gated", stage: 4 });
   });
 
   it("stops when asked and reports where", async () => {
