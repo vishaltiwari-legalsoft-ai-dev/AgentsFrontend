@@ -1120,3 +1120,7 @@
   .gdx-spin { animation-duration: 0.001ms; }
   .gd2 .gdx-generate, .gdx-arrow { transition: none; }
 }
+
+/* ── Step 5 · final tweak card ──────────────────────────────────────────────── */
+.gd2-tweakcard { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 10px; padding: 12px; border: 1px solid var(--gd2-line); border-radius: 12px; }
+.gd2-tweakcard img { width: 100%; border-radius: 10px; display: block; }

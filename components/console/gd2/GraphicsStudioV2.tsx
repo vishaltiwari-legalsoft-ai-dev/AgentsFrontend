@@ -29,6 +29,7 @@ import {
   gdSuggest,
   gdSuggestPlacement,
   gdTextPreview,
+  gdTweak,
   gdUpdateConfig,
   type CreativeTypeMeta,
   type GdBrandLogoVariant,
@@ -211,6 +212,10 @@ export function GraphicsStudioV2({
   const [styleSet, setStyleSet] = useState<GdAttempt[] | null>(null);
   const [styleSel, setStyleSel] = useState<number | null>(null);
   const [polishNotes, setPolishNotes] = useState("");
+
+  // Step 5 · final tweak (optional): pending instruction + un-kept result.
+  const [tweakText, setTweakText] = useState("");
+  const [tweakPreview, setTweakPreview] = useState<GdAttempt | null>(null);
 
   const fail = useCallback(
     (e: unknown) => onToast(e instanceof Error ? e.message : String(e)),
@@ -839,6 +844,29 @@ export function GraphicsStudioV2({
     });
   };
 
+  // Step 5: guardrailed retouch of the approved final. Server rejections (a
+  // guardrail was violated, or the model is offline) surface via guard's toast.
+  const applyTweak = () => {
+    if (!run || tweakText.trim().length < 3) return;
+    void guard("Retouching your final…", async () => {
+      const res = await gdTweak(run.id, tweakText.trim());
+      setRun(res.run);
+      setTweakPreview(res.attempt);
+      if (res.attempt.qa === "skipped")
+        onToast("Tweak ready — QA check was unavailable, review it yourself.");
+    });
+  };
+
+  const keepTweak = () => {
+    if (!run || !tweakPreview) return;
+    void guard("Locking in your tweak…", async () => {
+      setRun(await gdApprove(run.id, 4, tweakPreview.attempt));
+      setTweakPreview(null);
+      setTweakText("");
+      onToast("Tweak applied — this is your new final.");
+    });
+  };
+
   const gotoStage = (n: number) => {
     if (!run || n >= cur) return;
     if (!window.confirm(`Go back to “${STEPS[n - 1].name}”? Later layers will be regenerated after your change.`)) return;
@@ -1335,6 +1363,51 @@ export function GraphicsStudioV2({
               </li>
             ))}
           </ul>
+          <div className="gd2-tweakcard">
+            <span className="gd2-step-eyebrow">Step 5 · Final tweak (optional)</span>
+            {tweakPreview ? (
+              <>
+                <AuthImg path={tweakPreview.url} alt="Tweaked final" />
+                <p className="gd2-note">
+                  “{tweakPreview.tweak_instruction}”
+                  {tweakPreview.qa === "skipped" ? " · QA check unavailable" : ""}
+                </p>
+                <div className="gd2-actionrow">
+                  <button className="gd2-btn" onClick={keepTweak} disabled={busy !== null}>
+                    Keep it ✓
+                  </button>
+                  <button
+                    className="gd2-btn gd2-btn--soft"
+                    onClick={() => setTweakPreview(null)}
+                    disabled={busy !== null}
+                  >
+                    Discard
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <textarea
+                  className="gd2-polishnotes"
+                  placeholder="Describe a small change — e.g. soften the shadow, make the plant smaller…"
+                  maxLength={500}
+                  value={tweakText}
+                  onChange={(e) => setTweakText(e.target.value)}
+                />
+                <button
+                  className="gd2-btn gd2-btn--soft"
+                  onClick={applyTweak}
+                  disabled={busy !== null || tweakText.trim().length < 3}
+                >
+                  ✨ Apply tweak
+                </button>
+                <p className="gd2-note">
+                  Fonts, logo and the colour gradient are protected — the agent refuses any
+                  result that touches them.
+                </p>
+              </>
+            )}
+          </div>
           <div className="gd2-actionrow" style={{ gridTemplateColumns: "1fr" }}>
             <button className="gd2-btn" onClick={download}>Download PNG ↓</button>
             <button className="gd2-btn gd2-btn--soft" onClick={resetAll}>Make another</button>
