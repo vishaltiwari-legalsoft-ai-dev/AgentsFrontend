@@ -636,6 +636,8 @@ export interface GdAttempt {
   qa?: string;
   set_id?: string;
   fonts?: Record<string, string>;
+  // Step 5: the user's retouch request this attempt was generated from.
+  tweak_instruction?: string;
   created_at: string;
 }
 
@@ -1158,6 +1160,11 @@ export const gdSuggestPlacement = (id: string) =>
 
 export const gdApprove = (id: string, stage: number, attempt?: number) =>
   postJson<GdRun>(`/api/gd/runs/${id}/approve`, { stage, attempt });
+
+// Step 5: guardrailed retouch of the approved final. Rejections surface the
+// guardrail violations as the error message; nothing is stored server-side.
+export const gdTweak = (id: string, instruction: string) =>
+  postJson<{ attempt: GdAttempt; run: GdRun }>(`/api/gd/runs/${id}/tweak`, { instruction });
 
 export const gdBack = (id: string, stage: number) =>
   postJson<GdRun>(`/api/gd/runs/${id}/back`, { stage });
