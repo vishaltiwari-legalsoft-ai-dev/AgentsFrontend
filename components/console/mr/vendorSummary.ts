@@ -4,6 +4,10 @@ import { fmtMoney, fmtNum } from "./format";
 export interface SummaryCell {
   label: string;
   value: string;
+  /** Traffic light vs the desk's benchmark. Absent = no benchmark to judge by. */
+  status?: "good" | "bad";
+  /** The benchmark it was judged against, shown under the figure. */
+  note?: string;
 }
 
 /** The eight metrics the desk agreed on (7/9 review), in two rows of four.
@@ -20,6 +24,11 @@ export function vendorSummaryRows(
   t: MrOverview["totals"],
 ): SummaryCell[][] {
   if (p) {
+    // Judged by the same rules the Vendors dossier uses, against the same
+    // endpoint-supplied benchmarks — never a threshold typed in here.
+    const b = p.benchmarks;
+    const cpql = p.cost_per_qualified_lead;
+    const cpqd = p.cost_per_qual_demo_booked;
     return [
       [
         { label: "Spend", value: fmtMoney(p.total_spend) },
@@ -28,8 +37,19 @@ export function vendorSummaryRows(
         { label: "Demos Completed", value: fmtNum(p.demos_completed) },
       ],
       [
-        { label: "Cost per Qualified Lead", value: fmtMoney(p.cost_per_qualified_lead) },
-        { label: "Cost per Qualified Demo", value: fmtMoney(p.cost_per_qual_demo_booked) },
+        {
+          label: "Cost per Qualified Lead",
+          value: fmtMoney(cpql),
+          ...(b && cpql !== null && cpql >= b.cpql_red ? { status: "bad" as const } : {}),
+          ...(b ? { note: `red ≥ ${fmtMoney(b.cpql_red)}` } : {}),
+        },
+        {
+          label: "Cost per Qualified Demo",
+          value: fmtMoney(cpqd),
+          ...(b && cpqd !== null ? { status: (cpqd < b.cpqdb_max ? "good" : "bad") as "good" | "bad" } : {}),
+          ...(b ? { note: `target < ${fmtMoney(b.cpqdb_max)}` } : {}),
+        },
+        // No benchmark ships for cost per completed demo — leave it unjudged.
         { label: "Cost per Completed Demo", value: fmtMoney(p.cost_per_demo_completed) },
         { label: "Total Services Sold (Act.)", value: fmtNum(p.services_sold) },
       ],

@@ -738,14 +738,26 @@
 .mr-insight--good::before { background: var(--success); }
 .mr-insight--warn::before { background: var(--warning); }
 .mr-insight--info::before { background: var(--brand); }
-.mr-board__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
-.mr-chart {
-  background: var(--surface-card); border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg); padding: 14px 16px;
-  display: flex; flex-direction: column; gap: 10px; min-width: 0;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+/* One board, hairline-divided — three bordered cards side by side read as three
+   unrelated widgets; they are three views of the same month. */
+.mr-board__grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 0;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
-.mr-chart:hover { box-shadow: var(--shadow-sm); border-color: var(--border); }
+.mr-chart {
+  padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 12px; min-width: 0;
+  border-left: 1px solid var(--border-subtle);
+}
+.mr-board__grid > .mr-chart:first-child { border-left: none; }
+@media (max-width: 1000px) {
+  .mr-chart { border-left: none; border-top: 1px solid var(--border-subtle); }
+  .mr-board__grid > .mr-chart:first-child { border-top: none; }
+}
 .mr-chart__svg { width: 100%; height: auto; }
 .mr-chart__val { font: 600 8.5px var(--font-mono); fill: var(--text-primary); font-variant-numeric: tabular-nums; }
 .mr-chart__axis { font: 500 8px var(--font-mono); fill: var(--text-tertiary); }
@@ -871,31 +883,129 @@
 }
 
 /* Vendor summary — the green "official" block on the Overview ------------------- */
-.mr-vsum {
-  border: 1px solid color-mix(in srgb, var(--green-500) 35%, transparent);
-  border-top: 3px solid var(--green-500);
+/* The official ledger -----------------------------------------------------------
+   This row is the desk's statement of record — the figures they copy into chat.
+   It reads as a ledger: figures left-aligned on a mono baseline so columns can be
+   compared down as well as across, hairline rules instead of boxes, and green
+   spent only where it means "on target". (The green box it replaces came from a
+   misread: green/red in the review PDF were the reviewer's highlighter marking
+   which rows to keep, not a spec for a green container.) */
+.mr-led {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, var(--green-50), var(--surface-card) 70%);
-  padding: 14px 18px;
-  display: grid; gap: 10px;
+  padding: 16px 20px 14px;
+  display: grid;
+  gap: 12px;
 }
-.mr-vsum__head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.mr-vsum__head .mr-section__title { color: var(--green-600); }
-.mr-vsum__meta { font: 500 11.5px/1.4 var(--font-mono); color: var(--text-secondary); }
-.mr-vsum__row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 8px; }
-.mr-vsum__cell { display: grid; gap: 2px; text-align: center; padding: 6px 4px; }
-.mr-vsum__cell b {
-  font: 700 19px/1.15 var(--font-mono);
-  font-variant-numeric: tabular-nums;
+.mr-led__head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 12px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 10px;
+}
+.mr-led__title {
+  margin: 0;
+  font: 600 13px/1.2 var(--font-display);
+  letter-spacing: 0.01em;
   color: var(--text-primary);
 }
-.mr-vsum__cell span {
-  font: 600 10px/1.4 var(--font-mono);
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.mr-led__meta {
+  font: 500 11px/1.4 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
 }
-@media (max-width: 860px) { .mr-vsum__row { grid-template-columns: repeat(2, 1fr); } }
+.mr-led__row { display: grid; grid-template-columns: repeat(4, 1fr); }
+/* Hairline column rules — the ledger's spine. Never on the first cell. */
+.mr-led__cell {
+  display: grid;
+  gap: 3px;
+  padding: 2px 16px;
+  border-left: 1px solid var(--border-subtle);
+  min-width: 0;
+  /* Pack rows to the top. Cells stretch to the tallest in the row, and without
+     this the ones lacking a benchmark note spread their rows to fill — dropping
+     their labels out of line with the rest of the ledger. */
+  align-content: start;
+}
+.mr-led__cell:first-child { border-left: none; padding-left: 0; }
+.mr-led__fig {
+  font: 600 24px/1.1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+/* Green and red earn their place here: the figure IS the status. */
+.mr-led__fig--good { color: var(--green-600); }
+.mr-led__fig--bad { color: var(--red-600); }
+.mr-led__label {
+  font: 500 11.5px/1.35 var(--font-sans);
+  color: var(--text-secondary);
+}
+.mr-led__note {
+  font: 500 10px/1.3 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+}
+@media (max-width: 860px) {
+  .mr-led__row { grid-template-columns: repeat(2, 1fr); gap: 14px 0; }
+  .mr-led__cell:nth-child(odd) { border-left: none; padding-left: 0; }
+  .mr-led__fig { font-size: 20px; }
+}
+
+/* Pace spine — the signature. One track: how much budget is burnt (fill) against
+   how much of the month is gone (marker). Ahead or behind, at a glance. */
+.mr-pace {
+  display: grid;
+  gap: 7px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 12px;
+}
+.mr-pace__track {
+  position: relative;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  overflow: visible;
+}
+.mr-pace__fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--brand);
+  transition: width 0.5s ease-out;
+}
+/* The day-of-month marker: where spend *should* be. */
+.mr-pace__mark {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--ink);
+  transform: translateX(-1px);
+}
+.mr-pace__mark::after {
+  content: "";
+  position: absolute;
+  left: 50%; top: -4px;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--ink);
+  transform: translateX(-50%);
+}
+.mr-pace__read { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.mr-pace__verdict {
+  font: 600 12.5px/1.3 var(--font-sans);
+  color: var(--text-primary);
+}
+.mr-pace--over .mr-pace__verdict { color: var(--red-600); }
+.mr-pace--over .mr-pace__fill { background: var(--red-500); }
+.mr-pace--on .mr-pace__verdict { color: var(--green-600); }
+.mr-pace__detail {
+  font: 500 11px/1.4 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+}
+@media (prefers-reduced-motion: reduce) { .mr-pace__fill { transition: none; } }
 
 /* Report views nav (Daily | Weekly | Monthly | Quarterly) ----------------------- */
 .mr-viewnav {

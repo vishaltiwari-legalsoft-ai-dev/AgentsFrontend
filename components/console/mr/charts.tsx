@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 
+import { niceTicks } from "./chartScale";
+
 /* Fixed channel identity colors (app --cat-* tokens; legend always shown). */
 export const CHANNEL_COLORS: Record<string, string> = {
   Google: "var(--cat-design)",   // teal-blue — validated (french-blue was below the lightness band)
@@ -48,19 +50,23 @@ export function Spark({ values, width = 72, height = 22 }: { values: number[]; w
 
 /* Hero area chart — the board's one big moment. Brand-gradient fill, selective
    labels (first / peak / current), pulsing endpoint on the live month. */
-const HW = 680, HH = 170, HPAD = 10;
+// HGUT is the axis gutter. Without it the tick labels and the first point's value
+// label were both drawn at x=HPAD and printed on top of each other.
+const HW = 680, HH = 170, HPAD = 10, HGUT = 42;
 
 export function Area({ data, money }: { data: { month: string; value: number }[]; money?: boolean }) {
   if (data.length < 2) return null;
   const max = Math.max(...data.map((d) => d.value), 1);
-  const step = (HW - HPAD * 2) / (data.length - 1);
+  const step = (HW - HGUT - HPAD) / (data.length - 1);
   const y = (v: number) => HH - 20 - (v / max) * (HH - 56);
-  const x = (i: number) => HPAD + i * step;
+  const x = (i: number) => HGUT + i * step;
   const pts = data.map((d, i) => `${x(i)},${y(d.value)}`).join(" ");
   const peak = data.reduce((bi, d, i) => (d.value > data[bi].value ? i : bi), 0);
   const last = data.length - 1;
   const lbl = (v: number) => (money ? fmtK(v) : Math.round(v).toLocaleString());
-  const labeled = new Set([0, peak, last]);
+  // Label the peak and the live endpoint only. The first point used to be labeled
+  // too, which is where it collided with the axis.
+  const labeled = new Set([peak, last]);
   return (
     <svg viewBox={`0 0 ${HW} ${HH + LBL}`} className="mr-chart__svg" role="img">
       <defs>
@@ -69,11 +75,12 @@ export function Area({ data, money }: { data: { month: string; value: number }[]
           <stop offset="100%" stopColor="var(--brand)" stopOpacity="0.02" />
         </linearGradient>
       </defs>
-      {[0.25, 0.5, 0.75].map((f) => (
-        <g key={f}>
-          <line x1={HPAD} x2={HW - HPAD} y1={y(max * f)} y2={y(max * f)}
+      {niceTicks(max).ticks.map((v) => (
+        <g key={v}>
+          <line x1={HGUT} x2={HW - HPAD} y1={y(v)} y2={y(v)}
             stroke="var(--border-subtle)" strokeWidth="1" />
-          <text x={HPAD} y={y(max * f) - 4} className="mr-chart__axis">{fmtK(max * f)}</text>
+          <text x={HGUT - 8} y={y(v)} textAnchor="end" dominantBaseline="middle"
+            className="mr-chart__axis">{money ? fmtK(v) : Math.round(v).toLocaleString()}</text>
         </g>
       ))}
       <polygon points={`${x(0)},${HH - 20} ${pts} ${x(last)},${HH - 20}`} fill="url(#mrHeroFill)" />
@@ -87,7 +94,7 @@ export function Area({ data, money }: { data: { month: string; value: number }[]
           </circle>
           {i === last && <circle cx={x(i)} cy={y(d.value)} r="4" fill="var(--accent)" className="mr-pulse" />}
           {labeled.has(i) && (
-            <text x={x(i)} y={y(d.value) - 9} textAnchor={i === 0 ? "start" : i === last ? "end" : "middle"}
+            <text x={x(i)} y={y(d.value) - 10} textAnchor={i === last ? "end" : "middle"}
               className="mr-chart__val--lg">{lbl(d.value)}</text>
           )}
           <text x={x(i)} y={HH + 6} textAnchor="middle" className="mr-chart__axis">
@@ -199,22 +206,28 @@ export function StackedBars({ months, segments }: {
   );
 }
 
+/* Ranked vendors. The label sits on its own line above the bar rather than in a
+   118px gutter — vendor names here are things like "AgencyBell LS Meta (Stopped)"
+   and every one of them was being truncated to fit. */
 export function HBars({ data, money }: { data: { label: string; value: number }[]; money?: boolean }) {
   const max = Math.max(...data.map((d) => d.value), 1);
-  const rowH = 22;
-  const h = data.length * rowH + 4;
+  const rowH = 30, barY = 13, valW = 46;
+  const h = data.length * rowH;
+  const track = W - valW;
   return (
     <svg viewBox={`0 0 ${W} ${h}`} className="mr-chart__svg" role="img">
       {data.map((d, i) => {
-        const w = Math.max((d.value / max) * (W - 130), 3);
-        const y = 2 + i * rowH;
+        const w = Math.max((d.value / max) * track, 2);
+        const y = i * rowH;
         return (
           <g key={d.label}>
             <title>{`${d.label}: ${money ? fmtK(d.value) : d.value.toLocaleString()}`}</title>
-            <text x={0} y={y + 14} className="mr-chart__axis">{d.label.length > 18 ? d.label.slice(0, 17) + "…" : d.label}</text>
-            <rect x={118} y={y + 4} width={w} height={12} rx="3" fill="var(--brand)"
+            <text x={0} y={y + 8} className="mr-chart__axis">{d.label}</text>
+            <rect x={0} y={y + barY} width={w} height={8} rx="4" fill="var(--brand)"
               className="mr-grow-x" style={{ animationDelay: `${i * 45}ms` }} />
-            <text x={124 + w} y={y + 14} className="mr-chart__val">{money ? fmtK(d.value) : d.value.toLocaleString()}</text>
+            <text x={W} y={y + barY + 7} textAnchor="end" className="mr-chart__val">
+              {money ? fmtK(d.value) : d.value.toLocaleString()}
+            </text>
           </g>
         );
       })}

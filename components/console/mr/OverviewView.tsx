@@ -7,37 +7,76 @@ import { ChannelCard, Dot, fmtMoney, fmtMonth, fmtNum, fmtTime, sourceLabel } fr
 import { DailyMovement } from "./DailyMovement";
 import { DeskBoard } from "./DeskBoard";
 import { Spark } from "./charts";
+import { readPace } from "./pace";
 import { vendorSummaryRows } from "./vendorSummary";
 
-/* Green "official" vendor summary — the eight agreed metrics in two rows.
-   Sourced from the vendor snapshots (portfolio); falls back to the pulled
-   tracker totals when no snapshot exists yet. Row-building (and which cells the
-   tracker genuinely cannot fill) lives in ./vendorSummary. */
-function VendorSummaryGreen({ p, t }: { p: MrPortfolio | null; t: MrOverview["totals"] }) {
-  const cells = vendorSummaryRows(p, t);
-  if (!cells.length) return null;
+/* The official ledger — the eight agreed metrics, judged against the desk's own
+   benchmarks. Sourced from the vendor snapshots (portfolio); falls back to the
+   pulled tracker totals when no snapshot exists yet. Row-building, the status
+   rules and which cells the tracker cannot fill live in ./vendorSummary. */
+function OfficialLedger({ p, t }: { p: MrPortfolio | null; t: MrOverview["totals"] }) {
+  const rows = vendorSummaryRows(p, t);
+  if (!rows.length) return null;
   return (
-    <div className="mr-vsum">
-      <div className="mr-vsum__head">
-        <h3 className="mr-section__title">Vendor summary · official</h3>
+    <section className="mr-led" aria-label="Official vendor summary">
+      <div className="mr-led__head">
+        <h3 className="mr-led__title">Official summary</h3>
         {p ? (
-          <span className="mr-vsum__meta">{p.vendors} vendors · {p.month} MTD · as of {p.date}</span>
+          <span className="mr-led__meta">
+            {p.vendors} vendors · {p.month} MTD · as of {p.date}
+          </span>
         ) : (
-          <span className="mr-vsum__meta">
-            From the pulled tracker · qualified-demo and services-sold figures need a vendor snapshot
+          <span className="mr-led__meta">
+            From the pulled tracker · qualified-demo and services-sold need a vendor snapshot
           </span>
         )}
       </div>
-      {cells.map((row, i) => (
-        <div className="mr-vsum__row" key={i}>
+      {rows.map((row, i) => (
+        <div className="mr-led__row" key={i}>
           {row.map((c) => (
-            <div className="mr-vsum__cell" key={c.label}>
-              <b>{c.value}</b>
-              <span>{c.label}</span>
+            <div className="mr-led__cell" key={c.label}>
+              <b className={c.status ? `mr-led__fig mr-led__fig--${c.status}` : "mr-led__fig"}>
+                {c.value}
+              </b>
+              <span className="mr-led__label">{c.label}</span>
+              {c.note && <span className="mr-led__note">{c.note}</span>}
             </div>
           ))}
         </div>
       ))}
+      <PaceSpine p={p} />
+    </section>
+  );
+}
+
+/* The signature: one track answering the desk's standing question — for the day
+   we're on, is the money ahead or behind? Both halves already ship on the
+   portfolio endpoint; the Overview simply never read them. */
+function PaceSpine({ p }: { p: MrPortfolio | null }) {
+  const pace = readPace(p);
+  if (!pace) return null;
+  const verdict =
+    pace.state === "on"
+      ? "on pace"
+      : `${fmtMoney(pace.deltaMoney)} ${pace.state} pace`;
+  return (
+    <div className={`mr-pace mr-pace--${pace.state}`}>
+      <div className="mr-pace__bar">
+        <div className="mr-pace__track">
+          <div className="mr-pace__fill" style={{ width: `${pace.barPct}%` }} />
+          <div
+            className="mr-pace__mark"
+            style={{ left: `${Math.min(100, pace.expectedPct)}%` }}
+            aria-hidden
+          />
+        </div>
+      </div>
+      <div className="mr-pace__read">
+        <span className="mr-pace__verdict">{verdict}</span>
+        <span className="mr-pace__detail">
+          {pace.spentPct}% of budget spent · {pace.expectedPct}% expected by day {pace.day} of {pace.daysInMonth}
+        </span>
+      </div>
     </div>
   );
 }
@@ -166,7 +205,7 @@ export function OverviewView({ overview, busy, onPull, onAsk, onGotoData, onToas
         </div>
       )}
 
-      <VendorSummaryGreen p={portfolio} t={t} />
+      <OfficialLedger p={portfolio} t={t} />
 
       <DeskBoard trends={trends} />
 
