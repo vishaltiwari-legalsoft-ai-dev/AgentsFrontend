@@ -7,48 +7,26 @@ import { ChannelCard, Dot, fmtMoney, fmtMonth, fmtNum, fmtTime, sourceLabel } fr
 import { DailyMovement } from "./DailyMovement";
 import { DeskBoard } from "./DeskBoard";
 import { Spark } from "./charts";
+import { vendorSummaryRows } from "./vendorSummary";
 
 /* Green "official" vendor summary — the eight agreed metrics in two rows.
    Sourced from the vendor snapshots (portfolio); falls back to the pulled
-   tracker totals when no snapshot exists yet. */
+   tracker totals when no snapshot exists yet. Row-building (and which cells the
+   tracker genuinely cannot fill) lives in ./vendorSummary. */
 function VendorSummaryGreen({ p, t }: { p: MrPortfolio | null; t: MrOverview["totals"] }) {
-  const cells: { label: string; value: string }[][] = p
-    ? [
-        [
-          { label: "Spend", value: fmtMoney(p.total_spend) },
-          { label: "Qualified Leads", value: fmtNum(p.qualified_leads) },
-          { label: "Qualified Demos Booked", value: fmtNum(p.qual_demos_booked) },
-          { label: "Demos Completed", value: fmtNum(p.demos_completed) },
-        ],
-        [
-          { label: "Cost per Qualified Lead", value: fmtMoney(p.cost_per_qualified_lead) },
-          { label: "Cost per Qualified Demo", value: fmtMoney(p.cost_per_qual_demo_booked) },
-          { label: "Cost per Completed Demo", value: fmtMoney(p.cost_per_demo_completed) },
-          { label: "Total Services Sold (Act.)", value: fmtNum(p.services_sold) },
-        ],
-      ]
-    : t
-      ? [
-          [
-            { label: "Spend", value: fmtMoney(t.spend) },
-            { label: "Qualified Leads", value: fmtNum(t.qualified_leads) },
-            { label: "Qualified Demos Booked", value: fmtNum(t.demos_booked) },
-            { label: "Demos Completed", value: fmtNum(t.demos_completed) },
-          ],
-          [
-            { label: "Cost per Qualified Lead", value: fmtMoney(t.cost_per_qualified_lead) },
-            { label: "Cost per Qualified Demo", value: fmtMoney(t.cost_per_demo_booked) },
-            { label: "Cost per Completed Demo", value: fmtMoney(t.cost_per_demo_completed) },
-            { label: "Total Services Sold (Act.)", value: "—" },
-          ],
-        ]
-      : [];
+  const cells = vendorSummaryRows(p, t);
   if (!cells.length) return null;
   return (
     <div className="mr-vsum">
       <div className="mr-vsum__head">
         <h3 className="mr-section__title">Vendor summary · official</h3>
-        {p && <span className="mr-vsum__meta">{p.vendors} vendors · {p.month} MTD · as of {p.date}</span>}
+        {p ? (
+          <span className="mr-vsum__meta">{p.vendors} vendors · {p.month} MTD · as of {p.date}</span>
+        ) : (
+          <span className="mr-vsum__meta">
+            From the pulled tracker · qualified-demo and services-sold figures need a vendor snapshot
+          </span>
+        )}
       </div>
       {cells.map((row, i) => (
         <div className="mr-vsum__row" key={i}>
