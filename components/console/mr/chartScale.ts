@@ -22,6 +22,20 @@ function niceStep(rough: number): number {
   return fit * mag;
 }
 
+/** Axis top for a ranked bar chart that is judged against a threshold.
+ *
+ *  Scaling to the data max lets one outlier ($4,800 against a $118-$410 pack)
+ *  squash every other bar flat. When the chart has a decision line, that line is
+ *  what the reader is measuring against — so put it at mid-axis and let the
+ *  outliers run off the end, where they are clipped and labelled with their real
+ *  value. If nothing comes near the line, fall back to the data so the bars fill
+ *  the track instead of hugging the left edge. */
+export function barAxisMax(values: number[], redLine?: number | null): number {
+  const dataMax = Math.max(...values, 0);
+  if (!redLine) return dataMax || 1;
+  return Math.max(Math.min(dataMax, redLine * 2), 1);
+}
+
 export function niceTicks(dataMax: number, count = 3): Scale {
   const safe = dataMax > 0 ? dataMax : 1;
   const step = niceStep(safe / count);

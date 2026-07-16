@@ -207,7 +207,7 @@ export function OverviewView({ overview, busy, onPull, onAsk, onGotoData, onToas
 
       <OfficialLedger p={portfolio} t={t} />
 
-      <DeskBoard trends={trends} />
+      <DeskBoard trends={trends} redLine={portfolio?.benchmarks.cpql_red ?? null} />
 
       <DailyMovement onToast={onToast} />
 

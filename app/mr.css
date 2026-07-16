@@ -760,6 +760,8 @@
 }
 .mr-chart__svg { width: 100%; height: auto; }
 .mr-chart__val { font: 600 8.5px var(--font-mono); fill: var(--text-primary); font-variant-numeric: tabular-nums; }
+/* A figure past its red line. The dashed line + the bar colour say it too. */
+.mr-chart__val--bad { fill: var(--red-600); }
 .mr-chart__axis { font: 500 8px var(--font-mono); fill: var(--text-tertiary); }
 .mr-chart__legend { display: flex; gap: 12px; flex-wrap: wrap; }
 .mr-chart__key { display: inline-flex; align-items: center; gap: 5px; font: 500 10.5px/1 var(--font-mono); color: var(--text-secondary); }

@@ -3,11 +3,7 @@
 import type { MrInsight, MrTrends } from "@/lib/api";
 import { Area, ChartCard, HBars, Lines, StackedBars, channelColor } from "./charts";
 
-function pick(insights: MrInsight[], test: (t: string) => boolean): MrInsight[] {
-  return insights.filter((i) => test(i.text.toLowerCase()));
-}
-
-export function DeskBoard({ trends }: { trends: MrTrends | null }) {
+export function DeskBoard({ trends, redLine }: { trends: MrTrends | null; redLine?: number | null }) {
   if (!trends || !trends.has_data) return null;
   const t = trends;
 
@@ -16,8 +12,10 @@ export function DeskBoard({ trends }: { trends: MrTrends | null }) {
   const ranked = t.vendors.filter((v) => v.cpql !== null)
     .sort((a, b) => (a.cpql ?? 0) - (b.cpql ?? 0)).slice(0, 8);
 
-  const pace = pick(t.insights, (s) => s.includes("pace"))[0];
-  const efficiency = pick(t.insights, (s) => s.includes("qualified lead") && !s.includes("zero"));
+  // Route by kind, never by words in the text — each insight lands in exactly
+  // one place. Older cached runs have no kind; they fall through to the strip.
+  const pace = t.insights.find((i) => i.kind === "pace");
+  const efficiency = t.insights.filter((i) => i.kind === "efficiency");
   const strip = t.insights.filter((i) => i !== pace && !efficiency.includes(i));
 
   return (
@@ -69,7 +67,7 @@ export function DeskBoard({ trends }: { trends: MrTrends | null }) {
         <ChartCard title="Cost per qualified lead · by vendor (MTD)">
           {ranked.length ? (
             <>
-              <HBars money data={ranked.map((v) => ({ label: v.vendor, value: v.cpql as number }))} />
+              <HBars money redLine={redLine} data={ranked.map((v) => ({ label: v.vendor, value: v.cpql as number }))} />
               {efficiency.map((i, n) => (
                 <p className={`mr-chart__note mr-chart__note--${i.level}`} key={n}>{i.text}</p>
               ))}

@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-import { niceTicks } from "./chartScale";
+import { barAxisMax, niceTicks } from "./chartScale";
 
 /* Fixed channel identity colors (app --cat-* tokens; legend always shown). */
 export const CHANNEL_COLORS: Record<string, string> = {
@@ -160,8 +160,10 @@ export function Lines({ series, months }: {
               <title>{`${s.name} · ${mon(months[i])}: ${v.toLocaleString()}`}</title>
             </circle>
           ))}
+          {/* Text wears text ink, never the series colour — the line right beside
+              it carries identity, and the legend names it. */}
           <text x={W - PAD} y={endYs[si]} textAnchor="end"
-            className="mr-chart__val" fill={s.color}>
+            className="mr-chart__val">
             {(s.values[s.values.length - 1] ?? 0).toLocaleString()}
           </text>
         </g>
@@ -206,27 +208,59 @@ export function StackedBars({ months, segments }: {
   );
 }
 
-/* Ranked vendors. The label sits on its own line above the bar rather than in a
-   118px gutter — vendor names here are things like "AgencyBell LS Meta (Stopped)"
-   and every one of them was being truncated to fit. */
-export function HBars({ data, money }: { data: { label: string; value: number }[]; money?: boolean }) {
-  const max = Math.max(...data.map((d) => d.value), 1);
+/* Ranked vendors against a decision line.
+ *
+ * Two things this fixes over a plain ranked bar chart. Labels sit on their own
+ * line above the bar rather than in a 118px gutter — real vendor names look like
+ * "AgencyBell LS Meta (Stopped)" and every one was being truncated. And the axis
+ * scales to the red line rather than the data, because a single $4,800 vendor
+ * flattened the whole $118-$410 pack into stubs. Anything past the line runs off
+ * the end: clipped, marked with a chevron, and labelled with its real value. */
+export function HBars({ data, money, redLine }: {
+  data: { label: string; value: number }[];
+  money?: boolean;
+  redLine?: number | null;
+}) {
+  const max = barAxisMax(data.map((d) => d.value), redLine);
   const rowH = 30, barY = 13, valW = 46;
-  const h = data.length * rowH;
+  const h = data.length * rowH + (redLine ? 12 : 0);
   const track = W - valW;
+  const lineX = redLine ? (redLine / max) * track : 0;
+  const showLine = !!redLine && lineX < track;
+  const fmt = (v: number) => (money ? fmtK(v) : v.toLocaleString());
   return (
     <svg viewBox={`0 0 ${W} ${h}`} className="mr-chart__svg" role="img">
+      {showLine && (
+        <g>
+          <line x1={lineX} x2={lineX} y1={0} y2={data.length * rowH}
+            stroke="var(--red-500)" strokeWidth="1" strokeDasharray="3 3" />
+          <text x={lineX} y={h - 2} textAnchor="middle" className="mr-chart__axis">
+            {fmt(redLine!)} line
+          </text>
+        </g>
+      )}
       {data.map((d, i) => {
-        const w = Math.max((d.value / max) * track, 2);
+        const over = !!redLine && d.value >= redLine;
+        const clipped = d.value > max;
+        // A clipped bar stops short so the chevrons past its end read as "keeps
+        // going" — otherwise $4.8k and $1.1k end at nearly the same x and a 4x
+        // difference looks like a rounding error.
+        const w = clipped ? track - 8 : Math.max((d.value / max) * track, 2);
         const y = i * rowH;
         return (
           <g key={d.label}>
-            <title>{`${d.label}: ${money ? fmtK(d.value) : d.value.toLocaleString()}`}</title>
+            <title>{`${d.label}: ${fmt(d.value)}${over ? " — over the line" : ""}`}</title>
             <text x={0} y={y + 8} className="mr-chart__axis">{d.label}</text>
-            <rect x={0} y={y + barY} width={w} height={8} rx="4" fill="var(--brand)"
+            <rect x={0} y={y + barY} width={w} height={8} rx="4"
+              fill={over ? "var(--red-500)" : "var(--brand)"}
               className="mr-grow-x" style={{ animationDelay: `${i * 45}ms` }} />
-            <text x={W} y={y + barY + 7} textAnchor="end" className="mr-chart__val">
-              {money ? fmtK(d.value) : d.value.toLocaleString()}
+            {clipped && [0, 5].map((dx) => (
+              <path key={dx} d={`M${w + 2 + dx} ${y + barY + 1} l3.5 3 l-3.5 3`} fill="none"
+                stroke="var(--red-500)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            ))}
+            <text x={W} y={y + barY + 7} textAnchor="end"
+              className={over ? "mr-chart__val mr-chart__val--bad" : "mr-chart__val"}>
+              {fmt(d.value)}
             </text>
           </g>
         );

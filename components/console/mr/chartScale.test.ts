@@ -1,5 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { niceTicks } from "./chartScale";
+import { barAxisMax, niceTicks } from "./chartScale";
+
+describe("barAxisMax", () => {
+  // Real July data: one vendor at $4,800 against a pack from $118-$410. Scaling
+  // to the outlier squashed seven of eight bars into unreadable stubs.
+  const vendors = [118, 227, 290, 350, 409, 410, 1100, 4800];
+
+  it("scales to the decision line, not the outlier", () => {
+    // The chart answers "who is over the $600 red line", so the line sits mid-axis
+    // and the pack stays legible instead of collapsing against a $4.8k bar.
+    expect(barAxisMax(vendors, 600)).toBe(1200);
+  });
+
+  it("keeps the smallest bar visible", () => {
+    const max = barAxisMax(vendors, 600);
+    expect(118 / max).toBeGreaterThan(0.05);
+  });
+
+  it("grows past the line when nothing is near it, so bars are not all tiny", () => {
+    // Everyone well under the line: don't waste half the axis on empty space.
+    expect(barAxisMax([90, 110, 130], 600)).toBe(130);
+  });
+
+  it("falls back to the data max when no line is supplied", () => {
+    expect(barAxisMax(vendors, null)).toBe(4800);
+    expect(barAxisMax(vendors, undefined)).toBe(4800);
+  });
+
+  it("survives an empty set", () => {
+    expect(barAxisMax([], 600)).toBeGreaterThan(0);
+  });
+});
 
 describe("niceTicks", () => {
   it("rounds to human steps instead of fractions of the max", () => {

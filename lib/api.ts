@@ -1623,7 +1623,14 @@ export interface MrTrendVendor {
   vendor: string; spend_mtd: number; leads: number; qualified_leads: number;
   cpql: number | null; spend_series: { month: string; spend: number }[];
 }
-export interface MrInsight { level: "good" | "warn" | "info"; text: string }
+/** `kind` is the routing key — the board sends pace to the hero and efficiency to
+ *  the vendor chart. Never re-derive it by matching words in `text`: the pace
+ *  sentence mentions "qualified leads" and used to match both. */
+export interface MrInsight {
+  kind?: "pace" | "efficiency" | "mover";
+  level: "good" | "warn" | "info";
+  text: string;
+}
 export interface MrTrends {
   has_data: boolean; month: string | null;
   monthly: MrMonthRow[];
