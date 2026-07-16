@@ -2,6 +2,7 @@
 
 import type { MrChannelAgg, MrFlagGroup, MrReport, MrReportKind, MrSource } from "@/lib/api";
 import { ChannelCard, fmtMoney, fmtNum, fmtTime, readNarrative, sourceLabel, verdict } from "./shared";
+import { Prose } from "./Prose";
 import { REPORT_META } from "./reportMeta";
 
 const CAMPAIGN_KINDS: MrReportKind[] = [
@@ -26,38 +27,7 @@ interface ReportPeriod { start: string; end: string; label: string; basis?: stri
 
 /* Narrative renderer: paragraphs, bullet groups and simple "| a | b |" table
    rows survive as structure instead of collapsing into one wall of text. */
-function Prose({ text }: { text: string }) {
-  const blocks: React.ReactNode[] = [];
-  let bullets: string[] = [];
-  let tableRows: string[][] = [];
-  const flush = (key: number) => {
-    if (bullets.length) {
-      blocks.push(<ul className="mr-doc__list" key={`u${key}`}>{bullets.map((b, i) => <li key={i}>{b}</li>)}</ul>);
-      bullets = [];
-    }
-    if (tableRows.length) {
-      blocks.push(
-        <table className="mr-table" key={`t${key}`}>
-          <tbody>{tableRows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j}>{c}</td>)}</tr>)}</tbody>
-        </table>);
-      tableRows = [];
-    }
-  };
-  text.split(/\n/).forEach((raw, i) => {
-    const line = raw.replace(/^#+\s*/, "").replace(/^-{3,}$/, "").trim();
-    if (!line) { flush(i); return; }
-    if (/^[-•*]\s+/.test(line)) { bullets.push(line.replace(/^[-•*]\s+/, "")); return; }
-    if (/^\|.*\|$/.test(line)) {
-      const cells = line.slice(1, -1).split("|").map((c) => c.trim());
-      if (!cells.every((c) => /^:?-{2,}:?$/.test(c))) tableRows.push(cells);
-      return;
-    }
-    flush(i);
-    blocks.push(<p className="mr-doc__prose" key={`p${i}`}>{line.replace(/^>\s*/, "")}</p>);
-  });
-  flush(-1);
-  return <div className="mr-doc__prosewrap">{blocks}</div>;
-}
+// Prose moved to ./Prose (shared with the Ask answer card; parser under test).
 
 function Section({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (

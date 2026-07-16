@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { mrAsk, type MrAskAnswer } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
+import { Prose } from "./Prose";
 import { splitAnswer } from "./shared";
 
 const SUGGESTED = [
@@ -79,7 +80,7 @@ export function AskView({ seed, onSeedConsumed, onToast }: {
                 <div className="mr-empty">Finding the right data and reading it…</div>
               ) : (
                 <div className="mr-ans">
-                  <p className="mr-ans__text">{ans.summary}</p>
+                  <div className="mr-ans__text"><Prose text={ans.summary} /></div>
                   {ans.recommend && <div className="mr-rec"><b>Recommend</b><span>{ans.recommend}</span></div>}
                   {e.answer.used_tabs.length > 0 && (
                     <div className="mr-ans__src">

@@ -411,6 +411,13 @@
 }
 .mr-ans__q { font: 600 14px/1.4 var(--font-sans); color: var(--text-primary); }
 .mr-ans__text { margin: 0; font: 400 16px/1.6 var(--font-sans); }
+/* The answer renders through the shared <Prose>, whose base sizes are tuned for
+   the report doc — hold the card's larger reading size and let it use the full
+   width (the doc's 68ch measure is for a page, not a chat card). */
+.mr-ans__text .mr-doc__prosewrap { gap: 12px; }
+.mr-ans__text .mr-doc__prose { font-size: 16px; line-height: 1.6; max-width: none; }
+.mr-ans__text .mr-doc__prose:first-child { font-weight: 500; }
+.mr-ans__text .mr-doc__list { font-size: 15px; line-height: 1.6; max-width: none; gap: 7px; }
 .mr-ans__src { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .mr-ans__src-label {
   font: 600 10px/1.4 var(--font-mono);
