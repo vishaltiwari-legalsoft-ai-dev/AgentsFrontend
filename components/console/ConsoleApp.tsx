@@ -5,11 +5,10 @@ import { useAuth } from "@/lib/auth";
 import { Sidebar, NewsBar } from "@/components/console/Chrome";
 import { HomeView, AgentsView, TeamsView, SettingsView } from "@/components/console/Views";
 import { IntegrationsView } from "@/components/console/IntegrationsView";
-import { isAgentLive, LIVE_AGENTS, ON_HOLD_AGENTS } from "@/lib/console-data";
+import { isAgentLive, LIVE_AGENTS } from "@/lib/console-data";
 import { AgentChat } from "@/components/console/AgentChat";
 import { GraphicsStudioV2 } from "@/components/console/gd2/GraphicsStudioV2";
 import { MarketingResearch } from "@/components/console/mr/MarketingResearch";
-import SeoAgent from "@/components/console/seo/SeoAgent";
 import { LibraryView } from "@/components/console/LibraryView";
 import { AdminView } from "@/components/console/AdminView";
 import { DatabaseView } from "@/components/console/DatabaseView";
@@ -36,7 +35,6 @@ const NAV_VIEWS = [
   "workspace",
   "studio",
   "marketing",
-  "seo",
   "library",
   "imagelib",
   "admin",
@@ -56,8 +54,6 @@ function isNavView(value: string): value is NavView {
 function canAccess(view: NavView, user: { is_admin?: boolean; is_creator?: boolean }): boolean {
   if (view === "admin" || view === "database" || view === "imagelib") return !!user.is_admin;
   if (view === "agentcfg") return !!user.is_creator;
-  // An on-hold agent's view is unreachable, even via a saved #/hash.
-  if (Object.keys(ON_HOLD_AGENTS).some((id) => LIVE_AGENTS[id] === view)) return false;
   return true;
 }
 
@@ -129,10 +125,6 @@ export default function ConsoleApp() {
   };
 
   const onOpenAgent = (id: string) => {
-    if (id in ON_HOLD_AGENTS) {
-      fire(ON_HOLD_AGENTS[id]);
-      return;
-    }
     if (!isAgentLive(id)) {
       fire("This agent is coming soon.");
       return;
@@ -162,7 +154,6 @@ export default function ConsoleApp() {
           {nav === "workspace" && <AgentChat onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "studio" && <GraphicsStudioV2 onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "marketing" && <MarketingResearch onToast={fire} onBack={() => setNav("agents")} />}
-          {nav === "seo" && <SeoAgent onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "library" && <LibraryView onBack={() => setNav("workspace")} />}
           {nav === "imagelib" && user.is_admin && <ImageLibraryView onBack={() => setNav("home")} />}
           {nav === "admin" && user.is_admin && <AdminView onBack={() => setNav("home")} />}

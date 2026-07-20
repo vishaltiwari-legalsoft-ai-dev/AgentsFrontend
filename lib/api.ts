@@ -384,13 +384,6 @@ export interface AdminSettings {
     image_model: string;
     vision_model: string;
   };
-  // SerpAPI (SEO + GEO agent): a single standalone key, masked like the
-  // OpenRouter key — no model catalog, just a search API key.
-  serpapi: {
-    api_key_set: boolean;
-    api_key_hint: string;
-    api_key_source: "override" | "env" | "unset";
-  };
   sources: Record<string, "override" | "env">;
   // Curated model choices, keyed by runtime-config field, for dropdowns.
   catalog: Record<AgentModelField, ModelOption[]>;
@@ -402,7 +395,6 @@ export interface AdminSettingsPatch {
   openrouter_fast_model?: string;
   openrouter_image_model?: string;
   openrouter_vision_model?: string;
-  serpapi_key?: string;
 }
 
 export function getAdminSettings(): Promise<AdminSettings> {
@@ -608,16 +600,6 @@ export function updateAgentConfig(
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const response = await request(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) throw new Error(await parseError(response));
-  return (await response.json()) as T;
-}
-
-async function putJson<T>(path: string, body: unknown): Promise<T> {
-  const response = await request(path, {
-    method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -1773,94 +1755,3 @@ export const mrGetRun = (id: string) => getJson<MrReport>(`/api/mr/runs/${id}`);
 export const mrSchedule = (period: "daily" | "weekly" | "biweekly" | "monthly") =>
   postJson<MrReport>(`/api/mr/schedule/${period}`, {});
 
-/* --------------------------- SEO + GEO agent --------------------------- */
-
-export interface SeoTermTarget { term: string; weight: number; min_count: number; max_count: number }
-export interface SeoTopic { name: string; terms: string[]; questions: string[] }
-
-export interface SeoBenchmarkMeta {
-  id: string; keyword: string; location: string; brand: string;
-  created_at: string; serp_fetched_at: string; topics_ai: boolean;
-}
-
-export interface SeoBenchmark extends SeoBenchmarkMeta {
-  term_targets: SeoTermTarget[]; topics: SeoTopic[]; questions: string[];
-  word_count_range: [number, number]; heading_count_range: [number, number];
-  paa_questions: string[];
-  source_pages: { url: string; rank: number; word_count: number }[];
-  excluded: { url: string; reason: string }[];
-  topics_fallback_reason: string | null;
-}
-
-export interface SeoMissingTerm { term: string; used: number; min_count: number; max_count: number }
-
-export interface SeoTermReportRow {
-  term: string; weight: number; min_count: number; max_count: number;
-  used: number; status: "missing" | "low" | "ok" | "overused";
-}
-export interface SeoTopicCoverage {
-  name: string; terms_present: string[]; terms_missing: string[];
-  questions_unanswered: string[];
-}
-export interface SeoStructureStatus {
-  word_count: number; word_count_range: [number, number];
-  heading_count: number; heading_count_range: [number, number];
-  faq_needed: boolean; faq_present: boolean;
-}
-
-export interface SeoScoreReport {
-  score: number; term_coverage: number; topical_completeness: number;
-  structure_fit: number; semantic_depth: number;
-  missing_terms: SeoMissingTerm[]; questions_unanswered: string[];
-  structure_notes: string[];
-  term_report?: SeoTermReportRow[];
-  topic_coverage?: SeoTopicCoverage[];
-  structure?: SeoStructureStatus | null;
-}
-
-export interface SeoGeoAnswer {
-  engine: string; question: string; answer_text: string; citations: string[];
-  mentioned: boolean; cited: boolean; accuracy: number | null;
-  accuracy_notes: string[]; error: string | null;
-}
-
-export interface SeoGeoRun {
-  id: string; brand: string; week: string; captured_at: string;
-  answers: SeoGeoAnswer[]; score: number;
-  components: Record<string, number>; engine_scores: Record<string, number>;
-  no_data_engines: string[];
-}
-
-export interface SeoGeoBrand {
-  brand: string; latest: SeoGeoRun | null;
-  history: { week: string; score: number; id: string }[];
-}
-export interface SeoGeoOverview { brands: SeoGeoBrand[] }
-
-export interface SeoBrandConfig {
-  name: string; domain: string; category?: string;
-  competitors?: string[]; questions?: string[];
-}
-export interface SeoConfig extends Record<string, unknown> {
-  w_term_coverage: number; w_topics: number; w_structure: number; w_depth: number;
-  brands: Record<string, SeoBrandConfig>;
-  geo_engines: Record<string, string>;
-}
-
-export const seoBenchmarks = () =>
-  getJson<{ benchmarks: SeoBenchmarkMeta[] }>("/api/seo/benchmarks");
-export const seoBenchmark = (id: string) => getJson<SeoBenchmark>(`/api/seo/benchmarks/${id}`);
-export const seoAnalyze = (body: { keyword: string; location: string; brand: string }) =>
-  postJson<SeoBenchmark>("/api/seo/benchmarks", body);
-export const seoRefresh = (id: string) =>
-  postJson<SeoBenchmark>(`/api/seo/benchmarks/${id}/refresh`, {});
-export const seoScore = (body: { benchmark_id: string; draft_text: string }) =>
-  postJson<SeoScoreReport>("/api/seo/score", body);
-export const seoBrief = (id: string) => getJson<Record<string, unknown>>(`/api/seo/briefs/${id}`);
-export const seoGeoOverview = () => getJson<SeoGeoOverview>("/api/seo/geo/overview");
-export const seoGeoRun = (id: string) => getJson<SeoGeoRun>(`/api/seo/geo/runs/${id}`);
-export const seoGeoCapture = () => postJson<{ runs: SeoGeoRun[] }>("/api/seo/geo/capture", {});
-export const seoConfig = () => getJson<SeoConfig>("/api/seo/config");
-export const seoConfigSave = (body: Partial<SeoConfig>) => {
-  return putJson<SeoConfig>("/api/seo/config", body);
-};

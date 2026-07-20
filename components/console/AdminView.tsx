@@ -32,7 +32,6 @@ export function AdminView({ onBack }: { onBack: () => void }) {
   // Secrets & Integrations form state.
   const [cfg, setCfg] = useState<AdminSettings | null>(null);
   const [keyDraft, setKeyDraft] = useState("");
-  const [serpapiKeyDraft, setSerpapiKeyDraft] = useState("");
   const [models, setModels] = useState({ model: "", fast_model: "", image_model: "", vision_model: "" });
   const [saving, setSaving] = useState(false);
   const [secretMsg, setSecretMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -77,11 +76,9 @@ export function AdminView({ onBack }: { onBack: () => void }) {
       };
       // Only send a key if the admin typed a new one (blank = leave as-is).
       if (keyDraft.trim()) patch.openrouter_api_key = keyDraft.trim();
-      if (serpapiKeyDraft.trim()) patch.serpapi_key = serpapiKeyDraft.trim();
       const next = await updateAdminSettings(patch);
       setCfg(next);
       setKeyDraft("");
-      setSerpapiKeyDraft("");
       setSecretMsg({ kind: "ok", text: "Settings saved." });
     } catch (err) {
       setSecretMsg({ kind: "err", text: err instanceof Error ? err.message : "Save failed" });
@@ -191,26 +188,6 @@ export function AdminView({ onBack }: { onBack: () => void }) {
           <Button variant="secondary" size="sm" onClick={testKey} disabled={!cfg?.openrouter.api_key_set}>
             Test key
           </Button>
-        </div>
-
-        {/* SerpAPI key — used by the SEO + GEO agent's live SERP/GEO capture. */}
-        <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
-          SerpAPI key
-          {cfg?.serpapi.api_key_set && (
-            <span style={{ marginLeft: 8, fontWeight: 500, color: "var(--text-tertiary)" }}>
-              currently set: {cfg.serpapi.api_key_hint} · {cfg.serpapi.api_key_source === "override" ? "saved here" : "from environment"}
-            </span>
-          )}
-        </label>
-        <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
-          <input
-            type="password"
-            value={serpapiKeyDraft}
-            placeholder={cfg?.serpapi.api_key_set ? "Enter a new key to replace it…" : "SerpAPI key…"}
-            autoComplete="off"
-            onChange={(e) => setSerpapiKeyDraft(e.target.value)}
-            style={{ flex: 1, padding: "9px 12px", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontSize: 13, fontFamily: "var(--font-mono)" }}
-          />
         </div>
 
         {/* Global default models — curated dropdowns. These are the platform-wide

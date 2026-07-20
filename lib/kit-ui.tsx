@@ -268,7 +268,6 @@ export function AgentCard({
   onAdd,
   onOpen,
   comingSoon,
-  onHold,
   interactive,
   className = "",
   ...rest
@@ -283,16 +282,14 @@ export function AgentCard({
   onAdd?: () => void;
   onOpen?: () => void;
   comingSoon?: boolean;
-  onHold?: boolean;
   interactive?: boolean;
   className?: string;
 }) {
-  const inactive = comingSoon || onHold;
   return (
     <div
-      className={cx("ens-agentcard", interactive && !inactive ? "ens-agentcard--interactive" : undefined, className)}
+      className={cx("ens-agentcard", interactive && !comingSoon ? "ens-agentcard--interactive" : undefined, className)}
       data-category={category}
-      style={inactive ? { opacity: 0.72 } : undefined}
+      style={comingSoon ? { opacity: 0.72 } : undefined}
       {...rest}
     >
       <div className="ens-agentcard__top">
@@ -305,24 +302,18 @@ export function AgentCard({
           <div className="ens-agentcard__name">{name}</div>
           <div className="ens-agentcard__role">{role}</div>
         </div>
-        {onHold ? (
-          <Badge variant="outline">On hold</Badge>
-        ) : comingSoon ? (
-          <Badge variant="outline">Soon</Badge>
-        ) : null}
+        {comingSoon ? <Badge variant="outline">Soon</Badge> : null}
       </div>
       {description ? <p className="ens-agentcard__desc">{description}</p> : null}
       <div className="ens-agentcard__foot">
-        {onHold ? (
-          <span className="ens-agentcard__meta">Paused for now</span>
-        ) : comingSoon ? (
+        {comingSoon ? (
           <span className="ens-agentcard__meta">Not available yet</span>
         ) : status ? (
           <StatusDot status={status} />
         ) : (
           <span className="ens-agentcard__meta">Specialist agent</span>
         )}
-        {inactive ? null : onOpen ? (
+        {comingSoon ? null : onOpen ? (
           <Button size="sm" variant="brand" onClick={onOpen} iconRight={<Icon name="arrow-right" size={15} />}>
             Open
           </Button>

@@ -13,28 +13,14 @@ export interface AgentItem {
 export const LIVE_AGENT_ID = "a1";
 /** Marketing Research agent (backed by /api/mr). Uses the "Market Researcher" slot. */
 export const MARKETING_AGENT_ID = "a6";
-/** SEO + GEO agent (backed by /api/seo). */
-export const SEO_AGENT_ID = "a2";
-
 /** Agents wired to a live backend, mapped to the console nav key they open. */
 export const LIVE_AGENTS: Record<string, string> = {
   [LIVE_AGENT_ID]: "studio",
   [MARKETING_AGENT_ID]: "marketing",
-  [SEO_AGENT_ID]: "seo",
 };
 
 export function isAgentLive(id: string): boolean {
   return id in LIVE_AGENTS;
-}
-
-/** Agents temporarily paused — "On hold" badge on the card, not openable.
- * Value is the toast shown if someone tries. Takes precedence over LIVE_AGENTS. */
-export const ON_HOLD_AGENTS: Record<string, string> = {
-  [SEO_AGENT_ID]: "SEO Analyst is on hold for now.",
-};
-
-export function isAgentOnHold(id: string): boolean {
-  return id in ON_HOLD_AGENTS;
 }
 
 export interface TeamMember {
