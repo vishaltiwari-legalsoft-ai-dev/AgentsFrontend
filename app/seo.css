@@ -1,0 +1,10 @@
+/* SEO agent view — additive namespace, follows console token variables. */
+.seo-root { display: flex; flex-direction: column; gap: 16px; padding: 20px; }
+.seo-head { display: flex; align-items: center; gap: 14px; }
+.seo-back { background: none; border: none; cursor: pointer; font-size: 18px; }
+.seo-title { font-size: 20px; font-weight: 700; margin: 0; }
+.seo-sub { margin: 0; opacity: 0.65; font-size: 13px; }
+.seo-tabs { margin-left: auto; display: flex; gap: 6px; }
+.seo-tab { padding: 6px 14px; border-radius: 999px; border: 1px solid var(--border, #e2e2e2); background: transparent; cursor: pointer; }
+.seo-tab.is-active { background: var(--accent, #111); color: var(--accent-contrast, #fff); }
+.seo-panel { border: 1px solid var(--border, #e2e2e2); border-radius: 12px; padding: 16px; }
