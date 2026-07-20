@@ -36,3 +36,17 @@
 .seo-drawer header { display: flex; justify-content: space-between; align-items: center; }
 .seo-terms em { opacity: 0.6; font-style: normal; }
 .seo-excluded { font-size: 12px; opacity: 0.7; word-break: break-all; }
+.seo-geo-actions { display: flex; justify-content: flex-end; }
+.seo-geo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.seo-geo-card { border: 1px solid var(--border, #e2e2e2); border-radius: 12px; padding: 14px; }
+.seo-geo-card header { display: flex; justify-content: space-between; align-items: baseline; }
+.seo-geo-score { font-size: 24px; font-weight: 800; }
+.seo-geo-score small { font-size: 12px; opacity: 0.6; }
+.seo-geo-engines { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.seo-geo-engine { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--border, #f0f0f0); }
+.seo-geo-engine.is-nodata { opacity: 0.55; font-style: italic; }
+.seo-geo-history { display: flex; align-items: flex-end; gap: 4px; height: 48px; }
+.seo-geo-week { width: 14px; border: none; border-radius: 3px 3px 0 0; background: var(--accent, #555); cursor: pointer; opacity: 0.8; }
+.seo-geo-answer { border-top: 1px solid var(--border, #eee); padding: 10px 0; }
+.seo-geo-answer blockquote { font-size: 13px; opacity: 0.85; margin: 6px 0; border-left: 3px solid var(--border, #ddd); padding-left: 10px; }
+.seo-geo-flags { font-size: 13px; }
