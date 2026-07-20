@@ -25,24 +25,41 @@ export default function EditorView({
   const [analyzing, setAnalyzing] = useState(false);
   const [newKeyword, setNewKeyword] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Monotonic request id: bumped whenever a score request is fired OR a benchmark
+  // switch invalidates whatever's in flight. A `.then`/`.catch` only applies its
+  // result if it's still the most-recently-fired request when it resolves — this
+  // guards against both a stale-benchmark response and plain out-of-order network replies.
+  const requestId = useRef(0);
 
   useEffect(() => {
     seoBenchmarks().then((r) => setMetas(r.benchmarks)).catch((e) => onToast(String(e)));
   }, [onToast]);
 
-  useEffect(() => {
-    if (!benchmarkId) { setBenchmark(null); setReport(null); return; }
-    seoBenchmark(benchmarkId).then(setBenchmark).catch((e) => onToast(String(e)));
-  }, [benchmarkId, onToast]);
-
   const rescore = useCallback((text: string, bid: string) => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
+      const reqId = ++requestId.current;
       seoScore({ benchmark_id: bid, draft_text: text })
-        .then(setReport)
-        .catch((e) => onToast(String(e)));
+        .then((r) => { if (requestId.current === reqId) setReport(r); })
+        .catch((e) => { if (requestId.current === reqId) onToast(String(e)); });
     }, debounceMs);
   }, [onToast]);
+
+  useEffect(() => {
+    // Switching benchmarks must not leave the OLD benchmark's timer/report alive:
+    // cancel any pending debounce, invalidate any in-flight response, and clear the
+    // report (the draft text itself survives — the user shouldn't lose what they typed).
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    requestId.current += 1;
+    setReport(null);
+    if (!benchmarkId) { setBenchmark(null); return; }
+    seoBenchmark(benchmarkId).then(setBenchmark).catch((e) => onToast(String(e)));
+    if (draft.trim()) rescore(draft, benchmarkId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally keyed only
+    // on benchmarkId/onToast; draft is read at switch-time, not on every keystroke.
+  }, [benchmarkId, onToast]);
+
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   const onDraft = (text: string) => {
     setDraft(text);
