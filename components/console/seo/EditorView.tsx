@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  seoAnalyze, seoBenchmark, seoBenchmarks, seoScore,
+  seoAnalyze, seoBenchmark, seoBenchmarks, seoConfig, seoScore,
   type SeoBenchmark, type SeoBenchmarkMeta, type SeoScoreReport,
 } from "@/lib/api";
 
-import { debounceMs, scoreTone, termLabel } from "./logic";
+import { debounceMs } from "./logic";
+import ReportPanels from "./ReportPanels";
 
 export default function EditorView({
   onToast,
@@ -24,6 +25,8 @@ export default function EditorView({
   const [report, setReport] = useState<SeoScoreReport | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [newKeyword, setNewKeyword] = useState("");
+  const [brands, setBrands] = useState<{ slug: string; name: string }[]>([]);
+  const [brandSlug, setBrandSlug] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Monotonic request id: bumped whenever a score request is fired OR a benchmark
   // switch invalidates whatever's in flight. A `.then`/`.catch` only applies its
@@ -34,6 +37,14 @@ export default function EditorView({
   useEffect(() => {
     seoBenchmarks().then((r) => setMetas(r.benchmarks)).catch((e) => onToast(String(e)));
   }, [onToast]);
+
+  useEffect(() => {
+    seoConfig()
+      .then((c) => setBrands(
+        Object.entries(c.brands ?? {}).map(([slug, b]) => ({ slug, name: b.name || slug })),
+      ))
+      .catch(() => setBrands([]));
+  }, []);
 
   const rescore = useCallback((text: string, bid: string) => {
     if (timer.current) clearTimeout(timer.current);
@@ -70,7 +81,7 @@ export default function EditorView({
     if (!newKeyword.trim()) return;
     setAnalyzing(true);
     try {
-      const b = await seoAnalyze({ keyword: newKeyword.trim(), location: "", brand: "" });
+      const b = await seoAnalyze({ keyword: newKeyword.trim(), location: "", brand: brandSlug });
       setMetas((m) => [{ ...b }, ...m]);
       onBenchmark(b.id);
       onToast(`Benchmark ready: ${b.keyword}`);
@@ -94,6 +105,18 @@ export default function EditorView({
             <option key={m.id} value={m.id}>{m.keyword}</option>
           ))}
         </select>
+        {brands.length > 0 && (
+          <select
+            value={brandSlug}
+            onChange={(e) => setBrandSlug(e.target.value)}
+            aria-label="Brand"
+          >
+            <option value="">No brand (generic)</option>
+            {brands.map((b) => (
+              <option key={b.slug} value={b.slug}>{b.name}</option>
+            ))}
+          </select>
+        )}
         <input
           placeholder="Analyze a new keyword…"
           value={newKeyword}
@@ -103,6 +126,7 @@ export default function EditorView({
         <button onClick={() => void analyze()} disabled={analyzing}>
           {analyzing ? "Analyzing… (fetches live Google results)" : "Analyze"}
         </button>
+        {benchmark?.brand && <span className="seo-brand-tag">for {benchmark.brand}</span>}
       </div>
 
       <div className="seo-editor-body">
@@ -115,45 +139,7 @@ export default function EditorView({
         />
         <aside className="seo-rail">
           {report && benchmark ? (
-            <>
-              <div className={`seo-dial tone-${scoreTone(report.score)}`}>
-                <span className="seo-dial-num">{Math.round(report.score)}</span>
-                <span className="seo-dial-cap">/ 100</span>
-              </div>
-              <div className="seo-subscores">
-                {([
-                  ["Terms", report.term_coverage],
-                  ["Topics", report.topical_completeness],
-                  ["Structure", report.structure_fit],
-                  ["Depth", report.semantic_depth],
-                ] as const).map(([label, v]) => (
-                  <div key={label} className="seo-subscore">
-                    <span>{label}</span>
-                    <div className="seo-bar"><i style={{ width: `${Math.round(v * 100)}%` }} /></div>
-                  </div>
-                ))}
-              </div>
-              {!benchmark.topics_ai && (
-                <p className="seo-fallback-note" role="note">
-                  Topic grouping unavailable ({benchmark.topics_fallback_reason ?? "AI pass failed"}) —
-                  showing statistical terms.
-                </p>
-              )}
-              <section className="seo-checklist">
-                <h3>Missing terms</h3>
-                {report.missing_terms.length === 0 ? <p className="seo-done">All term targets met ✓</p> : (
-                  <ul>{report.missing_terms.map((t) => <li key={t.term}>{termLabel(t)}</li>)}</ul>
-                )}
-                <h3>Questions to answer</h3>
-                {report.questions_unanswered.length === 0 ? <p className="seo-done">All answered ✓</p> : (
-                  <ul>{report.questions_unanswered.map((q) => <li key={q}>{q}</li>)}</ul>
-                )}
-                <h3>Structure</h3>
-                {report.structure_notes.length === 0 ? <p className="seo-done">On target ✓</p> : (
-                  <ul>{report.structure_notes.map((n) => <li key={n}>{n}</li>)}</ul>
-                )}
-              </section>
-            </>
+            <ReportPanels report={report} benchmark={benchmark} />
           ) : (
             <p className="seo-empty">Score appears here once you pick a keyword and start writing.</p>
           )}

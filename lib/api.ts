@@ -1794,11 +1794,28 @@ export interface SeoBenchmark extends SeoBenchmarkMeta {
 
 export interface SeoMissingTerm { term: string; used: number; min_count: number; max_count: number }
 
+export interface SeoTermReportRow {
+  term: string; weight: number; min_count: number; max_count: number;
+  used: number; status: "missing" | "low" | "ok" | "overused";
+}
+export interface SeoTopicCoverage {
+  name: string; terms_present: string[]; terms_missing: string[];
+  questions_unanswered: string[];
+}
+export interface SeoStructureStatus {
+  word_count: number; word_count_range: [number, number];
+  heading_count: number; heading_count_range: [number, number];
+  faq_needed: boolean; faq_present: boolean;
+}
+
 export interface SeoScoreReport {
   score: number; term_coverage: number; topical_completeness: number;
   structure_fit: number; semantic_depth: number;
   missing_terms: SeoMissingTerm[]; questions_unanswered: string[];
   structure_notes: string[];
+  term_report: SeoTermReportRow[];
+  topic_coverage: SeoTopicCoverage[];
+  structure: SeoStructureStatus | null;
 }
 
 export interface SeoGeoAnswer {

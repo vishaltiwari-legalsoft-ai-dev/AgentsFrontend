@@ -1,4 +1,4 @@
-import type { SeoBrandConfig, SeoMissingTerm } from "@/lib/api";
+import type { SeoBrandConfig, SeoMissingTerm, SeoScoreReport, SeoTermReportRow } from "@/lib/api";
 
 export const debounceMs = 600;
 
@@ -72,4 +72,29 @@ export function draftToBrand(d: SeoBrandDraft): SeoBrandConfig {
 
 export function emptyBrandDraft(): SeoBrandDraft {
   return { name: "", domain: "", category: "", competitorsText: "", questionsText: "" };
+}
+
+export function statusTone(
+  s: SeoTermReportRow["status"],
+): "muted" | "warn" | "good" | "bad" {
+  if (s === "ok") return "good";
+  if (s === "overused") return "bad";
+  if (s === "low") return "warn";
+  return "muted";
+}
+
+export function statusLabel(row: SeoTermReportRow): string {
+  const range =
+    row.min_count === row.max_count ? `${row.min_count}` : `${row.min_count}–${row.max_count}`;
+  return `you: ${row.used} · target ${range}×`;
+}
+
+export function clampPct(v: number): number {
+  return Math.max(0, Math.min(100, Math.round(v)));
+}
+
+/** Global unanswered questions not already listed under a topic block. */
+export function extraQuestions(report: SeoScoreReport): string[] {
+  const shown = new Set(report.topic_coverage.flatMap((t) => t.questions_unanswered));
+  return report.questions_unanswered.filter((q) => !shown.has(q));
 }

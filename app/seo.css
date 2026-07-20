@@ -67,3 +67,26 @@
 .seo-config-add { flex-direction: row; align-items: flex-end; gap: 8px; }
 .seo-config-add label { flex: 1; }
 .seo-config-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
+
+.seo-panel-block { border-top: 1px solid var(--border, #eee); padding-top: 10px; }
+.seo-panel-block h3 { font-size: 13px; text-transform: uppercase; opacity: 0.7; margin: 0 0 6px; }
+.seo-struct-row { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 4px 0; }
+.seo-struct-row span { width: 64px; }
+.seo-struct-row em { font-style: normal; opacity: 0.75; white-space: nowrap; }
+.seo-struct-bar { flex: 1; }
+.seo-struct-warn { color: #b7791f; font-size: 13px; margin: 4px 0; }
+.seo-density { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.seo-density-row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding: 3px 6px; border-radius: 6px; }
+.seo-density-row.tone-muted { opacity: 0.55; }
+.seo-density-row.tone-warn { background: rgba(183, 121, 31, 0.12); color: #b7791f; }
+.seo-density-row.tone-good { background: rgba(30, 127, 79, 0.10); color: #1e7f4f; }
+.seo-density-row.tone-bad { background: rgba(192, 57, 43, 0.12); color: #c0392b; }
+.seo-density-term { font-weight: 600; }
+.seo-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.seo-chip { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--border, #f0f0f0); }
+.seo-chip.tone-warn { background: rgba(183, 121, 31, 0.15); color: #b7791f; }
+.seo-chip-topic { border: 1px dashed currentColor; background: transparent; opacity: 0.8; }
+.seo-cover-topic h4 { font-size: 13px; margin: 8px 0 2px; }
+.seo-cover-topic p, .seo-cover-topic ul { font-size: 13px; margin: 2px 0; }
+.seo-cover-topic ul { padding-left: 18px; }
+.seo-brand-tag { font-size: 12px; opacity: 0.7; align-self: center; }
