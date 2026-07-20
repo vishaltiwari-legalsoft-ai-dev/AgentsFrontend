@@ -11,12 +11,14 @@ export default function ReportPanels({
   report: SeoScoreReport;
   benchmark: SeoBenchmark;
 }) {
+  const termReport = report.term_report ?? [];
+  const topicCoverage = report.topic_coverage ?? [];
   const s = report.structure;
-  const gapTopics = report.topic_coverage.filter(
+  const gapTopics = topicCoverage.filter(
     (t) => t.terms_missing.length > 0 || t.questions_unanswered.length > 0,
   );
-  const wholeTopicsMissing = report.topic_coverage.filter((t) => t.terms_present.length === 0);
-  const needAdding = report.term_report.filter(
+  const wholeTopicsMissing = topicCoverage.filter((t) => t.terms_present.length === 0);
+  const needAdding = termReport.filter(
     (r) => r.status === "missing" || r.status === "low",
   );
   const other = extraQuestions(report);
@@ -80,7 +82,7 @@ export default function ReportPanels({
       <section className="seo-panel-block">
         <h3>Keyword density</h3>
         <div className="seo-density">
-          {report.term_report.map((r) => (
+          {termReport.map((r) => (
             <div key={r.term} className={`seo-density-row tone-${statusTone(r.status)}`}>
               <span className="seo-density-term">{r.term}</span>
               <span className="seo-density-count">{statusLabel(r)}</span>

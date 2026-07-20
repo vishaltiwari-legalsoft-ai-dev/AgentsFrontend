@@ -126,4 +126,8 @@ describe("extraQuestions", () => {
     };
     expect(extraQuestions(report as never)).toEqual(["q1", "q3"]);
   });
+
+  it("tolerates an old-backend report without topic_coverage", () => {
+    expect(extraQuestions({ questions_unanswered: ["q1"] } as never)).toEqual(["q1"]);
+  });
 });

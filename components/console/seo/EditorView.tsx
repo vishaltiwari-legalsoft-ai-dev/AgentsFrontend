@@ -126,7 +126,11 @@ export default function EditorView({
         <button onClick={() => void analyze()} disabled={analyzing}>
           {analyzing ? "Analyzing… (fetches live Google results)" : "Analyze"}
         </button>
-        {benchmark?.brand && <span className="seo-brand-tag">for {benchmark.brand}</span>}
+        {benchmark?.brand && (
+          <span className="seo-brand-tag">
+            for {brands.find((b) => b.slug === benchmark.brand)?.name ?? benchmark.brand}
+          </span>
+        )}
       </div>
 
       <div className="seo-editor-body">

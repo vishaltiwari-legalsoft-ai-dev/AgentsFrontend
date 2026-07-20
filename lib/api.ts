@@ -1813,9 +1813,9 @@ export interface SeoScoreReport {
   structure_fit: number; semantic_depth: number;
   missing_terms: SeoMissingTerm[]; questions_unanswered: string[];
   structure_notes: string[];
-  term_report: SeoTermReportRow[];
-  topic_coverage: SeoTopicCoverage[];
-  structure: SeoStructureStatus | null;
+  term_report?: SeoTermReportRow[];
+  topic_coverage?: SeoTopicCoverage[];
+  structure?: SeoStructureStatus | null;
 }
 
 export interface SeoGeoAnswer {

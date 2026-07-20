@@ -95,6 +95,6 @@ export function clampPct(v: number): number {
 
 /** Global unanswered questions not already listed under a topic block. */
 export function extraQuestions(report: SeoScoreReport): string[] {
-  const shown = new Set(report.topic_coverage.flatMap((t) => t.questions_unanswered));
+  const shown = new Set((report.topic_coverage ?? []).flatMap((t) => t.questions_unanswered));
   return report.questions_unanswered.filter((q) => !shown.has(q));
 }
