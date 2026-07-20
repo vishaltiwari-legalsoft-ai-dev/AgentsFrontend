@@ -8,3 +8,23 @@
 .seo-tab { padding: 6px 14px; border-radius: 999px; border: 1px solid var(--border, #e2e2e2); background: transparent; cursor: pointer; }
 .seo-tab.is-active { background: var(--accent, #111); color: var(--accent-contrast, #fff); }
 .seo-panel { border: 1px solid var(--border, #e2e2e2); border-radius: 12px; padding: 16px; }
+.seo-editor { display: flex; flex-direction: column; gap: 12px; }
+.seo-editor-top { display: flex; gap: 8px; flex-wrap: wrap; }
+.seo-editor-body { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: start; }
+.seo-draft { min-height: 480px; width: 100%; resize: vertical; padding: 14px; border-radius: 12px; border: 1px solid var(--border, #e2e2e2); font: inherit; }
+.seo-rail { display: flex; flex-direction: column; gap: 14px; }
+.seo-dial { display: flex; align-items: baseline; gap: 6px; padding: 18px; border-radius: 12px; border: 1px solid var(--border, #e2e2e2); }
+.seo-dial-num { font-size: 42px; font-weight: 800; }
+.seo-dial.tone-bad .seo-dial-num { color: #c0392b; }
+.seo-dial.tone-mid .seo-dial-num { color: #b7791f; }
+.seo-dial.tone-good .seo-dial-num { color: #1e7f4f; }
+.seo-subscore { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.seo-subscore span { width: 72px; }
+.seo-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--border, #eee); overflow: hidden; }
+.seo-bar i { display: block; height: 100%; background: currentColor; }
+.seo-checklist h3 { font-size: 13px; text-transform: uppercase; opacity: 0.7; margin: 12px 0 4px; }
+.seo-checklist ul { margin: 0; padding-left: 18px; font-size: 14px; }
+.seo-done { color: #1e7f4f; font-size: 14px; margin: 2px 0; }
+.seo-fallback-note { font-size: 12px; opacity: 0.75; border-left: 3px solid #b7791f; padding-left: 8px; }
+.seo-empty { opacity: 0.6; }
+@media (max-width: 900px) { .seo-editor-body { grid-template-columns: 1fr; } }
