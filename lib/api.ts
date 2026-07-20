@@ -384,6 +384,13 @@ export interface AdminSettings {
     image_model: string;
     vision_model: string;
   };
+  // SerpAPI (SEO + GEO agent): a single standalone key, masked like the
+  // OpenRouter key — no model catalog, just a search API key.
+  serpapi: {
+    api_key_set: boolean;
+    api_key_hint: string;
+    api_key_source: "override" | "env" | "unset";
+  };
   sources: Record<string, "override" | "env">;
   // Curated model choices, keyed by runtime-config field, for dropdowns.
   catalog: Record<AgentModelField, ModelOption[]>;
@@ -395,6 +402,7 @@ export interface AdminSettingsPatch {
   openrouter_fast_model?: string;
   openrouter_image_model?: string;
   openrouter_vision_model?: string;
+  serpapi_key?: string;
 }
 
 export function getAdminSettings(): Promise<AdminSettings> {

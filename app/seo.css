@@ -50,3 +50,20 @@
 .seo-geo-answer { border-top: 1px solid var(--border, #eee); padding: 10px 0; }
 .seo-geo-answer blockquote { font-size: 13px; opacity: 0.85; margin: 6px 0; border-left: 3px solid var(--border, #ddd); padding-left: 10px; }
 .seo-geo-flags { font-size: 13px; }
+
+/* Share-of-voice bar (I4). */
+.seo-geo-sov { margin: 8px 0; }
+.seo-geo-sov-label { display: flex; justify-content: space-between; font-size: 12px; opacity: 0.75; margin-bottom: 4px; }
+.seo-geo-sov-bar { height: 6px; border-radius: 3px; background: var(--border, #eee); overflow: hidden; }
+.seo-geo-sov-bar i { display: block; height: 100%; background: var(--accent, #555); }
+
+/* Admin config drawer (I4). */
+.seo-config-brand { border: 1px solid var(--border, #e2e2e2); border-radius: 10px; padding: 12px; margin: 12px 0; display: flex; flex-direction: column; gap: 8px; }
+.seo-config-brand-head { display: flex; justify-content: space-between; align-items: center; }
+.seo-config-brand-head strong { font-family: var(--font-mono, monospace); }
+.seo-config-brand label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; opacity: 0.8; }
+.seo-config-brand input, .seo-config-brand textarea { font: inherit; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border, #e2e2e2); background: var(--surface, #fff); color: inherit; }
+.seo-config-brand textarea { min-height: 60px; resize: vertical; }
+.seo-config-add { flex-direction: row; align-items: flex-end; gap: 8px; }
+.seo-config-add label { flex: 1; }
+.seo-config-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
