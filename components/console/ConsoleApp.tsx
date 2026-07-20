@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { Sidebar, NewsBar } from "@/components/console/Chrome";
 import { HomeView, AgentsView, TeamsView, SettingsView } from "@/components/console/Views";
 import { IntegrationsView } from "@/components/console/IntegrationsView";
-import { isAgentLive, LIVE_AGENTS } from "@/lib/console-data";
+import { isAgentLive, LIVE_AGENTS, ON_HOLD_AGENTS } from "@/lib/console-data";
 import { AgentChat } from "@/components/console/AgentChat";
 import { GraphicsStudioV2 } from "@/components/console/gd2/GraphicsStudioV2";
 import { MarketingResearch } from "@/components/console/mr/MarketingResearch";
@@ -56,6 +56,8 @@ function isNavView(value: string): value is NavView {
 function canAccess(view: NavView, user: { is_admin?: boolean; is_creator?: boolean }): boolean {
   if (view === "admin" || view === "database" || view === "imagelib") return !!user.is_admin;
   if (view === "agentcfg") return !!user.is_creator;
+  // An on-hold agent's view is unreachable, even via a saved #/hash.
+  if (Object.keys(ON_HOLD_AGENTS).some((id) => LIVE_AGENTS[id] === view)) return false;
   return true;
 }
 
@@ -127,6 +129,10 @@ export default function ConsoleApp() {
   };
 
   const onOpenAgent = (id: string) => {
+    if (id in ON_HOLD_AGENTS) {
+      fire(ON_HOLD_AGENTS[id]);
+      return;
+    }
     if (!isAgentLive(id)) {
       fire("This agent is coming soon.");
       return;

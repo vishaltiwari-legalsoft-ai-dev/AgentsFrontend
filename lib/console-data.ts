@@ -27,6 +27,16 @@ export function isAgentLive(id: string): boolean {
   return id in LIVE_AGENTS;
 }
 
+/** Agents temporarily paused — "On hold" badge on the card, not openable.
+ * Value is the toast shown if someone tries. Takes precedence over LIVE_AGENTS. */
+export const ON_HOLD_AGENTS: Record<string, string> = {
+  [SEO_AGENT_ID]: "SEO Analyst is on hold for now.",
+};
+
+export function isAgentOnHold(id: string): boolean {
+  return id in ON_HOLD_AGENTS;
+}
+
 export interface TeamMember {
   name: string;
   category: AgentCategory;

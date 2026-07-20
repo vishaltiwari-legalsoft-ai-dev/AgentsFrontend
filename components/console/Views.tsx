@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { agents, isAgentLive } from "@/lib/console-data";
+import { agents, isAgentLive, isAgentOnHold } from "@/lib/console-data";
 import { Icon, Button, IconButton, Avatar, Badge, Tabs, AgentCard } from "@/lib/kit-ui";
 import { GlyphTile } from "@/lib/glyph";
 
@@ -42,14 +42,16 @@ export function HomeView({
         </div>
         <div className="cgrid cgrid--3">
           {agents.slice(0, 6).map((a) => {
-            const live = isAgentLive(a.id);
+            const hold = isAgentOnHold(a.id);
+            const live = isAgentLive(a.id) && !hold;
             return (
               <AgentCard
                 key={a.id}
                 {...a}
                 glyph={<Icon name={a.glyph} />}
                 interactive
-                comingSoon={!live}
+                onHold={hold}
+                comingSoon={!live && !hold}
                 status={live ? "success" : undefined}
                 onOpen={live ? () => onOpenAgent(a.id) : undefined}
                 added={live ? !!added[a.id] : undefined}
@@ -96,14 +98,16 @@ export function AgentsView({
       </div>
       <div className="cgrid cgrid--3">
         {list.map((a) => {
-          const live = isAgentLive(a.id);
+          const hold = isAgentOnHold(a.id);
+          const live = isAgentLive(a.id) && !hold;
           return (
             <AgentCard
               key={a.id}
               {...a}
               glyph={<Icon name={a.glyph} />}
               interactive
-              comingSoon={!live}
+              onHold={hold}
+              comingSoon={!live && !hold}
               status={live ? "success" : undefined}
               onOpen={live ? () => onOpenAgent(a.id) : undefined}
             />
