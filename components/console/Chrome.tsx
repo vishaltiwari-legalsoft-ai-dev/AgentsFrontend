@@ -154,10 +154,99 @@ function fmtUsd(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
+/** Viewer-local wall clock, 12-hour. Rendered only after mount so SSR markup
+ *  never carries a server-zone time (hydration-safe). */
+function ClockPill() {
+  const [now, setNow] = useState<Date | null>(null);
+
+  useEffect(() => {
+    const tick = () => setNow(new Date());
+    tick();
+    const id = setInterval(tick, 15_000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (!now) return null;
+  return (
+    <span
+      className="cstatsbar__stat cstatsbar__clock"
+      title={now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+    >
+      <Icon name="clock" />
+      <b>{now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", hour12: true })}</b>
+    </span>
+  );
+}
+
+const NOTE_KEY = "topbar-note";
+
+/** Personal scratch note — saved in this browser only (localStorage). */
+function StickyNotePill() {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    try {
+      setText(window.localStorage.getItem(NOTE_KEY) || "");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // Close on any outside click (same pattern as the bell popover).
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  const save = (v: string) => {
+    setText(v);
+    try {
+      window.localStorage.setItem(NOTE_KEY, v);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return (
+    <div className="cstatsbar__notewrap" ref={wrapRef}>
+      <button
+        type="button"
+        className="cstatsbar__stat cstatsbar__notebtn"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-label="Sticky note"
+      >
+        <Icon name="sticky-note" /> Note
+        {text.trim() !== "" && <span className="cstatsbar__notedot" aria-hidden />}
+      </button>
+      {open && (
+        <div className="cstatsbar__pop cstatsbar__notepop" role="dialog" aria-label="Sticky note">
+          <div className="cstatsbar__pophead"><Icon name="sticky-note" /> Sticky note</div>
+          <textarea
+            className="cstatsbar__notearea"
+            value={text}
+            onChange={(e) => save(e.target.value)}
+            placeholder="Jot anything — todos, reminders. Saved in this browser."
+            rows={7}
+            autoFocus
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
- * Top strip: live OpenRouter stats (tokens used, credits left, 30-day spend)
- * plus a notification bell on the right. The creator's news bulletin — which
- * used to scroll here as a marquee — now lives in the bell's popover.
+ * Top strip: viewer-local clock + sticky note, live OpenRouter stats (tokens
+ * used, credits left, 30-day spend) plus a notification bell on the right. The
+ * creator's news bulletin — which used to scroll here as a marquee — now lives
+ * in the bell's popover.
  */
 export function StatsBar() {
   const [stats, setStats] = useState<OrStats | null>(null);
@@ -246,6 +335,8 @@ export function StatsBar() {
 
   return (
     <header className="cstatsbar">
+      <ClockPill />
+      <StickyNotePill />
       {stats && !stats.configured ? null : (
         <>
           {stats?.tokens30d != null && (
