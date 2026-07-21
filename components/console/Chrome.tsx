@@ -246,12 +246,7 @@ export function StatsBar() {
 
   return (
     <header className="cstatsbar">
-      <span className="cstatsbar__label">
-        <Icon name="zap" /> OpenRouter
-      </span>
-      {stats && !stats.configured ? (
-        <span className="cstatsbar__hint">Add OPENROUTER_API_KEY in .env.local to see live stats</span>
-      ) : (
+      {stats && !stats.configured ? null : (
         <>
           {stats?.tokens30d != null && (
             <span className="cstatsbar__stat" title="Tokens used in the last 30 days">

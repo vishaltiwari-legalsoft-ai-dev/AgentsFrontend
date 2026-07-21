@@ -88,10 +88,6 @@
     border-bottom:1px solid var(--border-subtle); color:var(--text-primary);
     background:var(--surface);
     position:sticky; top:0; z-index:5; }
-  .cstatsbar__label{ flex:none; display:inline-flex; align-items:center; gap:7px; font-family:var(--font-display);
-    font-size:12.5px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--brand);
-    padding:6px 14px; border-radius:99px; background:var(--brand-bg); border:1px solid var(--brand-border); }
-  .cstatsbar__label svg{ width:15px; height:15px; }
   .cstatsbar__stat{ display:inline-flex; align-items:center; gap:7px; padding:6px 12px;
     border-radius:var(--radius-pill); background:var(--gray-100); border:1px solid var(--border-subtle);
     font-size:12.5px; font-weight:500; color:var(--text-secondary); white-space:nowrap; }
