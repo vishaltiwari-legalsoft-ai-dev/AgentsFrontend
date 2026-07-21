@@ -28,20 +28,14 @@ function Logo() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
       <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="lslogin" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#00B4D8" />
-            <stop offset="1" stopColor="#03045E" />
-          </linearGradient>
-        </defs>
-        <rect x="2" y="2" width="36" height="36" rx="9" fill="url(#lslogin)" />
+        <rect x="2" y="2" width="36" height="36" rx="9" fill="#7624f4" />
         <rect x="11" y="22" width="4.5" height="7" rx="1.2" fill="#fff" opacity="0.55" />
         <rect x="17.75" y="18" width="4.5" height="11" rx="1.2" fill="#fff" opacity="0.78" />
         <rect x="24.5" y="14" width="4.5" height="15" rx="1.2" fill="#fff" />
         <path d="M11 19.5 L18 15 L23 17.5 L30.5 11" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
         <path d="M27 10.4 L31 10 L30.6 14 Z" fill="#fff" />
       </svg>
-      <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 24, letterSpacing: "-0.01em", color: "var(--blue-900)" }}>
+      <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 24, letterSpacing: "-0.01em", color: "var(--text-primary)" }}>
         Legal<span style={{ color: "var(--blue-600)" }}>Soft</span>
       </span>
     </div>

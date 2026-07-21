@@ -22,6 +22,7 @@ import {
   CircleDashed,
   CircleDot,
   Clock,
+  Coins,
   Compass,
   Copy,
   CornerDownRight,
@@ -65,6 +66,7 @@ import {
   Upload,
   Users,
   UsersRound,
+  Wallet,
   X,
   Zap,
 } from "lucide-react";
@@ -95,6 +97,7 @@ const ICONS: Record<string, LucideIcon> = {
   "circle-dashed": CircleDashed,
   "circle-dot": CircleDot,
   clock: Clock,
+  coins: Coins,
   compass: Compass,
   copy: Copy,
   "corner-down-right": CornerDownRight,
@@ -139,6 +142,7 @@ const ICONS: Record<string, LucideIcon> = {
   upload: Upload,
   users: Users,
   "users-round": UsersRound,
+  wallet: Wallet,
   x: X,
   zap: Zap,
 };

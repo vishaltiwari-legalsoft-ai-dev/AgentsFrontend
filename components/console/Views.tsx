@@ -159,24 +159,23 @@ export function PlaceholderView({ title }: { title: string }) {
 }
 
 /** Selectable color themes. `id` matches the `data-theme` value on <html>
- *  ("ocean" is the default and clears the attribute). */
+ *  ("light" is the default and clears the attribute). */
 const THEMES = [
-  { id: "ocean", label: "Ocean", desc: "Premium blue", swatch: ["#0077B6", "#00B4D8", "#03045E"] },
-  { id: "sky", label: "Sky & Amber", desc: "Aqua & warm amber", swatch: ["#219EBC", "#8ECAE6", "#FFB703", "#FB8500"] },
-  { id: "prussian", label: "Midnight Orange", desc: "Prussian blue & orange", swatch: ["#14213D", "#FCA311", "#E5E5E5"] },
+  { id: "light", label: "Light", desc: "Grape on cloud", swatch: ["#7624f4", "#fcfcfe", "#03080a"] },
+  { id: "dark", label: "Dark", desc: "Volt on ink", swatch: ["#c8ff00", "#03080a", "#fcfcfe"] },
 ];
 
 function ThemePicker() {
-  const [theme, setTheme] = useState("ocean");
+  const [theme, setTheme] = useState("light");
 
   // Reflect whatever the no-flash script (or a previous session) already applied.
   useEffect(() => {
-    setTheme(document.documentElement.dataset.theme || "ocean");
+    setTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
   }, []);
 
   const apply = (id: string) => {
     setTheme(id);
-    if (id === "ocean") delete document.documentElement.dataset.theme;
+    if (id === "light") delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = id;
     try {
       window.localStorage.setItem("app-theme", id);

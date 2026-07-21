@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { Sidebar, NewsBar } from "@/components/console/Chrome";
+import { Sidebar, StatsBar } from "@/components/console/Chrome";
 import { HomeView, AgentsView, TeamsView, SettingsView } from "@/components/console/Views";
 import { IntegrationsView } from "@/components/console/IntegrationsView";
 import { isAgentLive, LIVE_AGENTS } from "@/lib/console-data";
@@ -138,7 +138,7 @@ export default function ConsoleApp() {
       <Sidebar nav={nav} setNav={setNav} user={user} isAdmin={user.is_admin} isCreator={user.is_creator} onLogout={logout} />
       <div className="cmain">
         <WorkBar />
-        {nav !== "workspace" && nav !== "studio" && <NewsBar />}
+        {nav !== "workspace" && nav !== "studio" && <StatsBar />}
         <div className="cscroll" style={nav === "workspace" || nav === "studio" ? { overflow: "hidden" } : undefined}>
           {nav === "home" && (
             <HomeView

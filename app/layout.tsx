@@ -16,11 +16,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Apply the saved color theme before first paint to avoid a flash. */}
+        {/* Apply the saved color theme before first paint to avoid a flash.
+            Legacy values (ocean/sky/prussian) fall through to the light default. */}
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "try{var t=localStorage.getItem('app-theme');if(t&&t!=='ocean')document.documentElement.dataset.theme=t;}catch(e){}",
+              "try{var t=localStorage.getItem('app-theme');if(t==='dark')document.documentElement.dataset.theme='dark';}catch(e){}",
           }}
         />
       </head>

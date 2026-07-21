@@ -27,15 +27,10 @@
   max-width: 440px;
   padding: 44px 38px 34px;
   text-align: center;
-  border-radius: 26px;
-  background:
-    radial-gradient(125% 80% at 50% -12%, color-mix(in srgb, var(--brand) 14%, transparent) 0%, transparent 58%),
-    var(--surface);
+  border-radius: var(--radius-2xl);
+  background: var(--surface);
   border: 1px solid var(--border);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.6),
-    0 28px 70px -28px color-mix(in srgb, var(--brand) 42%, transparent),
-    0 10px 30px -16px rgba(2, 32, 71, 0.20);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
   animation: fadeIn var(--dur-base) var(--ease-out);
 }
@@ -44,7 +39,7 @@
   position: absolute;
   inset: 0 0 auto 0;
   height: 3px;
-  background: var(--grad-duo);
+  background: var(--brand);
 }
 .gdlaunch__eyebrow {
   display: inline-flex;
@@ -76,11 +71,11 @@
   font-size: 13.5px;
   border-radius: var(--radius-lg);
   background: var(--surface-sunken, var(--surface));
-  box-shadow: inset 0 1px 2px rgba(2, 32, 71, 0.05);
+  box-shadow: none;
   transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
 }
 .gdlaunch__field .gdselect:focus {
-  box-shadow: 0 0 0 3px var(--brand-subtle), inset 0 1px 2px rgba(2, 32, 71, 0.05);
+  box-shadow: var(--ring);
 }
 
 /* ── Form controls ─────────────────────────────────────────────────────── */
@@ -145,7 +140,7 @@
   display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 1.4;
   padding: 9px 11px; border-radius: var(--radius-md); text-align: left;
 }
-.crea-banner--warn { background: rgba(232, 94, 12, 0.08); color: var(--cat-copy, #c2570f); border: 1px solid rgba(232, 94, 12, 0.25); }
+.crea-banner--warn { background: var(--cat-copy-bg); color: var(--cat-copy); border: 1px solid color-mix(in srgb, var(--cat-copy) 25%, transparent); }
 
 /* Workspace */
 .crea-wrap { display: flex; flex-direction: column; gap: 14px; padding: 18px 22px; overflow: auto; }
@@ -153,7 +148,7 @@
 .crea-head .gdminibtn { display: inline-flex; align-items: center; gap: 4px; }
 .crea-title { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0; flex: 1; }
 .crea-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 8px; border-radius: var(--radius-pill); background: var(--brand-subtle); color: var(--brand); }
-.crea-badge--auto { background: rgba(232, 94, 12, 0.12); color: var(--cat-copy, #c2570f); }
+.crea-badge--auto { background: var(--cat-copy-bg); color: var(--cat-copy); }
 
 /* Stepper */
 .crea-steps { display: flex; gap: 8px; list-style: none; padding: 0; margin: 0; flex-wrap: wrap; }
@@ -206,7 +201,7 @@
 
 /* Generation progress */
 .crea-progress { height: 6px; border-radius: var(--radius-pill); background: var(--surface-sunken, var(--border)); overflow: hidden; margin: 2px 0 14px; }
-.crea-progress__bar { height: 100%; border-radius: var(--radius-pill); background: linear-gradient(90deg, var(--brand), var(--accent)); transition: width 0.4s ease; }
+.crea-progress__bar { height: 100%; border-radius: var(--radius-pill); background: var(--brand); transition: width 0.4s ease; }
 
 /* Live slide thumbnails */
 .crea-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); gap: 10px; margin-bottom: 14px; }
@@ -241,9 +236,9 @@
 .crea-log__why { font-size: 11px; color: var(--text-secondary); line-height: 1.4; margin-top: 1px; }
 
 /* Autonomous warning modal */
-.crea-modal { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(2, 16, 38, 0.45); backdrop-filter: blur(2px); }
+.crea-modal { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(3, 8, 10, 0.45); }
 .crea-modal__box { width: min(460px, 92vw); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px 24px; box-shadow: var(--shadow-sm); }
-.crea-modal__h { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: var(--cat-copy, #c2570f); margin: 0 0 12px; }
+.crea-modal__h { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: var(--cat-copy); margin: 0 0 12px; }
 .crea-modal__text { font-size: 13px; line-height: 1.55; color: var(--text-secondary); margin: 0 0 18px; }
 .crea-modal__actions { display: flex; gap: 10px; justify-content: flex-end; }
 

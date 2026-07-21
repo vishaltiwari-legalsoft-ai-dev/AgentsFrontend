@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { User } from "@/lib/api";
 import { getNews } from "@/lib/api";
 import { Icon, Avatar, IconButton } from "@/lib/kit-ui";
@@ -22,22 +22,16 @@ const NAV2 = [
 
 function Logo() {
   return (
-    <div className="cbrand" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <div className="cbrand">
       <svg width="30" height="30" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="lsnav" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#00B4D8" />
-            <stop offset="1" stopColor="#03045E" />
-          </linearGradient>
-        </defs>
-        <rect x="2" y="2" width="36" height="36" rx="9" fill="url(#lsnav)" />
+        <rect x="2" y="2" width="36" height="36" rx="9" fill="#7624f4" />
         <rect x="11" y="22" width="4.5" height="7" rx="1.2" fill="#fff" opacity="0.55" />
         <rect x="17.75" y="18" width="4.5" height="11" rx="1.2" fill="#fff" opacity="0.78" />
         <rect x="24.5" y="14" width="4.5" height="15" rx="1.2" fill="#fff" />
         <path d="M11 19.5 L18 15 L23 17.5 L30.5 11" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
         <path d="M27 10.4 L31 10 L30.6 14 Z" fill="#fff" />
       </svg>
-      <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18, letterSpacing: "-0.01em", color: "var(--blue-900)" }}>
+      <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18, letterSpacing: "-0.01em", color: "var(--text-primary)" }}>
         Agent<span style={{ color: "var(--blue-600)" }}>Hub</span>
       </span>
     </div>
@@ -139,73 +133,179 @@ export function Sidebar({
   );
 }
 
-/**
- * Announcement strip that replaces the old top bar. Shows the single news
- * bulletin the creator writes (via the Agent-config panel), scrolling right →
- * left. Every signed-in user sees the same text; it refreshes on mount, when the
- * tab regains focus, and immediately after the creator saves a new message.
- */
-export function NewsBar() {
-  const [text, setText] = useState<string | null>(null);
+/** OpenRouter account stats served by /api/or-stats (key stays server-side). */
+interface OrStats {
+  configured: boolean;
+  error?: boolean;
+  totalCredits?: number | null;
+  totalUsage?: number | null;
+  tokens30d?: number | null;
+  spend30d?: number | null;
+}
 
+function fmtTokens(n: number): string {
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
+  return String(Math.round(n));
+}
+
+function fmtUsd(n: number): string {
+  return `$${n.toFixed(2)}`;
+}
+
+/**
+ * Top strip: live OpenRouter stats (tokens used, credits left, 30-day spend)
+ * plus a notification bell on the right. The creator's news bulletin — which
+ * used to scroll here as a marquee — now lives in the bell's popover.
+ */
+export function StatsBar() {
+  const [stats, setStats] = useState<OrStats | null>(null);
+  const [news, setNews] = useState<{ text: string; updated_at: string } | null>(null);
+  const [open, setOpen] = useState(false);
+  const [seenAt, setSeenAt] = useState<string>("");
+  const bellRef = useRef<HTMLDivElement | null>(null);
+
+  // Stats: fetch on mount and when the tab regains focus.
+  useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      fetch("/api/or-stats")
+        .then((r) => r.json())
+        .then((s: OrStats) => {
+          if (!cancelled) setStats(s);
+        })
+        .catch(() => {
+          if (!cancelled) setStats({ configured: true, error: true });
+        });
+    load();
+    window.addEventListener("focus", load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", load);
+    };
+  }, []);
+
+  // News: same refresh triggers as the old marquee (mount, focus, creator save).
   useEffect(() => {
     let cancelled = false;
     const load = () =>
       getNews()
         .then((n) => {
-          if (!cancelled) setText(n.text || "");
+          if (!cancelled) setNews({ text: n.text || "", updated_at: n.updated_at || "" });
         })
         .catch(() => {
-          if (!cancelled) setText("");
+          if (!cancelled) setNews({ text: "", updated_at: "" });
         });
     load();
-
-    const onFocus = () => load();
-    window.addEventListener("focus", onFocus);
-    window.addEventListener(NEWS_UPDATED_EVENT, onFocus);
+    window.addEventListener("focus", load);
+    window.addEventListener(NEWS_UPDATED_EVENT, load);
     return () => {
       cancelled = true;
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener(NEWS_UPDATED_EVENT, onFocus);
+      window.removeEventListener("focus", load);
+      window.removeEventListener(NEWS_UPDATED_EVENT, load);
     };
   }, []);
 
-  // Before the first fetch resolves, render the strip empty (no flash of text).
-  if (text === null) {
-    return (
-      <header className="cnewsbar cnewsbar--empty">
-        <span className="cnewsbar__tag">
-          <Icon name="megaphone" /> News
-        </span>
-      </header>
-    );
-  }
+  useEffect(() => {
+    try {
+      setSeenAt(window.localStorage.getItem("news-seen-at") || "");
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
-  if (!text) {
-    return (
-      <header className="cnewsbar cnewsbar--empty">
-        <span className="cnewsbar__tag">
-          <Icon name="megaphone" /> News
-        </span>
-        <span>No announcements right now.</span>
-      </header>
-    );
-  }
+  // Close the popover on any outside click.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
 
-  // Two copies of the message make the marquee loop seamlessly (the keyframe
-  // translates the track by exactly one copy's width, -50%).
+  const unread = Boolean(news?.text) && news!.updated_at !== seenAt;
+
+  const toggle = () => {
+    setOpen((o) => !o);
+    if (news?.updated_at) {
+      setSeenAt(news.updated_at);
+      try {
+        window.localStorage.setItem("news-seen-at", news.updated_at);
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+
+  const creditsLeft =
+    stats?.totalCredits != null && stats?.totalUsage != null
+      ? Math.max(0, stats.totalCredits - stats.totalUsage)
+      : null;
+
   return (
-    <header className="cnewsbar">
-      <span className="cnewsbar__tag">
-        <Icon name="megaphone" /> News
+    <header className="cstatsbar">
+      <span className="cstatsbar__label">
+        <Icon name="zap" /> OpenRouter
       </span>
-      <div className="cnewsbar__viewport">
-        <div className="cnewsbar__track">
-          <span className="cnewsbar__item">{text}</span>
-          <span className="cnewsbar__item" aria-hidden="true">
-            {text}
-          </span>
-        </div>
+      {stats && !stats.configured ? (
+        <span className="cstatsbar__hint">Add OPENROUTER_API_KEY in .env.local to see live stats</span>
+      ) : (
+        <>
+          {stats?.tokens30d != null && (
+            <span className="cstatsbar__stat" title="Tokens used in the last 30 days">
+              <Icon name="activity" /> Tokens (30d) <b>{fmtTokens(stats.tokens30d)}</b>
+            </span>
+          )}
+          {creditsLeft != null && (
+            <span className="cstatsbar__stat" title="Credits remaining on the account">
+              <Icon name="wallet" /> Credits left <b>{fmtUsd(creditsLeft)}</b>
+            </span>
+          )}
+          {stats?.spend30d != null && (
+            <span className="cstatsbar__stat" title="Spend in the last 30 days">
+              <Icon name="coins" /> Spend (30d) <b>{fmtUsd(stats.spend30d)}</b>
+            </span>
+          )}
+          {stats?.error && <span className="cstatsbar__hint">OpenRouter stats unavailable</span>}
+        </>
+      )}
+      <div className="cstatsbar__spacer" />
+      <div className="cstatsbar__bellwrap" ref={bellRef}>
+        <button
+          type="button"
+          className="cstatsbar__bell"
+          onClick={toggle}
+          aria-label="Notifications"
+          aria-expanded={open}
+        >
+          <Icon name="bell" />
+          {unread && <span className="cstatsbar__dot" />}
+        </button>
+        {open && (
+          <div className="cstatsbar__pop" role="dialog" aria-label="Announcements">
+            <div className="cstatsbar__pophead">
+              <Icon name="megaphone" /> Announcements
+            </div>
+            {news?.text ? (
+              <>
+                <p className="cstatsbar__poptext">{news.text}</p>
+                {news.updated_at && (
+                  <div className="cstatsbar__popdate">
+                    {new Date(news.updated_at).toLocaleDateString(undefined, {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="cstatsbar__poptext cstatsbar__poptext--muted">No announcements right now.</p>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );

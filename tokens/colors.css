@@ -1,283 +1,240 @@
-/* LegalSoft — Color tokens (Premium Ocean)
-   Brand kit: deep-twilight #03045E → french-blue #023E8A → bright-teal-blue #0077B6
-   → blue-green #0096C7 → turquoise-surf #00B4D8 → sky-aqua #48CAE4 → frosted/cyan tints.
-   Brand identity is the teal-blue #0077B6; accent is electric turquoise #00B4D8.
-   Gradients (navy → cyan) are core to the brand. */
+/* LegalSoft — Color tokens (OpenRouter Bauhaus)
+   Ink #03080a · Cloud #fcfcfe · Grape #7624f4 (light primary) · Volt #c8ff00 (dark primary)
+   Coral #ff6849 · Royal #035ade. Flat surfaces; elevation via 1px alpha borders.
+   Interaction states are the SAME hue at fixed alpha stops (05/08/0a/14/20/30/70/b0/e0). */
 :root {
-  /* ---- Neutral scale (cool, subtly cyan-tinted to harmonize with the ocean palette) ---- */
+  color-scheme: light;
+
+  /* ---- Neutral scale (ink-alpha ramp; legacy keys preserved) ---- */
   --gray-0:   #FFFFFF;
-  --gray-25:  #F8FBFD;
-  --gray-50:  #F2F8FB;   /* app canvas */
-  --gray-100: #E7F0F6;
-  --gray-150: #DAE7EF;
-  --gray-200: #C8DAE5;
-  --gray-300: #A7C1D0;
-  --gray-400: #7794A6;
-  --gray-500: #57707F;
-  --gray-600: #3F525F;
-  --gray-700: #2C3B45;
-  --gray-800: #1A2730;
-  --gray-900: #0E1820;
-  --ink:      #03045E;   /* deep-twilight — premium navy ink */
+  --gray-25:  #fcfcfe;   /* cloud */
+  --gray-50:  #03080a05;
+  --gray-100: #03080a08;
+  --gray-150: #03080a0a;
+  --gray-200: #03080a14;
+  --gray-300: #03080a20;
+  --gray-400: #03080a30;
+  --gray-500: #03080a70;
+  --gray-600: #03080ab0;
+  --gray-700: #03080ac9;
+  --gray-800: #03080ae0;
+  --gray-900: #03080a;
+  --ink:      #03080a;
 
-  /* ---- Warm neutral (kept for warnings only) ---- */
-  --cream-50: #FFFBF2;
-  --cream-100:#FFF7E9;
-  --cream-200:#FCEFD6;
+  /* ---- Warm neutral (coral-subtle; replaces cream) ---- */
+  --cream-50: #ff684905;
+  --cream-100:#ff684908;
+  --cream-200:#ff684914;
 
-  /* ---- Brand ocean ramp (light cyan → deep twilight) ---- */
-  --blue-50:  #E8F6FC;   /* derived icy tint */
-  --blue-100: #CAF0F8;   /* light-cyan */
-  --blue-200: #ADE8F4;   /* frosted-blue-2 */
-  --blue-300: #90E0EF;   /* frosted-blue */
-  --blue-400: #48CAE4;   /* sky-aqua */
-  --blue-500: #00B4D8;   /* turquoise-surf */
-  --blue-600: #0096C7;   /* blue-green */
-  --blue-700: #0077B6;   /* bright-teal-blue — brand main */
-  --blue-800: #023E8A;   /* french-blue */
-  --blue-900: #03045E;   /* deep-twilight */
+  /* ---- Brand ramp (grape; legacy --blue-* keys preserved) ---- */
+  --blue-50:  #7624f408;
+  --blue-100: #7624f414;
+  --blue-200: #7624f420;
+  --blue-300: #b79af9;
+  --blue-400: #9d6ef7;
+  --blue-500: #8946f5;
+  --blue-600: #7624f4;   /* grape — brand main */
+  --blue-700: #7624f4;
+  --blue-800: #6516d9;
+  --blue-900: #2d0a66;
 
-  /* ---- Accent (electric turquoise — the single high-energy pop) ---- */
-  --accent-50:  #E8FBFF;
-  --accent-100: #CAF0F8;
-  --accent-200: #ADE8F4;
-  --accent-400: #48CAE4;
-  --accent-500: #00B4D8;  /* turquoise-surf */
-  --accent-600: #0096C7;  /* blue-green */
-  --accent-700: #0077B6;  /* bright-teal-blue */
+  /* ---- Accent ramp (royal blue) ---- */
+  --accent-50:  #035ade08;
+  --accent-100: #035ade14;
+  --accent-200: #035ade20;
+  --accent-400: #4d8dff;
+  --accent-500: #035ade;
+  --accent-600: #0352c9;
+  --accent-700: #0348b0;
 
   /* ---- Semantic status ---- */
-  --green-50:  #E6F7EF;
-  --green-500: #12A150;
-  --green-600: #0E8543;
-  --amber-50:  var(--cream-100);
-  --amber-500: #D98A00;
-  --amber-600: #B87100;
-  --red-50:    #FCEBEC;
-  --red-500:   #E5484D;
-  --red-600:   #CB2B31;
+  --green-50:  #00bf6f14;
+  --green-500: #00bf6f;
+  --green-600: #007544;
+  --amber-50:  #e5a00014;
+  --amber-500: #e5a000;
+  --amber-600: #8a6000;
+  --red-50:    #ff2d5514;
+  --red-500:   #ff2d55;
+  --red-600:   #bf0024;
 
-  /* ---- Brand gradients (navy → cyan ocean) ---- */
-  --grad-brand:      linear-gradient(135deg, #0096C7 0%, #0077B6 50%, #023E8A 100%); /* @kind color */
-  --grad-brand-soft: linear-gradient(135deg, #48CAE4 0%, #F2F8FB 100%); /* @kind color */
-  --grad-duo:        linear-gradient(135deg, #03045E 0%, #0077B6 45%, #00B4D8 100%); /* @kind color */
-  --grad-accent:     linear-gradient(135deg, #48CAE4 0%, #0096C7 100%); /* @kind color */
-  --grad-warm:       linear-gradient(135deg, #CAF0F8 0%, #00B4D8 100%); /* @kind color */
-  --grad-hero:       radial-gradient(120% 90% at 85% 0%, #CAF0F8 0%, #F2F8FB 55%, #FFFFFF 100%); /* @kind color */
+  /* ---- Gradients — flattened (kept as vars for background-image consumers) ---- */
+  --grad-brand:      linear-gradient(135deg, #7624f4 0%, #7624f4 100%); /* @kind color */
+  --grad-brand-soft: linear-gradient(135deg, #7624f414 0%, #fcfcfe 100%); /* @kind color */
+  --grad-duo:        linear-gradient(135deg, #7624f4 0%, #035ade 100%); /* @kind color */
+  --grad-accent:     linear-gradient(135deg, #035ade 0%, #035ade 100%); /* @kind color */
+  --grad-warm:       linear-gradient(135deg, #ff684914 0%, #ff6849 100%); /* @kind color */
+  --grad-hero:       radial-gradient(120% 90% at 85% 0%, #7624f408 0%, #fcfcfe 60%, #ffffff 100%); /* @kind color */
 
-  /* ---- Playful per-domain palette (legal/marketing workstreams) ---- */
-  --cat-design-bg:   #D5EFF9;  --cat-design:   #0077B6;  /* on-brand teal-blue */
-  --cat-seo-bg:      #E6F6EC;  --cat-seo:      #109150;
-  --cat-copy-bg:     #FFF1E7;  --cat-copy:     #E85E0C;  /* one warm pop for variety */
-  --cat-social-bg:   #FCE9F2;  --cat-social:   #D63384;
-  --cat-ads-bg:      #E1ECF8;  --cat-ads:      #023E8A;  /* french-blue */
-  --cat-data-bg:     #D2F0F4;  --cat-data:     #0096C7;  /* blue-green */
+  /* ---- Category palette (workstreams) ---- */
+  --cat-design-bg:   #7624f414;  --cat-design:   #7624f4;
+  --cat-seo-bg:      #00bf6f14;  --cat-seo:      #007544;
+  --cat-copy-bg:     #ff684914;  --cat-copy:     #bf3d20;
+  --cat-social-bg:   #ff2d5514;  --cat-social:   #bf0024;
+  --cat-ads-bg:      #035ade14;  --cat-ads:      #0352c9;
+  --cat-data-bg:     #ffab0014;  --cat-data:     #8a6000;
 
   /* =========================================================
      Semantic aliases — reference these in components & kits
      ========================================================= */
-  --bg-app:          var(--gray-50);
-  --surface:         var(--gray-0);
-  --surface-card:    var(--gray-0);
-  --surface-sunken:  var(--gray-50);
-  --surface-hover:   var(--gray-50);
-  --surface-active:  var(--gray-100);
-  --surface-warm:    var(--cream-100);
+  --bg-app:          #fcfcfe;
+  --surface:         #ffffff;
+  --surface-card:    #ffffff;
+  --surface-sunken:  #03080a05;
+  --surface-hover:   #03080a08;
+  --surface-active:  #03080a14;
+  --surface-warm:    #ff684908;
 
-  --border-subtle:   var(--gray-150);
-  --border:          var(--gray-200);
-  --border-strong:   var(--gray-300);
+  --border-subtle:   #03080a14;
+  --border:          #03080a20;
+  --border-strong:   #03080a30;
 
-  --text-primary:    var(--blue-900);
-  --text-secondary:  var(--gray-600);
-  --text-tertiary:   var(--gray-500);
-  --text-disabled:   var(--gray-400);
-  --text-inverse:    var(--gray-0);
-  --text-link:       var(--blue-700);
+  --text-primary:    #03080a;
+  --text-secondary:  #03080ab0;
+  --text-tertiary:   #03080a70;
+  --text-disabled:   #03080a4d;
+  --text-inverse:    #fcfcfe;
+  --text-link:       #7624f4;
 
-  /* Brand teal-blue is the primary identity color */
-  --brand:           var(--blue-700);
-  --brand-hover:     var(--blue-800);
-  --brand-active:    var(--blue-900);
-  --brand-light:     var(--blue-400);
-  --brand-subtle:    var(--blue-50);
-  --brand-bg:        var(--blue-50);
-  --brand-border:    var(--blue-200);
-  --on-brand:        var(--gray-0);
+  --brand:           #7624f4;
+  --brand-hover:     #7624f4e0;
+  --brand-active:    #6516d9;
+  --brand-light:     #9d6ef7;
+  --brand-subtle:    #7624f408;
+  --brand-bg:        #7624f414;
+  --brand-border:    #7624f420;
+  --on-brand:        #fcfcfe;
 
-  /* Primary action = brand teal-blue (gradient-friendly) */
-  --action:          var(--blue-700);
-  --action-hover:    var(--blue-800);
-  --action-active:   var(--blue-900);
-  --on-action:       var(--gray-0);
+  --action:          #7624f4;
+  --action-hover:    #7624f4e0;
+  --action-active:   #6516d9;
+  --on-action:       #fcfcfe;
 
-  /* Accent = electric turquoise, for the single high-energy highlight / key CTA.
-     Pairs with deep-navy text (white is unreadable on bright cyan). */
-  --accent:          var(--accent-500);
-  --accent-hover:    var(--accent-600);
-  --accent-active:   var(--accent-700);
-  --accent-subtle:   var(--accent-100);
-  --on-accent:       var(--blue-900);
+  --accent:          #035ade;
+  --accent-hover:    #0352c9;
+  --accent-active:   #0348b0;
+  --accent-subtle:   #035ade14;
+  --on-accent:       #fcfcfe;
 
-  --focus-ring:      color-mix(in srgb, var(--blue-500) 50%, transparent);
+  --focus-ring:      #03080a0f;
 
-  --success:         var(--green-500);
-  --success-bg:      var(--green-50);
-  --warning:         var(--amber-500);
-  --warning-bg:      var(--cream-100);
-  --danger:          var(--red-500);
-  --danger-hover:    var(--red-600);
-  --danger-bg:       var(--red-50);
+  --success:         #00bf6f;
+  --success-bg:      #00bf6f14;
+  --warning:         #e5a000;
+  --warning-bg:      #e5a00014;
+  --danger:          #ff2d55;
+  --danger-hover:    #d91f47;
+  --danger-bg:       #ff2d5514;
 
-  /* Dotted canvas + frosted-glass finish */
-  --dot-grid:        rgba(2, 62, 138, 0.09);
-  --glass:           rgba(255, 255, 255, 0.60);
-  --glass-strong:    rgba(255, 255, 255, 0.74);
-  --glass-blur:      saturate(170%) blur(18px);
+  /* Frosted-glass finish — used by identity cards and elevated panels */
+  --dot-grid:        transparent;
+  --glass:           rgba(255, 255, 255, 0.66);
+  --glass-strong:    rgba(255, 255, 255, 0.78);
+  --glass-blur:      saturate(160%) blur(14px);
   --glass-edge:      inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 /* =========================================================
-   Selectable themes — set `data-theme` on <html> to switch.
-   Each block overrides the brand/accent ramps, key semantic
-   aliases and gradients; the neutral scale, status colors and
-   glass finish are inherited from the default (:root) Ocean theme.
+   Dark theme — ink canvas, volt primary, cloud-alpha neutrals.
+   Set `data-theme="dark"` on <html>; light is the default.
    ========================================================= */
+:root[data-theme="dark"] {
+  color-scheme: dark;
 
-/* ---- Theme: "Sky & Amber" — aqua blue-green with warm amber/orange pop ---- */
-:root[data-theme="sky"] {
-  --ink:        #023047;
+  --gray-0:   #0b1013;
+  --gray-25:  #03080a;
+  --gray-50:  #fcfcfe05;
+  --gray-100: #fcfcfe08;
+  --gray-150: #fcfcfe0a;
+  --gray-200: #fcfcfe14;
+  --gray-300: #fcfcfe20;
+  --gray-400: #fcfcfe30;
+  --gray-500: #fcfcfe70;
+  --gray-600: #fcfcfeb0;
+  --gray-700: #fcfcfec9;
+  --gray-800: #fcfcfee0;
+  --gray-900: #fcfcfe;
+  --ink:      #fcfcfe;
 
-  --blue-50:  #EAF6FA;
-  --blue-100: #D6EDF4;
-  --blue-200: #BCE2EE;
-  --blue-300: #8ECAE6;   /* sky-blue-light */
-  --blue-400: #5FB7D6;
-  --blue-500: #33A7C4;
-  --blue-600: #219EBC;   /* blue-green */
-  --blue-700: #1B7E97;   /* brand main (deeper blue-green) */
-  --blue-800: #0E5468;
-  --blue-900: #023047;   /* deep-space-blue */
+  --blue-50:  #c8ff0008;
+  --blue-100: #c8ff0014;
+  --blue-200: #c8ff0020;
+  --blue-300: #e2ff70;
+  --blue-400: #d4ff3d;
+  --blue-500: #c8ff00;
+  --blue-600: #c8ff00;   /* volt — brand main in dark */
+  --blue-700: #c8ff00;
+  --blue-800: #a5d400;
+  --blue-900: #2a3600;
 
-  --accent-50:  #FFF6E0;
-  --accent-100: #FFEBB3;
-  --accent-200: #FFD968;
-  --accent-400: #FFC22E;
-  --accent-500: #FFB703;  /* amber-flame */
-  --accent-600: #FB8500;  /* princeton-orange */
-  --accent-700: #D86E00;
+  --accent-400: #4d8dff;
 
-  --bg-app:          #DCF0F2;
-  --surface-hover:   #E4F4F8;
-  --surface-active:  #CFE9F1;
+  /* Status text brightened for readability on ink (chips, badges) */
+  --green-600: #3dd68c;
+  --amber-600: #ffab00;
+  --red-600:   #ff5c7f;
 
-  /* Tinted frosted glass — colors the sidebar + news bar */
-  --glass:           rgba(190, 226, 238, 0.55);
-  --glass-strong:    rgba(206, 235, 244, 0.80);
+  --grad-brand:      linear-gradient(135deg, #c8ff00 0%, #c8ff00 100%);
+  --grad-brand-soft: linear-gradient(135deg, #c8ff0014 0%, #03080a 100%);
+  --grad-duo:        linear-gradient(135deg, #7624f4 0%, #c8ff00 100%);
+  --grad-warm:       linear-gradient(135deg, #ff684914 0%, #ff6849 100%);
+  --grad-hero:       radial-gradient(120% 90% at 85% 0%, #c8ff0005 0%, #03080a 60%, #03080a 100%);
 
-  --text-primary:    #023047;
-  --text-secondary:  #2E6B7E;
-  --text-tertiary:   #5C8C9C;
-  --text-link:       #1B7E97;
+  --cat-design-bg:   #7624f420;  --cat-design:   #baa7ff;
+  --cat-seo-bg:      #00bf6f14;  --cat-seo:      #3dd68c;
+  --cat-copy-bg:     #ff684914;  --cat-copy:     #ff8c70;
+  --cat-social-bg:   #ff2d5514;  --cat-social:   #ff5c7f;
+  --cat-ads-bg:      #035ade20;  --cat-ads:      #4d8dff;
+  --cat-data-bg:     #ffab0014;  --cat-data:     #ffab00;
 
-  --brand:           #219EBC;
-  --brand-hover:     #1B7E97;
-  --brand-active:    #0E5468;
-  --brand-light:     #8ECAE6;
-  --brand-subtle:    #EAF6FA;
-  --brand-bg:        #EAF6FA;
-  --brand-border:    #BCE2EE;
-  --on-brand:        #FFFFFF;
+  --bg-app:          #03080a;
+  --surface:         #0b1013;
+  --surface-card:    #0b1013;
+  --surface-sunken:  #03080a;
+  --surface-hover:   #fcfcfe0a;
+  --surface-active:  #fcfcfe14;
+  --surface-warm:    #ff684908;
 
-  --action:          #219EBC;
-  --action-hover:    #1B7E97;
-  --action-active:   #0E5468;
-  --on-action:       #FFFFFF;
+  --border-subtle:   #fcfcfe14;
+  --border:          #fcfcfe20;
+  --border-strong:   #fcfcfe30;
 
-  --accent:          #FFB703;
-  --accent-hover:    #FB8500;
-  --accent-active:   #D86E00;
-  --accent-subtle:   #FFEBB3;
-  --on-accent:       #023047;
+  --text-primary:    #fcfcfe;
+  --text-secondary:  #fcfcfeb0;
+  --text-tertiary:   #fcfcfe70;
+  --text-disabled:   #fcfcfe4d;
+  --text-inverse:    #03080a;
+  --text-link:       #c8ff00;
 
-  --focus-ring:      color-mix(in srgb, #219EBC 50%, transparent);
-  --dot-grid:        rgba(2, 48, 71, 0.10);
+  --brand:           #c8ff00;
+  --brand-hover:     #c8ff00e0;
+  --brand-active:    #a5d400;
+  --brand-light:     #d4ff3d;
+  --brand-subtle:    #c8ff0008;
+  --brand-bg:        #c8ff0014;
+  --brand-border:    #c8ff0020;
+  --on-brand:        #03080a;
 
-  --grad-brand:      linear-gradient(135deg, #219EBC 0%, #1B7E97 50%, #023047 100%);
-  --grad-brand-soft: linear-gradient(135deg, #8ECAE6 0%, #F2F8FB 100%);
-  --grad-duo:        linear-gradient(135deg, #023047 0%, #219EBC 50%, #FFB703 100%);
-  --grad-accent:     linear-gradient(135deg, #FFB703 0%, #FB8500 100%);
-  --grad-warm:       linear-gradient(135deg, #FFE9B0 0%, #FFB703 100%);
-  --grad-hero:       radial-gradient(120% 90% at 85% 0%, #D6EDF4 0%, #F2F8FB 55%, #FFFFFF 100%);
-}
+  --action:          #c8ff00;
+  --action-hover:    #c8ff00e0;
+  --action-active:   #a5d400;
+  --on-action:       #03080a;
 
-/* ---- Theme: "Midnight Orange" — prussian-blue + orange on grey/white neutrals ---- */
-:root[data-theme="prussian"] {
-  --ink:        #14213D;
+  --accent:          #4d8dff;
+  --accent-hover:    #7fabff;
+  --accent-active:   #035ade;
+  --accent-subtle:   #035ade20;
+  --on-accent:       #03080a;
 
-  --blue-50:  #EDEFF4;
-  --blue-100: #DDE1EC;
-  --blue-200: #BBC2D6;
-  --blue-300: #8B96B5;
-  --blue-400: #5C6A92;
-  --blue-500: #3A496F;
-  --blue-600: #26345A;
-  --blue-700: #14213D;   /* prussian-blue — brand main */
-  --blue-800: #0D1628;
-  --blue-900: #000000;   /* black */
+  --focus-ring:      #fcfcfe0f;
 
-  --accent-50:  #FFF3DF;
-  --accent-100: #FEE3B0;
-  --accent-200: #FDD080;
-  --accent-400: #FDB94A;
-  --accent-500: #FCA311;  /* orange */
-  --accent-600: #E08800;
-  --accent-700: #B86E00;
+  --success-bg:      #00bf6f14;
+  --warning-bg:      #e5a00014;
+  --danger-bg:       #ff2d5514;
 
-  /* Neutrals leaning on alabaster grey / white */
-  --bg-app:          #E3E4EA;
-  --surface-hover:   #EDEEF2;
-  --surface-active:  #DCDDE3;
-  --border-subtle:   #DBDCE1;
-  --border:          #CDCED4;
-  --border-strong:   #BBBCC3;
-
-  /* Tinted frosted glass — colors the sidebar + news bar */
-  --glass:           rgba(20, 33, 61, 0.07);
-  --glass-strong:    rgba(221, 225, 236, 0.84);
-
-  --text-primary:    #14213D;
-  --text-secondary:  #3A4660;
-  --text-tertiary:   #6A7385;
-  --text-link:       #14213D;
-
-  --brand:           #14213D;
-  --brand-hover:     #0D1628;
-  --brand-active:    #000000;
-  --brand-light:     #5C6A92;
-  --brand-subtle:    #EDEFF4;
-  --brand-bg:        #EDEFF4;
-  --brand-border:    #BBC2D6;
-  --on-brand:        #FFFFFF;
-
-  --action:          #14213D;
-  --action-hover:    #0D1628;
-  --action-active:   #000000;
-  --on-action:       #FFFFFF;
-
-  --accent:          #FCA311;
-  --accent-hover:    #E08800;
-  --accent-active:   #B86E00;
-  --accent-subtle:   #FEE3B0;
-  --on-accent:       #14213D;
-
-  --focus-ring:      color-mix(in srgb, #14213D 50%, transparent);
-  --dot-grid:        rgba(20, 33, 61, 0.10);
-
-  --grad-brand:      linear-gradient(135deg, #26345A 0%, #14213D 55%, #0D1628 100%);
-  --grad-brand-soft: linear-gradient(135deg, #8B96B5 0%, #F4F4F5 100%);
-  --grad-duo:        linear-gradient(135deg, #000000 0%, #14213D 55%, #FCA311 100%);
-  --grad-accent:     linear-gradient(135deg, #FCA311 0%, #E08800 100%);
-  --grad-warm:       linear-gradient(135deg, #FEE3B0 0%, #FCA311 100%);
-  --grad-hero:       radial-gradient(120% 90% at 85% 0%, #DDE1EC 0%, #F4F4F5 55%, #FFFFFF 100%);
+  --dot-grid:        transparent;
+  --glass:           rgba(252, 252, 254, 0.04);
+  --glass-strong:    rgba(252, 252, 254, 0.07);
+  --glass-blur:      saturate(140%) blur(14px);
+  --glass-edge:      inset 0 1px 0 rgba(252, 252, 254, 0.07);
 }
