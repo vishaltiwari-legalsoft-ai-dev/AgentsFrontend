@@ -10,15 +10,20 @@ import { REPORT_META } from "./reportMeta";
 import { MrReportDoc } from "./MrReportDoc";
 import { fmtTime } from "./shared";
 
-/* The four recurring report views; everything else lives under "Other reports". */
-const PERIOD_VIEWS: { kind: MrReportKind; label: string }[] = [
-  { kind: "daily_summary", label: "Daily" },
-  { kind: "weekly_summary", label: "Weekly" },
-  { kind: "monthly_summary", label: "Monthly" },
-  { kind: "quarterly_summary", label: "Quarterly" },
-];
-const PERIOD_KINDS = PERIOD_VIEWS.map((p) => p.kind);
-const OTHER_KINDS = MR_REPORT_KINDS.filter((k) => !PERIOD_KINDS.includes(k));
+/* Short button labels — the full label + description live in the hover title
+   and on the generated document itself. */
+const KIND_LABELS: Partial<Record<MrReportKind, string>> = {
+  daily_summary: "Daily",
+  weekly_summary: "Weekly",
+  monthly_summary: "Monthly",
+  quarterly_summary: "Quarterly",
+  threshold_alert: "Threshold Alert",
+  competitor_digest: "Competitor Digest",
+  opportunity_report: "Media Opportunities",
+  utm_attribution: "UTM Attribution",
+  icp_signal: "ICP Signal",
+  daily_movement: "Daily Movement",
+};
 
 export function ReportsView({ runs, onRunsChanged, onToast }: {
   runs: MrRunSummary[];
@@ -48,55 +53,35 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
     }
   }
 
-  const activePeriod = report && PERIOD_KINDS.includes(report.kind) ? report.kind : null;
-
   return (
     <div className="mr-rpts">
       <aside className="mr-rpts__rail">
-        <h3 className="mr-section__title">Report views</h3>
-        <div className="mr-viewnav" role="tablist" aria-label="Report period">
-          {PERIOD_VIEWS.map((p) => (
+        <h3 className="mr-section__title">Generate a report</h3>
+        <div className="mr-genbtns">
+          {MR_REPORT_KINDS.map((k) => (
             <button
-              key={p.kind} className="mr-viewnav__btn" role="tab" disabled={busy}
-              aria-selected={activePeriod === p.kind}
-              onClick={() => void generate(p.kind)}
+              key={k} className="mr-genbtn" disabled={busy}
+              aria-pressed={report?.kind === k}
+              title={REPORT_META[k]?.desc}
+              onClick={() => void generate(k)}
             >
-              {p.label}
+              {KIND_LABELS[k] ?? REPORT_META[k]?.label ?? k}
             </button>
           ))}
         </div>
-        <p className="mr-viewnav__hint">
-          {activePeriod
-            ? REPORT_META[activePeriod].desc
-            : "Pick a period — the report is built fresh from the latest data, through yesterday."}
-        </p>
 
-        <h3 className="mr-section__title" style={{ marginTop: 14 }}>Other reports</h3>
-        <div className="mr-gen">
-          {OTHER_KINDS.map((k) => {
-            const m = REPORT_META[k];
-            return (
-              <button className="mr-gencard" key={k} disabled={busy} onClick={() => void generate(k)}>
-                <span className="mr-gencard__eyebrow">{m.eyebrow}</span>
-                <span className="mr-gencard__name">{m.label}</span>
-                <span className="mr-gencard__desc">{m.desc}</span>
+        <h3 className="mr-section__title" style={{ marginTop: 18 }}>History</h3>
+        {runs.length > 0 ? (
+          <div className="mr-hist">
+            {runs.map((r) => (
+              <button key={r.id} className="mr-hist__row" aria-current={report?.id === r.id} onClick={() => void open(r.id)}>
+                <span className="mr-hist__kind">{REPORT_META[r.kind]?.label ?? r.kind}</span>
+                <span className="mr-hist__ts">{fmtTime(r.generated_at)}</span>
               </button>
-            );
-          })}
-        </div>
-
-        {runs.length > 0 && (
-          <>
-            <h3 className="mr-section__title" style={{ marginTop: 18 }}>History</h3>
-            <div className="mr-hist">
-              {runs.map((r) => (
-                <button key={r.id} className="mr-hist__row" aria-current={report?.id === r.id} onClick={() => void open(r.id)}>
-                  <span className="mr-hist__kind">{REPORT_META[r.kind]?.label ?? r.kind}</span>
-                  <span className="mr-hist__ts">{fmtTime(r.generated_at)}</span>
-                </button>
-              ))}
-            </div>
-          </>
+            ))}
+          </div>
+        ) : (
+          <p className="mr-viewnav__hint">No reports yet — generate one above.</p>
         )}
       </aside>
 
@@ -106,7 +91,7 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
         ) : report ? (
           <MrReportDoc report={report} />
         ) : (
-          <div className="mr-empty">Pick a report view (Daily / Weekly / Monthly / Quarterly), generate one of the other reports, or open one from the history.</div>
+          <div className="mr-empty">Generate a report on the left, or open one from the history.</div>
         )}
       </div>
     </div>

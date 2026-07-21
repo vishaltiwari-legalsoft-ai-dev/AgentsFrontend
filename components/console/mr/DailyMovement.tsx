@@ -23,6 +23,7 @@ function sign(n: number | null, money: boolean): string {
 export function DailyMovement({ onToast }: { onToast: (m: string) => void }) {
   const [deltas, setDeltas] = useState<MrVendorDelta[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
 
   const load = useCallback(() => {
     mrSnapshotDeltas().then(setDeltas).catch(() => setDeltas([]));
@@ -66,27 +67,41 @@ export function DailyMovement({ onToast }: { onToast: (m: string) => void }) {
         <div className="mr-dm__grid">
           {deltas.map((d) => {
             const t = d.blocks.team_overall.additive;
+            const isOpen = !!open[d.vendor_slug];
+            const spend = t[HEADLINE[0].path];
             return (
-              <div className="mr-dm__card" key={d.vendor_slug}>
+              <button
+                type="button"
+                className="mr-dm__card"
+                key={d.vendor_slug}
+                data-open={isOpen ? "1" : "0"}
+                aria-expanded={isOpen}
+                onClick={() => setOpen((p) => ({ ...p, [d.vendor_slug]: !p[d.vendor_slug] }))}
+              >
                 <div className="mr-dm__vendor">
                   <span>{d.vendor}</span>
                   {d.month_start && <span className="badge-note">month start</span>}
                   {!d.month_start && d.days > 1 && <span className="badge-note">since {d.since} · {d.days}d</span>}
                   {d.corrected && <span className="badge-note badge-note--warn">corrected</span>}
+                  <span className="mr-dm__spacer" />
+                  {!isOpen && <b className="mr-dm__spend">{sign(spend?.delta ?? null, true)}</b>}
+                  <Icon name="chevron-down" size={14} className="mr-dm__chev" />
                 </div>
-                <div className="mr-dm__rows">
-                  {HEADLINE.map((h) => {
-                    const f = t[h.path];
-                    return (
-                      <div className="mr-dm__row" key={h.path}>
-                        <span>{h.label}</span>
-                        <b className={f?.corrected ? "mr-dm__neg" : undefined}>{sign(f?.delta ?? null, h.money)}</b>
-                        <small>MTD {h.money ? fmtMoney(f?.mtd) : fmtNum(f?.mtd)}</small>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+                {isOpen && (
+                  <div className="mr-dm__rows">
+                    {HEADLINE.map((h) => {
+                      const f = t[h.path];
+                      return (
+                        <div className="mr-dm__row" key={h.path}>
+                          <span>{h.label}</span>
+                          <b className={f?.corrected ? "mr-dm__neg" : undefined}>{sign(f?.delta ?? null, h.money)}</b>
+                          <small>MTD {h.money ? fmtMoney(f?.mtd) : fmtNum(f?.mtd)}</small>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </button>
             );
           })}
         </div>

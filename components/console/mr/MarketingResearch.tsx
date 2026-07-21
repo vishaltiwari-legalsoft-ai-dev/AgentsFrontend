@@ -154,7 +154,6 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
             overview={overview}
             busy={busy}
             onPull={pullSheet}
-            onAsk={askFromAnywhere}
             onGotoData={() => setView("data")}
             onToast={onToast}
           />

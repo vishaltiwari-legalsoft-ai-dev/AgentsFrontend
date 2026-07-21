@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import type { MrChannelAgg, MrMetricStatus } from "@/lib/api";
+import { Icon } from "@/lib/kit-ui";
 import { fmtMoney, fmtNum } from "./format";
 
 // The pure display helpers live in ./format so unit tests can import them
@@ -30,12 +32,12 @@ export function MetricRow({ label, value, goal, status }: {
   );
 }
 
-export function ChannelCard({ name, a }: { name: string; a: MrChannelAgg }) {
+export function ChannelCard({ name, a, collapsible = false }: { name: string; a: MrChannelAgg; collapsible?: boolean }) {
+  const [open, setOpen] = useState(false);
   const g = a.goal;
   const st = a.status ?? {};
-  return (
-    <div className="mr-card">
-      <div className="mr-card__top"><span className="mr-card__chan">{name}</span></div>
+  const body = (
+    <>
       <div className="mr-card__spend">{fmtMoney(a.spend)}<small>Spend</small></div>
       <div className="mr-counts">
         <div className="mr-count"><b>{fmtNum(a.leads)}</b><span>Leads</span></div>
@@ -50,6 +52,34 @@ export function ChannelCard({ name, a }: { name: string; a: MrChannelAgg }) {
         <MetricRow label="Cost / Demo Completed" value={a.cost_per_demo_completed} goal={g ? `goal $${g.cpd_completed_low}–${g.cpd_completed_high}` : undefined} status={st.cost_per_demo_completed} />
         <MetricRow label="CAC" value={a.cac} goal="target ≤ $2,500" status={st.cac} />
       </div>
-    </div>
+    </>
+  );
+
+  if (!collapsible) {
+    return (
+      <div className="mr-card">
+        <div className="mr-card__top"><span className="mr-card__chan">{name}</span></div>
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="mr-card mr-card--mini"
+      data-open={open ? "1" : "0"}
+      aria-expanded={open}
+      onClick={() => setOpen((o) => !o)}
+    >
+      <div className="mr-card__top">
+        <span className="mr-card__chan">{name}</span>
+        <span className="mr-card__minihead">
+          {!open && <b className="mr-card__minispend">{fmtMoney(a.spend)}</b>}
+          <Icon name="chevron-down" size={14} className="mr-card__chev" />
+        </span>
+      </div>
+      {open && body}
+    </button>
   );
 }

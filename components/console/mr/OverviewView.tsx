@@ -89,17 +89,13 @@ const KPIS = [
   { key: "cost_per_demo_completed", label: "Cost / demo completed", money: true },
 ] as const;
 
-const TEASERS = ["How did we perform this month?", "Where are we wasting spend?"];
-
-export function OverviewView({ overview, busy, onPull, onAsk, onGotoData, onToast }: {
+export function OverviewView({ overview, busy, onPull, onGotoData, onToast }: {
   overview: MrOverview | null;
   busy: boolean;
   onPull: () => void;
-  onAsk: (q: string) => void;
   onGotoData: () => void;
   onToast: (m: string) => void;
 }) {
-  const [teaser, setTeaser] = useState("");
   const [trends, setTrends] = useState<MrTrends | null>(null);
   const [portfolio, setPortfolio] = useState<MrPortfolio | null>(null);
   const [showSources, setShowSources] = useState(false);
@@ -218,31 +214,10 @@ export function OverviewView({ overview, busy, onPull, onAsk, onGotoData, onToas
       )}
       <div className="mr-cards">
         {Object.entries(overview.channels).map(([name, a]) => (
-          <ChannelCard key={name} name={name} a={a} />
+          <ChannelCard key={name} name={name} a={a} collapsible />
         ))}
       </div>
 
-      <div className="mr-teaser">
-        <div className="mr-ask__box">
-          <textarea
-            className="mr-ask__input" rows={1}
-            placeholder="Ask anything about this data…"
-            value={teaser}
-            onChange={(e) => setTeaser(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                if (teaser.trim()) onAsk(teaser.trim());
-              }
-            }}
-          />
-          <Button variant="brand" disabled={!teaser.trim()} onClick={() => onAsk(teaser.trim())}
-            iconLeft={<Icon name="sparkles" size={15} />}>Ask</Button>
-        </div>
-        <div className="mr-sugg">
-          {TEASERS.map((q) => <button key={q} className="mr-chip" onClick={() => onAsk(q)}>{q}</button>)}
-        </div>
-      </div>
     </div>
   );
 }
