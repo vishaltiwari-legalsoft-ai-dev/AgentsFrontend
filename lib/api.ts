@@ -1785,6 +1785,7 @@ export interface SeoRunNums {
 
 export interface SeoBrandCard {
   brand: SeoBrand;
+  gsc_connected?: boolean;
   last_run: {
     at: string;
     summary: SeoRunNums;
@@ -1842,8 +1843,19 @@ export interface SeoRun {
 
 export const seoOverview = () => getJson<SeoOverview>("/api/seo-geo/overview");
 
+export interface SeoGscStatus {
+  connected: boolean;
+  property: string | null;
+}
+
 export const seoBrandDetail = (id: string) =>
-  getJson<{ brand: SeoBrand; run: SeoRun | null }>(`/api/seo-geo/brands/${id}`);
+  getJson<{ brand: SeoBrand; run: SeoRun | null; gsc?: SeoGscStatus }>(`/api/seo-geo/brands/${id}`);
+
+export const seoOauthStart = (brandId: string) =>
+  getJson<{ url: string }>(`/api/seo-geo/oauth/start/${brandId}`);
+
+export const seoOauthDisconnect = (brandId: string) =>
+  postJson<{ connected: boolean }>(`/api/seo-geo/oauth/disconnect/${brandId}`, {});
 
 export const seoRunBrand = (id: string) =>
   postJson<{ at: string; summary: SeoRunNums; degraded: string[]; todo_count: number; topic_count: number }>(

@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  seoBrandDetail, seoDeleteBrand, seoOverview, seoRunBrand, seoSaveBrand, seoSetTodoStatus,
-  type SeoBrand, type SeoOverview, type SeoRun, type SeoTodoStatus, type SeoTopic,
+  seoBrandDetail, seoDeleteBrand, seoOauthDisconnect, seoOauthStart, seoOverview, seoRunBrand,
+  seoSaveBrand, seoSetTodoStatus,
+  type SeoBrand, type SeoGscStatus, type SeoOverview, type SeoRun, type SeoTodoStatus, type SeoTopic,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Icon, Tabs } from "@/lib/kit-ui";
@@ -118,6 +119,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
   const [overview, setOverview] = useState<SeoOverview | null>(null);
   const [brand, setBrand] = useState<SeoBrand | null>(null);
   const [run, setRun] = useState<SeoRun | null>(null);
+  const [gsc, setGsc] = useState<SeoGscStatus | null>(null);
   const [tab, setTab] = useState<SeoTab>("todos");
   const [busy, setBusy] = useState(false);
 
@@ -136,6 +138,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       const detail = await seoBrandDetail(id);
       setBrand(detail.brand);
       setRun(detail.run);
+      setGsc(detail.gsc ?? null);
       setTab("todos");
     } catch (e) {
       onToast(e instanceof Error ? e.message : "Failed to load brand");
@@ -148,7 +151,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
     try {
       await seoRunBrand(id);
       const detail = await seoBrandDetail(id);
-      if (brand?.id === id) { setBrand(detail.brand); setRun(detail.run); }
+      if (brand?.id === id) { setBrand(detail.brand); setRun(detail.run); setGsc(detail.gsc ?? null); }
       await refreshOverview();
       const summary = detail.run?.summary;
       if (summary?.mode === "rank-tracking") {
@@ -162,6 +165,27 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       onToast(e instanceof Error ? e.message : "Analysis failed");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function connectGsc(id: string) {
+    try {
+      const { url } = await seoOauthStart(id);
+      window.open(url, "_blank", "width=540,height=680");
+      onToast("Choose the Google account that owns the site's Search Console, press Allow, then hit Refresh data here.");
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "Could not start the Google connect");
+    }
+  }
+
+  async function disconnectGsc(id: string) {
+    if (!window.confirm("Disconnect Search Console? The brand falls back to live rank tracking.")) return;
+    try {
+      await seoOauthDisconnect(id);
+      setGsc({ connected: false, property: null });
+      onToast("Search Console disconnected");
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "Disconnect failed");
     }
   }
 
@@ -215,12 +239,15 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
               <span className="mr-panel__sub">Every site we watch — open one for its fix list and blog topics.</span>
             </div>
             <div className="seo-grid">
-              {(overview?.brands ?? []).map(({ brand: b, last_run }) => (
+              {(overview?.brands ?? []).map(({ brand: b, last_run, gsc_connected }) => (
                 <div key={b.id} className="seo-card" role="button" tabIndex={0}
                      onClick={() => void openBrand(b.id)}
                      onKeyDown={(e) => e.key === "Enter" && void openBrand(b.id)}>
                   <div className="seo-card__head">
-                    <span className="seo-card__name">{b.name}</span>
+                    <span className="seo-card__name">
+                      {b.name}
+                      {gsc_connected && <span className="seo-chip seo-chip--on seo-card__gsc">GSC ✓</span>}
+                    </span>
                     <span className="seo-card__domain">{b.domain}</span>
                   </div>
                   {last_run ? (
@@ -286,6 +313,19 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                 <span className="mr-panel__sub">{brand.domain}{run ? ` · analyzed ${run.at}` : ""}</span>
               </div>
               <div className="seo-detail__actions">
+                {gsc?.connected ? (
+                  <span className="seo-chip seo-chip--on" title={gsc.property ?? undefined}>
+                    Search Console ✓
+                    {user?.is_creator && (
+                      <button className="seo-chip__x" aria-label="Disconnect Search Console"
+                              onClick={() => void disconnectGsc(brand.id)}>×</button>
+                    )}
+                  </span>
+                ) : (
+                  <button className="seo-btn" onClick={() => void connectGsc(brand.id)}>
+                    <Icon name="link" size={13} /> Connect Search Console
+                  </button>
+                )}
                 <button className="seo-btn seo-btn--primary" disabled={busy} onClick={() => void runBrand(brand.id)}>
                   <Icon name="refresh-cw" size={13} /> Refresh data
                 </button>
