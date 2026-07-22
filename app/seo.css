@@ -264,3 +264,19 @@
 .seo-msg--busy { color: var(--text-tertiary); }
 
 .seo-card__gsc { margin-left: 8px; font-size: 10px; padding: 3px 7px; vertical-align: 2px; }
+
+/* Card headline + plan of action ------------------------------------------- */
+.seo-card__headline { font: 500 12.5px/1.45 var(--font-sans); color: var(--text-primary); }
+.seo-poa { border-left: 3px solid var(--green-500); }
+.seo-poa__item { display: flex; gap: 12px; align-items: flex-start; }
+.seo-poa__num {
+  font: 700 13px/1 var(--font-mono);
+  color: var(--green-500);
+  border: 1px solid color-mix(in srgb, var(--green-500) 45%, transparent);
+  border-radius: 999px;
+  padding: 5px 9px;
+  flex-shrink: 0;
+}
+.seo-poa__body { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.seo-poa__action { font: 600 13.5px/1.35 var(--font-sans); }
+.seo-poa__detail { font: 400 12.5px/1.45 var(--font-sans); color: var(--text-secondary); }

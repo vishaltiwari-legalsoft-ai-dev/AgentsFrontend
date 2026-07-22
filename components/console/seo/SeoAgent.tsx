@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  seoBrandDetail, seoDeleteBrand, seoOauthDisconnect, seoOauthStart, seoOverview, seoRunBrand,
-  seoSaveBrand, seoSetTodoStatus,
-  type SeoBrand, type SeoGscStatus, type SeoOverview, type SeoRun, type SeoTodoStatus, type SeoTopic,
+  seoAnalyzeSite, seoBrandDetail, seoDeleteBrand, seoOauthDisconnect, seoOauthStart, seoOverview,
+  seoRunBrand, seoSaveBrand, seoSetTodoStatus,
+  type SeoBrand, type SeoGscStatus, type SeoOverview, type SeoPlanItem, type SeoRun,
+  type SeoSiteReview, type SeoTodoStatus, type SeoTopic,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Icon, Tabs } from "@/lib/kit-ui";
@@ -120,6 +121,9 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
   const [brand, setBrand] = useState<SeoBrand | null>(null);
   const [run, setRun] = useState<SeoRun | null>(null);
   const [gsc, setGsc] = useState<SeoGscStatus | null>(null);
+  const [plan, setPlan] = useState<SeoPlanItem[]>([]);
+  const [siteReview, setSiteReview] = useState<SeoSiteReview | null>(null);
+  const [siteBusy, setSiteBusy] = useState(false);
   const [tab, setTab] = useState<SeoTab>("todos");
   const [busy, setBusy] = useState(false);
 
@@ -139,6 +143,8 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       setBrand(detail.brand);
       setRun(detail.run);
       setGsc(detail.gsc ?? null);
+      setPlan(detail.plan ?? []);
+      setSiteReview(detail.site_review ?? null);
       setTab("todos");
     } catch (e) {
       onToast(e instanceof Error ? e.message : "Failed to load brand");
@@ -151,7 +157,13 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
     try {
       await seoRunBrand(id);
       const detail = await seoBrandDetail(id);
-      if (brand?.id === id) { setBrand(detail.brand); setRun(detail.run); setGsc(detail.gsc ?? null); }
+      if (brand?.id === id) {
+        setBrand(detail.brand);
+        setRun(detail.run);
+        setGsc(detail.gsc ?? null);
+        setPlan(detail.plan ?? []);
+        setSiteReview(detail.site_review ?? null);
+      }
       await refreshOverview();
       const summary = detail.run?.summary;
       if (summary?.mode === "rank-tracking") {
@@ -165,6 +177,23 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       onToast(e instanceof Error ? e.message : "Analysis failed");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function analyzeSite(id: string) {
+    setSiteBusy(true);
+    onToast("Reading the website — crawling pages and running the expert review (takes a minute or two)…");
+    try {
+      const review = await seoAnalyzeSite(id);
+      setSiteReview(review);
+      const detail = await seoBrandDetail(id);
+      setRun(detail.run);
+      setPlan(detail.plan ?? []);
+      onToast(`Site review done — ${review.issues.length} finding(s) added to the fix list`);
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "Site analysis failed");
+    } finally {
+      setSiteBusy(false);
     }
   }
 
@@ -239,7 +268,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
               <span className="mr-panel__sub">Every site we watch — open one for its fix list and blog topics.</span>
             </div>
             <div className="seo-grid">
-              {(overview?.brands ?? []).map(({ brand: b, last_run, gsc_connected }) => (
+              {(overview?.brands ?? []).map(({ brand: b, last_run, gsc_connected, headline }) => (
                 <div key={b.id} className="seo-card" role="button" tabIndex={0}
                      onClick={() => void openBrand(b.id)}
                      onKeyDown={(e) => e.key === "Enter" && void openBrand(b.id)}>
@@ -250,6 +279,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                     </span>
                     <span className="seo-card__domain">{b.domain}</span>
                   </div>
+                  {headline && <div className="seo-card__headline">{headline}</div>}
                   {last_run ? (
                     <>
                       <div className="seo-card__stats">
@@ -326,6 +356,9 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                     <Icon name="link" size={13} /> Connect Search Console
                   </button>
                 )}
+                <button className="seo-btn" disabled={siteBusy} onClick={() => void analyzeSite(brand.id)}>
+                  <Icon name="search" size={13} /> {siteReview ? "Re-analyze website" : "Analyze website"}
+                </button>
                 <button className="seo-btn seo-btn--primary" disabled={busy} onClick={() => void runBrand(brand.id)}>
                   <Icon name="refresh-cw" size={13} /> Refresh data
                 </button>
@@ -334,6 +367,51 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                 )}
               </div>
             </div>
+
+            {plan.length > 0 && (
+              <div className="mr-section seo-poa">
+                <h3 className="mr-section__title">Plan of action — do these first</h3>
+                {plan.map((p, i) => (
+                  <div key={i} className="seo-poa__item">
+                    <span className="seo-poa__num">{i + 1}</span>
+                    <div className="seo-poa__body">
+                      <span className="seo-poa__action">{p.action}</span>
+                      <span className="seo-poa__detail">{p.detail}</span>
+                    </div>
+                    <span className="seo-chip">{p.source}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {siteReview && (
+              <div className="mr-section">
+                <h3 className="mr-section__title">
+                  Site review — {siteReview.page_count} pages read · {siteReview.at}
+                </h3>
+                {siteReview.positioning && <div className="seo-poa__action">{siteReview.positioning}</div>}
+                {siteReview.strengths.length > 0 && (
+                  <div className="seo-cluster__kws">
+                    {siteReview.strengths.map((s) => (
+                      <span key={s} className="seo-chip seo-chip--on">{s}</span>
+                    ))}
+                  </div>
+                )}
+                {siteReview.missing_topics.length > 0 && (
+                  <>
+                    <div className="seo-lab__meta">Topics the site doesn't cover yet — blog fuel:</div>
+                    <div className="seo-cluster__kws">
+                      {siteReview.missing_topics.map((t) => (
+                        <span key={t} className="seo-chip seo-chip--cov-gap">{t}</span>
+                      ))}
+                    </div>
+                  </>
+                )}
+                <div className="seo-lab__meta">
+                  Findings are in the Fix list with everything else — nothing to read twice.
+                </div>
+              </div>
+            )}
 
             {run && <DegradedNotes notes={run.degraded} domain={brand.domain} />}
 
@@ -453,7 +531,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                         ) : (
                           <div className="seo-todo__gain seo-todo__gain--pos">
                             {t.position > 0 ? `#${t.position}` : "—"}
-                            <small>{t.position > 0 ? "current pos" : "not ranked"}</small>
+                            <small>{t.position > 0 ? "current pos" : t.kind === "site" ? "site fix" : "not ranked"}</small>
                           </div>
                         )}
                         <div className="seo-todo__body">

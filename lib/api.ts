@@ -1786,6 +1786,7 @@ export interface SeoRunNums {
 export interface SeoBrandCard {
   brand: SeoBrand;
   gsc_connected?: boolean;
+  headline?: string | null;
   last_run: {
     at: string;
     summary: SeoRunNums;
@@ -1848,8 +1849,43 @@ export interface SeoGscStatus {
   property: string | null;
 }
 
+export interface SeoSiteIssue {
+  insight: string;
+  evidence: string;
+  action: string;
+  priority: "high" | "medium" | "low";
+  category: "content" | "structure" | "trust" | "other";
+}
+
+export interface SeoSiteReview {
+  at: string;
+  page_count: number;
+  positioning: string;
+  strengths: string[];
+  issues: SeoSiteIssue[];
+  suggested_seeds: string[];
+  covered_topics: string[];
+  missing_topics: string[];
+  degraded: string[];
+}
+
+export interface SeoPlanItem {
+  source: string;
+  action: string;
+  detail: string;
+}
+
 export const seoBrandDetail = (id: string) =>
-  getJson<{ brand: SeoBrand; run: SeoRun | null; gsc?: SeoGscStatus }>(`/api/seo-geo/brands/${id}`);
+  getJson<{
+    brand: SeoBrand;
+    run: SeoRun | null;
+    gsc?: SeoGscStatus;
+    plan?: SeoPlanItem[];
+    site_review?: SeoSiteReview | null;
+  }>(`/api/seo-geo/brands/${id}`);
+
+export const seoAnalyzeSite = (brandId: string) =>
+  postJson<SeoSiteReview>(`/api/seo-geo/site-review/${brandId}`, {});
 
 export const seoOauthStart = (brandId: string) =>
   getJson<{ url: string }>(`/api/seo-geo/oauth/start/${brandId}`);
