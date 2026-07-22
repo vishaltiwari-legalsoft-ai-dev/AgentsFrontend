@@ -390,6 +390,22 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                   Site review — {siteReview.page_count} pages read · {siteReview.at}
                 </h3>
                 {siteReview.positioning && <div className="seo-poa__action">{siteReview.positioning}</div>}
+                {siteReview.scorecard && Object.keys(siteReview.scorecard).length > 0 && (
+                  <div className="seo-cluster__kws">
+                    {Object.entries(siteReview.scorecard).map(([key, cell]) => {
+                      const label = {
+                        intent: "Intent", content_depth: "Content depth", architecture: "Architecture",
+                        trust: "Trust", conversion: "Conversion", ai_search: "AI search",
+                      }[key] ?? key;
+                      const cls = cell.grade >= 4 ? "seo-chip--on" : cell.grade === 3 ? "seo-chip--sev-medium" : "seo-chip--sev-high";
+                      return (
+                        <span key={key} className={`seo-chip ${cls}`} title={cell.note}>
+                          {label} {cell.grade}/5
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
                 {siteReview.strengths.length > 0 && (
                   <div className="seo-cluster__kws">
                     {siteReview.strengths.map((s) => (

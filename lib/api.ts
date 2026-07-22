@@ -1861,6 +1861,7 @@ export interface SeoSiteReview {
   at: string;
   page_count: number;
   positioning: string;
+  scorecard?: Record<string, { grade: number; note: string }>;
   strengths: string[];
   issues: SeoSiteIssue[];
   suggested_seeds: string[];
