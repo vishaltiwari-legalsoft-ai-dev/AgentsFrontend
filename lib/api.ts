@@ -1852,3 +1852,141 @@ export async function seoDeleteBrand(id: string): Promise<{ brands: SeoBrand[] }
 
 export const seoSetTodoStatus = (brandId: string, todoId: string, status: SeoTodoStatus) =>
   postJson<{ id: string; status: SeoTodoStatus }>(`/api/seo-geo/todos/${brandId}/${todoId}`, { status });
+
+/* ------------------------ SEO agent: researcher layer --------------------- */
+
+export interface SeoCluster {
+  name: string;
+  intent: "informational" | "commercial" | "transactional" | "navigational" | "local";
+  keywords: string[];
+  volume_est: number;
+  best_position: number | null;
+  coverage: "gap" | "weak" | "ranking";
+  opportunity: number;
+}
+
+export interface SeoKeywordLab {
+  brand_id: string;
+  at: string;
+  keyword_count: number;
+  degraded: string[];
+  clusters: SeoCluster[];
+  gaps: string[];
+}
+
+export interface SeoRankShift {
+  keyword: string;
+  position: number | null;
+  previous: number | null;
+  delta: number | null;
+  top: string[];
+}
+
+export interface SeoSitemapEntry {
+  at: string;
+  total: number;
+  new_urls: string[];
+  new_count: number;
+  first_check: boolean;
+}
+
+export interface SeoCompetitors {
+  tracked: string[];
+  suggested: string[];
+  shifts: SeoRankShift[];
+  feed: Record<string, SeoSitemapEntry>;
+}
+
+export interface SeoBrief {
+  id: string;
+  keyword: string;
+  at: string;
+  intent: string;
+  target_keywords: string[];
+  outline: { heading: string; note: string }[];
+  questions: string[];
+  entities: string[];
+  target_word_count: number;
+  schema_recommended: string[];
+  internal_links: string[];
+  who_ranks: { domain: string; title: string; position: number }[];
+  our_position: number | null;
+  aio_present: boolean;
+  degraded: string[];
+}
+
+export interface SeoAuditIssue {
+  issue: string;
+  severity: "high" | "medium" | "low";
+  count: number;
+  pages: string[];
+  fix: string;
+}
+
+export interface SeoAuditReport {
+  brand_id: string;
+  at: string;
+  pages_checked: number;
+  pages_ok: number;
+  health_score: number;
+  issues: SeoAuditIssue[];
+}
+
+export interface SeoDraftScore {
+  score: number;
+  verdict: "publish-ready" | "needs work" | "rework";
+  keyword: string;
+  word_count: number;
+  checks: { name: string; ok: boolean; note: string; weight: number }[];
+}
+
+export interface SeoUpdatePlan {
+  page: string;
+  at: string;
+  query: string;
+  our_position: number | null;
+  suggestions: string[];
+}
+
+export const seoKeywordLab = (brandId: string) =>
+  getJson<{ lab: SeoKeywordLab | null }>(`/api/seo-geo/keywords/${brandId}`);
+
+export const seoRunKeywordLab = (brandId: string) =>
+  postJson<SeoKeywordLab>(`/api/seo-geo/keywords/${brandId}/run`, {});
+
+export const seoCompetitors = (brandId: string) =>
+  getJson<SeoCompetitors>(`/api/seo-geo/competitors/${brandId}`);
+
+export async function seoSetCompetitors(brandId: string, domains: string[]): Promise<{ tracked: string[] }> {
+  const response = await request(`/api/seo-geo/competitors/${brandId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ domains }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as { tracked: string[] };
+}
+
+export const seoTrackCompetitors = (brandId: string) =>
+  postJson<{ shifts: SeoRankShift[]; feed: Record<string, SeoSitemapEntry>; degraded: string[] }>(
+    `/api/seo-geo/competitors/${brandId}/track`,
+    {},
+  );
+
+export const seoBriefs = (brandId: string) =>
+  getJson<{ briefs: SeoBrief[] }>(`/api/seo-geo/briefs/${brandId}`);
+
+export const seoBuildBrief = (brandId: string, keyword: string) =>
+  postJson<SeoBrief>(`/api/seo-geo/briefs/${brandId}`, { keyword });
+
+export const seoAuditReport = (brandId: string) =>
+  getJson<{ report: SeoAuditReport | null }>(`/api/seo-geo/audit/${brandId}`);
+
+export const seoRunAudit = (brandId: string) =>
+  postJson<SeoAuditReport>(`/api/seo-geo/audit/${brandId}/run`, {});
+
+export const seoDraftScore = (brandId: string, text: string, keyword: string) =>
+  postJson<SeoDraftScore>(`/api/seo-geo/draft-score/${brandId}`, { text, keyword });
+
+export const seoUpdatePlan = (brandId: string, page: string) =>
+  postJson<SeoUpdatePlan>(`/api/seo-geo/update-plan/${brandId}`, { page });

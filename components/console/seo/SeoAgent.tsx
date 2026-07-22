@@ -7,6 +7,9 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Icon, Tabs } from "@/lib/kit-ui";
+import { AuditView, BriefsView, CompetitorsView, KeywordsView, UpdatePlanButton } from "./labs";
+
+type SeoTab = "todos" | "keywords" | "topics" | "competitors" | "briefs" | "audit";
 
 /** SEO agent (a2) — per-brand insights, traffic-estimated to-dos, blog topic lab. */
 
@@ -115,7 +118,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
   const [overview, setOverview] = useState<SeoOverview | null>(null);
   const [brand, setBrand] = useState<SeoBrand | null>(null);
   const [run, setRun] = useState<SeoRun | null>(null);
-  const [tab, setTab] = useState<"todos" | "topics">("todos");
+  const [tab, setTab] = useState<SeoTab>("todos");
   const [busy, setBusy] = useState(false);
 
   const refreshOverview = useCallback(async () => {
@@ -273,12 +276,6 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
 
             {run && <DegradedNotes notes={run.degraded} domain={brand.domain} />}
 
-            {!run && (
-              <div className="mr-section seo-empty">
-                No analysis yet — hit “Refresh data” to pull the first 28 days of search performance.
-              </div>
-            )}
-
             {run && (
               <>
                 <div className="seo-summary">
@@ -311,16 +308,36 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                     </ul>
                   </div>
                 )}
+              </>
+            )}
 
-                <Tabs
-                  items={[
-                    { value: "todos", label: "Fix list", count: run.todos.length || undefined },
-                    { value: "topics", label: "Blog topics", count: run.topics.length || undefined },
-                  ]}
-                  value={tab}
-                  onChange={(v) => setTab(v as "todos" | "topics")}
-                />
+            <Tabs
+              items={[
+                { value: "todos", label: "Fix list", count: run?.todos.length || undefined },
+                { value: "keywords", label: "Keywords" },
+                { value: "topics", label: "Blog topics", count: run?.topics.length || undefined },
+                { value: "competitors", label: "Competitors" },
+                { value: "briefs", label: "Briefs" },
+                { value: "audit", label: "Audit" },
+              ]}
+              value={tab}
+              onChange={(v) => setTab(v as SeoTab)}
+            />
 
+            {tab === "keywords" && <KeywordsView brandId={brand.id} onToast={onToast} />}
+            {tab === "competitors" && (
+              <CompetitorsView brandId={brand.id} isCreator={!!user?.is_creator} onToast={onToast} />
+            )}
+            {tab === "briefs" && <BriefsView brandId={brand.id} onToast={onToast} />}
+            {tab === "audit" && <AuditView brandId={brand.id} brandName={brand.name} onToast={onToast} />}
+            {(tab === "todos" || tab === "topics") && !run && (
+              <div className="mr-section seo-empty">
+                No analysis yet — hit “Refresh data” to pull the first 28 days of search performance.
+              </div>
+            )}
+
+            {run && (
+              <>
                 {tab === "todos" && (
                   <div className="mr-section">
                     <h3 className="mr-section__title">Prioritized fixes — biggest estimated gain first</h3>
@@ -336,6 +353,9 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                             {t.position > 0 && <span>pos {t.position}</span>}
                             <span>{fmt(t.impressions)} impressions</span>
                           </div>
+                          {t.kind === "decay" && (
+                            <UpdatePlanButton brandId={brand.id} page={t.page} onToast={onToast} />
+                          )}
                         </div>
                         <select className={`seo-status seo-status--${t.status}`} value={t.status}
                                 onChange={(e) => void setStatus(t.id, e.target.value as SeoTodoStatus)}>
