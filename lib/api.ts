@@ -1768,11 +1768,19 @@ export interface SeoBrand {
 }
 
 export interface SeoRunNums {
+  /** "search-console" = impression-based numbers; "rank-tracking" = live SERP positions only. */
+  mode?: "search-console" | "rank-tracking";
   clicks_28d: number;
   clicks_prev_28d: number;
   impressions_28d: number;
   avg_position: number;
   est_potential_clicks: number;
+  tracked?: number;
+  top3?: number;
+  top10?: number;
+  unranked?: number;
+  moved_up?: number;
+  moved_down?: number;
 }
 
 export interface SeoBrandCard {
@@ -1800,9 +1808,9 @@ export interface SeoTodo {
   query: string;
   action: string;
   why: string;
-  est_monthly_clicks: number;
+  est_monthly_clicks: number | null;
   position: number;
-  impressions: number;
+  impressions: number | null;
   status: SeoTodoStatus;
 }
 

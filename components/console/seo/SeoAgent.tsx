@@ -151,9 +151,13 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       if (brand?.id === id) { setBrand(detail.brand); setRun(detail.run); }
       await refreshOverview();
       const summary = detail.run?.summary;
-      onToast(summary?.est_potential_clicks
-        ? `Done — est. +${fmt(summary.est_potential_clicks)} clicks/month on the table`
-        : "Done — see the brand card for data status");
+      if (summary?.mode === "rank-tracking") {
+        onToast(`Done — ${summary.top10 ?? 0}/${summary.tracked ?? 0} tracked keywords on page 1 (live rankings)`);
+      } else if (summary?.est_potential_clicks) {
+        onToast(`Done — est. +${fmt(summary.est_potential_clicks)} clicks/month on the table`);
+      } else {
+        onToast("Done — see the brand card for data status");
+      }
     } catch (e) {
       onToast(e instanceof Error ? e.message : "Analysis failed");
     } finally {
@@ -222,19 +226,36 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                   {last_run ? (
                     <>
                       <div className="seo-card__stats">
-                        <div className="seo-stat">
-                          <span className="seo-stat__label">Clicks · 28d</span>
-                          <span className="seo-stat__num">
-                            {fmt(last_run.summary.clicks_28d)}
-                            <Delta now={last_run.summary.clicks_28d} prev={last_run.summary.clicks_prev_28d} />
-                          </span>
-                        </div>
-                        <div className="seo-stat">
-                          <span className="seo-stat__label">Est. upside</span>
-                          <span className="seo-stat__num seo-stat__num--good">
-                            +{fmt(last_run.summary.est_potential_clicks)}/mo
-                          </span>
-                        </div>
+                        {last_run.summary.mode === "rank-tracking" ? (
+                          <>
+                            <div className="seo-stat">
+                              <span className="seo-stat__label">Page 1</span>
+                              <span className="seo-stat__num">
+                                {last_run.summary.top10 ?? 0}/{last_run.summary.tracked ?? 0}
+                              </span>
+                            </div>
+                            <div className="seo-stat">
+                              <span className="seo-stat__label">Not ranking</span>
+                              <span className="seo-stat__num">{last_run.summary.unranked ?? 0}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="seo-stat">
+                              <span className="seo-stat__label">Clicks · 28d</span>
+                              <span className="seo-stat__num">
+                                {fmt(last_run.summary.clicks_28d)}
+                                <Delta now={last_run.summary.clicks_28d} prev={last_run.summary.clicks_prev_28d} />
+                              </span>
+                            </div>
+                            <div className="seo-stat">
+                              <span className="seo-stat__label">Est. upside</span>
+                              <span className="seo-stat__num seo-stat__num--good">
+                                +{fmt(last_run.summary.est_potential_clicks)}/mo
+                              </span>
+                            </div>
+                          </>
+                        )}
                       </div>
                       <div className="seo-card__meta">
                         <span>{last_run.todo_count} fixes</span>
@@ -278,27 +299,64 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
 
             {run && (
               <>
-                <div className="seo-summary">
-                  <div className="seo-stat">
-                    <span className="seo-stat__label">Clicks · 28d</span>
-                    <span className="seo-stat__num">
-                      {fmt(run.summary.clicks_28d)}
-                      <Delta now={run.summary.clicks_28d} prev={run.summary.clicks_prev_28d} />
-                    </span>
+                {run.summary.mode === "rank-tracking" ? (
+                  <div className="seo-summary">
+                    <div className="seo-stat">
+                      <span className="seo-stat__label">Tracked keywords</span>
+                      <span className="seo-stat__num">{run.summary.tracked ?? 0}</span>
+                    </div>
+                    <div className="seo-stat">
+                      <span className="seo-stat__label">Top 3</span>
+                      <span className="seo-stat__num seo-stat__num--good">{run.summary.top3 ?? 0}</span>
+                    </div>
+                    <div className="seo-stat">
+                      <span className="seo-stat__label">Page 1</span>
+                      <span className="seo-stat__num">{run.summary.top10 ?? 0}</span>
+                    </div>
+                    <div className="seo-stat">
+                      <span className="seo-stat__label">Not ranking</span>
+                      <span className="seo-stat__num">{run.summary.unranked ?? 0}</span>
+                    </div>
+                    <div className="seo-stat">
+                      <span className="seo-stat__label">Since last check</span>
+                      <span className="seo-stat__num">
+                        {(run.summary.moved_up ?? 0) > 0 && (
+                          <span className="seo-delta seo-delta--up">
+                            <Icon name="trending-up" size={13} />{run.summary.moved_up}
+                          </span>
+                        )}
+                        {(run.summary.moved_down ?? 0) > 0 && (
+                          <span className="seo-delta seo-delta--down">
+                            <Icon name="trending-down" size={13} />{run.summary.moved_down}
+                          </span>
+                        )}
+                        {!(run.summary.moved_up || run.summary.moved_down) && "steady"}
+                      </span>
+                    </div>
                   </div>
-                  <div className="seo-stat">
-                    <span className="seo-stat__label">Impressions · 28d</span>
-                    <span className="seo-stat__num">{fmt(run.summary.impressions_28d)}</span>
+                ) : (
+                  <div className="seo-summary">
+                    <div className="seo-stat">
+                      <span className="seo-stat__label">Clicks · 28d</span>
+                      <span className="seo-stat__num">
+                        {fmt(run.summary.clicks_28d)}
+                        <Delta now={run.summary.clicks_28d} prev={run.summary.clicks_prev_28d} />
+                      </span>
+                    </div>
+                    <div className="seo-stat">
+                      <span className="seo-stat__label">Impressions · 28d</span>
+                      <span className="seo-stat__num">{fmt(run.summary.impressions_28d)}</span>
+                    </div>
+                    <div className="seo-stat">
+                      <span className="seo-stat__label">Avg. position</span>
+                      <span className="seo-stat__num">{run.summary.avg_position || "—"}</span>
+                    </div>
+                    <div className="seo-stat">
+                      <span className="seo-stat__label">Est. upside if fixed</span>
+                      <span className="seo-stat__num seo-stat__num--good">+{fmt(run.summary.est_potential_clicks)}/mo</span>
+                    </div>
                   </div>
-                  <div className="seo-stat">
-                    <span className="seo-stat__label">Avg. position</span>
-                    <span className="seo-stat__num">{run.summary.avg_position || "—"}</span>
-                  </div>
-                  <div className="seo-stat">
-                    <span className="seo-stat__label">Est. upside if fixed</span>
-                    <span className="seo-stat__num seo-stat__num--good">+{fmt(run.summary.est_potential_clicks)}/mo</span>
-                  </div>
-                </div>
+                )}
 
                 {run.insights.length > 0 && (
                   <div className="mr-section">
@@ -340,18 +398,29 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
               <>
                 {tab === "todos" && (
                   <div className="mr-section">
-                    <h3 className="mr-section__title">Prioritized fixes — biggest estimated gain first</h3>
+                    <h3 className="mr-section__title">
+                      {run.summary.mode === "rank-tracking"
+                        ? "Prioritized fixes — from live rankings (drops first)"
+                        : "Prioritized fixes — biggest estimated gain first"}
+                    </h3>
                     {run.todos.length === 0 && <div className="seo-empty">Nothing above the impact threshold — refresh after the next content push.</div>}
                     {run.todos.map((t) => (
                       <div key={t.id} className={`seo-todo${t.status === "done" ? " seo-todo--done" : ""}`}>
-                        <div className="seo-todo__gain">+{fmt(t.est_monthly_clicks)}<small>est. clicks/mo</small></div>
+                        {t.est_monthly_clicks != null ? (
+                          <div className="seo-todo__gain">+{fmt(t.est_monthly_clicks)}<small>est. clicks/mo</small></div>
+                        ) : (
+                          <div className="seo-todo__gain seo-todo__gain--pos">
+                            {t.position > 0 ? `#${t.position}` : "—"}
+                            <small>{t.position > 0 ? "current pos" : "not ranked"}</small>
+                          </div>
+                        )}
                         <div className="seo-todo__body">
                           <div className="seo-todo__action">{t.action}</div>
                           <div className="seo-todo__why">{t.why}</div>
                           <div className="seo-todo__meta">
-                            <span>{shortPage(t.page)}</span>
-                            {t.position > 0 && <span>pos {t.position}</span>}
-                            <span>{fmt(t.impressions)} impressions</span>
+                            {!!t.page && <span>{shortPage(t.page)}</span>}
+                            {t.est_monthly_clicks != null && t.position > 0 && <span>pos {t.position}</span>}
+                            {t.impressions != null && <span>{fmt(t.impressions)} impressions</span>}
                           </div>
                           {t.kind === "decay" && (
                             <UpdatePlanButton brandId={brand.id} page={t.page} onToast={onToast} />

@@ -235,3 +235,6 @@
 .seo-check__note { color: var(--text-secondary); }
 
 .seo-plan { display: grid; gap: 5px; padding: 10px 12px; border: 1px dashed var(--border); border-radius: var(--radius-md); }
+
+/* Rank-tracking mode (no Search Console): position replaces the gain figure. */
+.seo-todo__gain--pos { color: var(--text-primary); }
