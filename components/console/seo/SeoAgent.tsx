@@ -7,9 +7,9 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Icon, Tabs } from "@/lib/kit-ui";
-import { AuditView, BriefsView, CompetitorsView, KeywordsView, UpdatePlanButton } from "./labs";
+import { AskView, AuditView, BriefsView, CompetitorsView, KeywordsView, UpdatePlanButton } from "./labs";
 
-type SeoTab = "todos" | "keywords" | "topics" | "competitors" | "briefs" | "audit";
+type SeoTab = "todos" | "ask" | "keywords" | "topics" | "competitors" | "briefs" | "audit";
 
 /** SEO agent (a2) — per-brand insights, traffic-estimated to-dos, blog topic lab. */
 
@@ -372,6 +372,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
             <Tabs
               items={[
                 { value: "todos", label: "Fix list", count: run?.todos.length || undefined },
+                { value: "ask", label: "Ask" },
                 { value: "keywords", label: "Keywords" },
                 { value: "topics", label: "Blog topics", count: run?.topics.length || undefined },
                 { value: "competitors", label: "Competitors" },
@@ -382,6 +383,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
               onChange={(v) => setTab(v as SeoTab)}
             />
 
+            {tab === "ask" && <AskView brandId={brand.id} brandName={brand.name} />}
             {tab === "keywords" && <KeywordsView brandId={brand.id} onToast={onToast} />}
             {tab === "competitors" && (
               <CompetitorsView brandId={brand.id} isCreator={!!user?.is_creator} onToast={onToast} />
@@ -446,11 +448,16 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                         <div className="seo-topic__main">
                           <span className="seo-topic__kw">{t.keyword}</span>
                           <div className="seo-topic__chips">
+                            <span className={`seo-chip seo-chip--tier-${t.priority === "high" ? "high" : t.priority === "medium" ? "medium" : "watch"}`}>
+                              {t.priority} priority
+                            </span>
+                            {t.source === "new idea" && <span className="seo-chip seo-chip--trend-new">new idea</span>}
                             <span className="seo-chip">{t.angle}</span>
                             <TrendChip trend={t.trend} />
                             <DifficultyChip difficulty={t.difficulty} />
                           </div>
                           <div className="seo-topic__why">{t.why}</div>
+                          <div className="seo-topic__impact">{t.impact}</div>
                         </div>
                         <div className="seo-topic__nums">
                           <span className="seo-topic__vol">{t.volume_label}</span>

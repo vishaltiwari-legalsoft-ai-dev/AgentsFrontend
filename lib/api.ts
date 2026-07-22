@@ -1817,6 +1817,8 @@ export interface SeoTodo {
 export interface SeoTopic {
   keyword: string;
   source: string;
+  priority: "high" | "medium" | "low";
+  impact: string;
   angle: string;
   volume_est: number | null;
   volume_label: string;
@@ -1871,6 +1873,10 @@ export interface SeoCluster {
   best_position: number | null;
   coverage: "gap" | "weak" | "ranking";
   opportunity: number;
+  tier: "high" | "medium" | "watch";
+  recommendation: string;
+  owned_by?: string[];
+  aio_present?: boolean;
 }
 
 export interface SeoKeywordLab {
@@ -1931,12 +1937,20 @@ export interface SeoAuditIssue {
   fix: string;
 }
 
+export interface SeoSiteCheck {
+  name: string;
+  ok: boolean;
+  note: string;
+  fix: string;
+}
+
 export interface SeoAuditReport {
   brand_id: string;
   at: string;
   pages_checked: number;
   pages_ok: number;
   health_score: number;
+  site_checks?: SeoSiteCheck[];
   issues: SeoAuditIssue[];
 }
 
@@ -1998,3 +2012,6 @@ export const seoDraftScore = (brandId: string, text: string, keyword: string) =>
 
 export const seoUpdatePlan = (brandId: string, page: string) =>
   postJson<SeoUpdatePlan>(`/api/seo-geo/update-plan/${brandId}`, { page });
+
+export const seoAsk = (brandId: string, question: string) =>
+  postJson<{ question: string; answer: string }>(`/api/seo-geo/ask/${brandId}`, { question });

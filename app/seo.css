@@ -238,3 +238,27 @@
 
 /* Rank-tracking mode (no Search Console): position replaces the gain figure. */
 .seo-todo__gain--pos { color: var(--text-primary); }
+
+/* Tiers, topic impact, and the Ask thread ---------------------------------- */
+.seo-tier { display: grid; gap: 8px; }
+.seo-tier__head { display: flex; align-items: center; gap: 10px; padding-top: 6px; }
+.seo-chip--tier-high { color: var(--green-500); border-color: color-mix(in srgb, var(--green-500) 45%, transparent); font-weight: 700; }
+.seo-chip--tier-medium { color: var(--amber-500); }
+.seo-chip--tier-watch { color: var(--text-tertiary); }
+.seo-cluster__rec { flex-basis: 100%; font: 500 12.5px/1.45 var(--font-sans); color: var(--text-primary); }
+.seo-cluster__owners { flex-basis: 100%; font: 500 11.5px/1.4 var(--font-mono); color: var(--text-tertiary); }
+.seo-topic__impact { font: 500 12px/1.45 var(--font-sans); color: var(--green-500); }
+
+.seo-ask { min-height: 380px; }
+.seo-ask__thread { display: grid; gap: 10px; }
+.seo-msg {
+  max-width: 85%;
+  padding: 10px 13px;
+  border-radius: var(--radius-md);
+  font: 500 13px/1.55 var(--font-sans);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.seo-msg--user { justify-self: end; background: var(--text-primary); color: var(--surface-card); }
+.seo-msg--agent { justify-self: start; border: 1px solid var(--border); background: var(--surface-card); }
+.seo-msg--busy { color: var(--text-tertiary); }

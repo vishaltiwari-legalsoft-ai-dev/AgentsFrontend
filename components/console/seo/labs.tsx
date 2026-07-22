@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  seoAuditReport, seoBriefs, seoBuildBrief, seoCompetitors, seoDraftScore, seoKeywordLab,
+  seoAsk, seoAuditReport, seoBriefs, seoBuildBrief, seoCompetitors, seoDraftScore, seoKeywordLab,
   seoRunAudit, seoRunKeywordLab, seoSetCompetitors, seoTrackCompetitors, seoUpdatePlan,
   type SeoAuditReport, type SeoBrief, type SeoCompetitors, type SeoDraftScore,
   type SeoKeywordLab, type SeoUpdatePlan,
@@ -81,28 +81,110 @@ export function KeywordsView({ brandId, onToast }: { brandId: string; onToast: (
           {fmt(lab.keyword_count)} keywords · {lab.clusters.length} clusters · {lab.gaps.length} content gaps · mapped {lab.at}
         </div>
       )}
-      {lab?.clusters.map((c) => (
-        <details key={c.name} className="seo-cluster">
-          <summary>
-            <span className="seo-cluster__name">{c.name}</span>
-            <span className="seo-cluster__chips">
-              <span className="seo-chip">{c.intent}</span>
-              <CoverageChip coverage={c.coverage} />
-            </span>
-            <span className="seo-cluster__nums">
-              {c.volume_est ? `~${fmt(c.volume_est)}/mo` : "no volume data"}
-              {c.best_position ? ` · best pos ${c.best_position}` : ""}
-            </span>
-            <button className="seo-btn" disabled={briefBusy === c.name}
-                    onClick={(e) => { e.preventDefault(); void brief(c.name); }}>
-              Brief
-            </button>
-          </summary>
-          <div className="seo-cluster__kws">
-            {c.keywords.map((k) => <span key={k} className="seo-chip">{k}</span>)}
+      {lab && ([
+        { key: "high", label: "High priority", hint: "buyer searches you don't own — act now" },
+        { key: "medium", label: "Medium priority", hint: "plan these into the next content cycle" },
+        { key: "watch", label: "Worth watching", hint: "already ranking — defend, don't rebuild" },
+      ] as const).map(({ key, label, hint }) => {
+        const group = lab.clusters.filter((c) => c.tier === key);
+        if (!group.length) return null;
+        return (
+          <div key={key} className="seo-tier">
+            <div className="seo-tier__head">
+              <span className={`seo-chip seo-chip--tier-${key}`}>{label}</span>
+              <span className="seo-lab__meta">{hint}</span>
+            </div>
+            {group.map((c) => (
+              <details key={c.name} className="seo-cluster">
+                <summary>
+                  <span className="seo-cluster__name">{c.name}</span>
+                  <span className="seo-cluster__chips">
+                    <span className="seo-chip">{c.intent}</span>
+                    <CoverageChip coverage={c.coverage} />
+                    {c.aio_present && <span className="seo-chip seo-chip--trend-new">AI Overview</span>}
+                  </span>
+                  <span className="seo-cluster__nums">
+                    {c.volume_est ? `~${fmt(c.volume_est)}/mo` : ""}
+                    {c.best_position ? ` best pos ${c.best_position}` : ""}
+                  </span>
+                  <button className="seo-btn" disabled={briefBusy === c.name}
+                          onClick={(e) => { e.preventDefault(); void brief(c.name); }}>
+                    Brief
+                  </button>
+                  <span className="seo-cluster__rec">{c.recommendation}</span>
+                  {!!c.owned_by?.length && (
+                    <span className="seo-cluster__owners">
+                      Owned today by: {c.owned_by.join(" · ")}
+                    </span>
+                  )}
+                </summary>
+                <div className="seo-cluster__kws">
+                  {c.keywords.map((k) => <span key={k} className="seo-chip">{k}</span>)}
+                </div>
+              </details>
+            ))}
           </div>
-        </details>
-      ))}
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---------------------------------- Ask ----------------------------------- */
+
+export function AskView({ brandId, brandName }: { brandId: string; brandName: string }) {
+  const [msgs, setMsgs] = useState<{ role: "user" | "agent"; text: string }[]>([]);
+  const [q, setQ] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function send(text?: string) {
+    const question = (text ?? q).trim();
+    if (!question || busy) return;
+    setMsgs((m) => [...m, { role: "user", text: question }]);
+    setQ("");
+    setBusy(true);
+    try {
+      const res = await seoAsk(brandId, question);
+      setMsgs((m) => [...m, { role: "agent", text: res.answer }]);
+    } catch (e) {
+      setMsgs((m) => [...m, { role: "agent", text: errMsg(e, "The strategist is unavailable right now.") }]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const suggestions = [
+    "What should we do first?",
+    "Kaunse keywords pe focus karna chahiye?",
+    "What content should we publish this month?",
+    "Where are competitors beating us?",
+  ];
+
+  return (
+    <div className="mr-section seo-ask">
+      <h3 className="mr-section__title">Ask your SEO strategist — answers grounded in {brandName}'s data</h3>
+      {!msgs.length && (
+        <div className="seo-cluster__kws">
+          {suggestions.map((s) => (
+            <button key={s} className="seo-chip" onClick={() => void send(s)}>{s}</button>
+          ))}
+        </div>
+      )}
+      <div className="seo-ask__thread">
+        {msgs.map((m, i) => (
+          <div key={i} className={`seo-msg seo-msg--${m.role}`}>{m.text}</div>
+        ))}
+        {busy && <div className="seo-msg seo-msg--agent seo-msg--busy">Reading the brand's data…</div>}
+      </div>
+      <div className="seo-form__row">
+        <input className="seo-input seo-input--grow"
+               placeholder="Ask anything — priorities, strategy, why something dropped…"
+               value={q} onChange={(e) => setQ(e.target.value)}
+               onKeyDown={(e) => e.key === "Enter" && void send()} />
+        <button className="seo-btn seo-btn--primary" disabled={busy || !q.trim()} onClick={() => void send()}>
+          Ask
+        </button>
+      </div>
     </div>
   );
 }
@@ -320,6 +402,27 @@ export function BriefsView({ brandId, onToast }: { brandId: string; onToast: (m:
 
 /* --------------------------------- Audit --------------------------------- */
 
+async function copyReport(brandName: string, r: SeoAuditReport, onToast: (m: string) => void) {
+  const lines = [
+    `# SEO health report — ${brandName}`,
+    `Generated ${r.at} · Health score ${r.health_score}/100 · ${r.pages_ok}/${r.pages_checked} pages OK`,
+    "",
+    "## Site foundations",
+    ...(r.site_checks ?? []).map((c) => `- ${c.ok ? "✅" : "❌"} ${c.name}: ${c.note}${c.ok ? "" : ` — ${c.fix}`}`),
+    "",
+    "## Issues",
+    ...(r.issues.length
+      ? r.issues.flatMap((i) => [
+          `### ${i.issue} (${i.severity}, ${i.count} page${i.count === 1 ? "" : "s"})`,
+          `Fix: ${i.fix}`,
+          ...i.pages.map((p) => `- ${p}`),
+        ])
+      : ["Nothing found at this depth."]),
+  ];
+  await navigator.clipboard.writeText(lines.join("\n"));
+  onToast("Report copied — paste it anywhere");
+}
+
 export function AuditView({ brandId, brandName, onToast }: {
   brandId: string; brandName: string; onToast: (m: string) => void;
 }) {
@@ -370,7 +473,21 @@ export function AuditView({ brandId, brandName, onToast }: {
             <div className="seo-audit__score">
               <span className="seo-audit__num">{report.health_score}</span>
               <span className="seo-lab__meta">/100 · {report.pages_ok}/{report.pages_checked} pages OK · {report.at}</span>
+              <button className="seo-btn" onClick={() => void copyReport(brandName, report, onToast)}>
+                Copy full report
+              </button>
             </div>
+            {!!report.site_checks?.length && (
+              <div className="seo-scorecard">
+                {report.site_checks.map((c) => (
+                  <div key={c.name} className={`seo-check${c.ok ? " seo-check--ok" : ""}`}>
+                    <Icon name={c.ok ? "check" : "x"} size={14} />
+                    <span className="seo-check__name">{c.name}</span>
+                    <span className="seo-check__note">{c.ok ? c.note : `${c.note} — ${c.fix}`}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             {!report.issues.length && <div className="seo-empty">Clean — nothing to fix at this depth.</div>}
             {report.issues.map((i) => (
               <details key={i.issue} className="seo-issue">
