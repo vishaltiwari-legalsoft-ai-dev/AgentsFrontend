@@ -1755,3 +1755,100 @@ export const mrGetRun = (id: string) => getJson<MrReport>(`/api/mr/runs/${id}`);
 export const mrSchedule = (period: "daily" | "weekly" | "biweekly" | "monthly") =>
   postJson<MrReport>(`/api/mr/schedule/${period}`, {});
 
+
+/* ------------------------------ SEO agent (a2) ---------------------------- */
+
+export interface SeoBrand {
+  id: string;
+  name: string;
+  domain: string;
+  gsc_property: string;
+  seeds: string[];
+  enabled: boolean;
+}
+
+export interface SeoRunNums {
+  clicks_28d: number;
+  clicks_prev_28d: number;
+  impressions_28d: number;
+  avg_position: number;
+  est_potential_clicks: number;
+}
+
+export interface SeoBrandCard {
+  brand: SeoBrand;
+  last_run: {
+    at: string;
+    summary: SeoRunNums;
+    degraded: string[];
+    todo_count: number;
+    topic_count: number;
+  } | null;
+}
+
+export interface SeoOverview {
+  sources: { gsc: boolean; serp: boolean };
+  brands: SeoBrandCard[];
+}
+
+export type SeoTodoStatus = "todo" | "assigned" | "done";
+
+export interface SeoTodo {
+  id: string;
+  kind: string;
+  page: string;
+  query: string;
+  action: string;
+  why: string;
+  est_monthly_clicks: number;
+  position: number;
+  impressions: number;
+  status: SeoTodoStatus;
+}
+
+export interface SeoTopic {
+  keyword: string;
+  source: string;
+  angle: string;
+  volume_est: number | null;
+  volume_label: string;
+  trend: "rising" | "falling" | "flat" | "new";
+  difficulty: string | null;
+  est_monthly_clicks: number | null;
+  why: string;
+  score: number;
+}
+
+export interface SeoRun {
+  brand_id: string;
+  at: string;
+  trigger: string;
+  degraded: string[];
+  summary: SeoRunNums;
+  insights: string[];
+  todos: SeoTodo[];
+  topics: SeoTopic[];
+}
+
+export const seoOverview = () => getJson<SeoOverview>("/api/seo-geo/overview");
+
+export const seoBrandDetail = (id: string) =>
+  getJson<{ brand: SeoBrand; run: SeoRun | null }>(`/api/seo-geo/brands/${id}`);
+
+export const seoRunBrand = (id: string) =>
+  postJson<{ at: string; summary: SeoRunNums; degraded: string[]; todo_count: number; topic_count: number }>(
+    `/api/seo-geo/run/${id}`,
+    {},
+  );
+
+export const seoSaveBrand = (b: { id?: string; name: string; domain: string; gsc_property?: string; seeds?: string[] }) =>
+  postJson<{ brands: SeoBrand[] }>("/api/seo-geo/brands", b);
+
+export async function seoDeleteBrand(id: string): Promise<{ brands: SeoBrand[] }> {
+  const response = await request(`/api/seo-geo/brands/${id}`, { method: "DELETE" });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as { brands: SeoBrand[] };
+}
+
+export const seoSetTodoStatus = (brandId: string, todoId: string, status: SeoTodoStatus) =>
+  postJson<{ id: string; status: SeoTodoStatus }>(`/api/seo-geo/todos/${brandId}/${todoId}`, { status });

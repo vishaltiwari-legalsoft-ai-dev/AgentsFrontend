@@ -13,10 +13,13 @@ export interface AgentItem {
 export const LIVE_AGENT_ID = "a1";
 /** Marketing Research agent (backed by /api/mr). Uses the "Market Researcher" slot. */
 export const MARKETING_AGENT_ID = "a6";
+/** SEO agent (backed by /api/seo-geo). Uses the "SEO Analyst" slot. */
+export const SEO_AGENT_ID = "a2";
 /** Agents wired to a live backend, mapped to the console nav key they open. */
 export const LIVE_AGENTS: Record<string, string> = {
   [LIVE_AGENT_ID]: "studio",
   [MARKETING_AGENT_ID]: "marketing",
+  [SEO_AGENT_ID]: "seo",
 };
 
 export function isAgentLive(id: string): boolean {
