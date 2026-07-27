@@ -1752,6 +1752,17 @@ export const mrListRuns = () => getJson<MrRunSummary[]>("/api/mr/runs");
 
 export const mrGetRun = (id: string) => getJson<MrReport>(`/api/mr/runs/${id}`);
 
+/** Download-report PDFs — the console panels rendered server-side in the same
+ *  format. Returns an object URL ready for an <a download> click. */
+async function mrPdfBlobUrl(path: string): Promise<string> {
+  const response = await request(path);
+  if (!response.ok) throw new Error(await parseError(response));
+  return URL.createObjectURL(await response.blob());
+}
+export const mrReportPdfUrl = (id: string) => mrPdfBlobUrl(`/api/mr/runs/${id}/pdf`);
+export const mrVendorPdfUrl = (slug: string, date?: string) =>
+  mrPdfBlobUrl(`/api/mr/snapshots/vendor/${slug}/pdf${date ? `?date_iso=${date}` : ""}`);
+
 export const mrSchedule = (period: "daily" | "weekly" | "biweekly" | "monthly") =>
   postJson<MrReport>(`/api/mr/schedule/${period}`, {});
 

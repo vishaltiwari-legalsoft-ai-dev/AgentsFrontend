@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { mrPortfolio, mrVendorDetail, type MrPortfolio, type MrSnapshotMeta, type MrVendorDetail } from "@/lib/api";
+import { mrPortfolio, mrVendorDetail, mrVendorPdfUrl, type MrPortfolio, type MrSnapshotMeta, type MrVendorDetail } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
 import { fmtMoney, fmtNum, fmtTime } from "./shared";
 
@@ -108,6 +108,36 @@ function CopyPortfolio({ p, onToast }: { p: MrPortfolio | null; onToast: (m: str
     <Button size="sm" variant="secondary" onClick={() => void copy()}
       iconLeft={<Icon name="copy" size={13} />}>
       Copy summary
+    </Button>
+  );
+}
+
+/* Downloads the dossier the user is looking at as a same-format PDF. */
+function DownloadDossier({ slug, date, vendor, onToast }: {
+  slug: string; date: string; vendor: string; onToast: (m: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  async function download() {
+    setBusy(true);
+    try {
+      const url = await mrVendorPdfUrl(slug, date);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mr-vendor-${slug}-${date}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : `PDF download failed for ${vendor}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Button size="sm" variant="secondary" disabled={busy} onClick={() => void download()}
+      iconLeft={<Icon name="download" size={13} />}>
+      {busy ? "Preparing…" : "Download PDF"}
     </Button>
   );
 }
@@ -286,7 +316,11 @@ export function VendorsView({ snapshots, onToast }: {
                   {detail.dates.length} day{detail.dates.length === 1 ? "" : "s"} captured · showing {detail.snapshot.date} (MTD) · captured {fmtTime(detail.snapshot.captured_at)}
                 </span>
               </div>
-              <CopyPortfolio p={portfolioData} onToast={onToast} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <DownloadDossier slug={detail.vendor_slug} date={detail.snapshot.date}
+                  vendor={detail.vendor} onToast={onToast} />
+                <CopyPortfolio p={portfolioData} onToast={onToast} />
+              </div>
             </header>
 
             <div className="mr-vend__dates">

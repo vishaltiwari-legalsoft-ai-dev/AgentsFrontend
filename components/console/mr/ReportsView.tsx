@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import {
-  MR_REPORT_KINDS, mrBuildReport, mrGetRun,
+  MR_REPORT_KINDS, mrBuildReport, mrGetRun, mrReportPdfUrl,
   type MrReport, type MrReportKind, type MrRunSummary,
 } from "@/lib/api";
-import { Icon } from "@/lib/kit-ui";
+import { Button, Icon } from "@/lib/kit-ui";
 import { REPORT_META } from "./reportMeta";
 import { MrReportDoc } from "./MrReportDoc";
 import { fmtTime } from "./shared";
@@ -32,6 +32,26 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
 }) {
   const [report, setReport] = useState<MrReport | null>(null);
   const [busy, setBusy] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
+  async function downloadPdf() {
+    if (!report) return;
+    setDownloading(true);
+    try {
+      const url = await mrReportPdfUrl(report.id);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mr-${report.kind}-${report.generated_at.slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "PDF download failed");
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   async function generate(kind: MrReportKind) {
     setBusy(true);
@@ -89,7 +109,16 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
         {busy ? (
           <div className="mr-empty"><Icon name="loader-circle" size={16} className="cworkbar__spin" /> Writing the report…</div>
         ) : report ? (
-          <MrReportDoc report={report} />
+          <>
+            <div className="mr-rpts__toolbar" style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+              <Button size="sm" variant="secondary" disabled={downloading}
+                onClick={() => void downloadPdf()}
+                iconLeft={<Icon name="download" size={13} />}>
+                {downloading ? "Preparing PDF…" : "Download PDF"}
+              </Button>
+            </div>
+            <MrReportDoc report={report} />
+          </>
         ) : (
           <div className="mr-empty">Generate a report on the left, or open one from the history.</div>
         )}
