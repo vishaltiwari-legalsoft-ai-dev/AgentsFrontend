@@ -34,6 +34,8 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
   const [busy, setBusy] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
+  // Server-rendered PDF (reportlab): clean page breaks, designed layout.
+  // (DOM-capture was tried and reverted — cards/text sliced at page breaks.)
   async function downloadPdf() {
     if (!report) return;
     setDownloading(true);

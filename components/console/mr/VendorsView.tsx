@@ -112,7 +112,7 @@ function CopyPortfolio({ p, onToast }: { p: MrPortfolio | null; onToast: (m: str
   );
 }
 
-/* Downloads the dossier the user is looking at as a same-format PDF. */
+/* Downloads the dossier as a server-rendered, same-format PDF. */
 function DownloadDossier({ slug, date, vendor, onToast }: {
   slug: string; date: string; vendor: string; onToast: (m: string) => void;
 }) {
