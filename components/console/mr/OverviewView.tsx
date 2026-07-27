@@ -101,8 +101,14 @@ export function OverviewView({ overview, busy, onPull, onGotoData, onToast }: {
   const [showSources, setShowSources] = useState(false);
 
   useEffect(() => {
-    mrTrends().then(setTrends).catch(() => setTrends(null));
-    mrPortfolio().then(setPortfolio).catch(() => setPortfolio(null));
+    const load = () => {
+      mrTrends().then(setTrends).catch(() => setTrends(null));
+      mrPortfolio().then(setPortfolio).catch(() => setPortfolio(null));
+    };
+    load();
+    // Matches the 3-minute cloud pull, so the board tracks the sheet live.
+    const id = window.setInterval(load, 180_000);
+    return () => window.clearInterval(id);
   }, []);
 
   if (!overview) {

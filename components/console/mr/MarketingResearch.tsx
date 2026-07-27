@@ -52,6 +52,19 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
     mrWorkbook().then((w) => setCatalog(w.tabs)).catch(() => {});
   }, [refresh]);
 
+  // Near-real-time dashboard: the cloud pull refreshes the data every 3
+  // minutes, so an open console silently re-reads on the same cadence.
+  // Background failures stay quiet — no error toasts for a missed poll.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      Promise.all([mrOverview(), mrDatasets(), mrListRuns()])
+        .then(([ov, ds, rs]) => { setOverview(ov); setDatasets(ds); setRuns(rs); })
+        .catch(() => {});
+      mrSnapshots().then(setSnapshots).catch(() => {});
+    }, 180_000);
+    return () => window.clearInterval(id);
+  }, []);
+
   async function pullSheet() {
     setBusy(true);
     try {
