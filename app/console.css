@@ -226,6 +226,7 @@
   .caddcard:hover, .cbuildcard:hover{ border-color:var(--brand); background:var(--brand-subtle); }
   .caddcard__ic, .cbuildcard__ic{ width:40px; height:40px; border-radius:var(--radius-md); background:var(--gray-100); color:var(--text-secondary); display:flex; align-items:center; justify-content:center; margin-bottom:6px; }
   .caddcard__ic svg, .cbuildcard__ic svg{ width:20px; height:20px; }
+  .caddcard__art{ width:104px; height:104px; object-fit:cover; margin-bottom:6px; }
   .cbuildcard{ min-height:220px; }
 
   /* Run detail */
@@ -285,6 +286,10 @@
   .csswitch > span{ position:absolute; top:3px; left:3px; width:19px; height:19px; border-radius:99px; background:#fff; box-shadow:var(--shadow-sm); transition:transform var(--dur-base) var(--ease-spring); }
   .csswitch[data-on="1"]{ background:var(--brand); }
   .csswitch[data-on="1"] > span{ transform:translateX(17px); }
+  /* Mini switch — fits inside statsbar pills (the "New look" toggle) */
+  .csswitch--sm{ width:32px; height:18px; }
+  .csswitch--sm > span{ top:2px; left:2px; width:14px; height:14px; }
+  .csswitch--sm[data-on="1"] > span{ transform:translateX(14px); }
 
   /* Integrations */
   .cintg{ background:var(--surface);  border:1px solid var(--border-subtle); border-radius:var(--radius-2xl); box-shadow:var(--shadow-xs); padding:20px; display:flex; flex-direction:column; gap:11px;

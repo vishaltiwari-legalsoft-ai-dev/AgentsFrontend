@@ -267,6 +267,105 @@
 .ens-agentcard[data-category="ads"]:hover .ens-agentcard__name{ color:var(--cat-ads); }
 .ens-agentcard[data-category="data"]:hover .ens-agentcard__name{ color:var(--cat-data); }
 
+/* Portrait cards — the character roster look: a hovering mascot cutout, then just name + action.
+   The portrait replaces both the 3px accent bar and the description as the card's identity.
+   Art is a transparent cutout floating directly on the card; the stage is drawn in CSS —
+   a category-tinted aura behind and a floor shadow below, so it adapts to both themes. */
+.ens-agentcard--portrait{ padding:10px 10px 8px; gap:8px; }
+.ens-agentcard--portrait::before{ content:none; }
+/* The glass display case each mini lives in */
+.ens-agentcard__art{
+  position:relative; overflow:hidden;
+  border-radius:calc(var(--radius-xl) - 5px);
+  aspect-ratio:10 / 9;
+  background:var(--glass);
+  -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur);
+  box-shadow:var(--glass-edge), inset 0 0 0 1px var(--border-subtle), inset 0 -14px 24px -20px var(--card-accent);
+  transition:transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+}
+.ens-agentcard--interactive:hover .ens-agentcard__art{
+  transform:perspective(700px) rotateX(3deg);
+  box-shadow:var(--glass-edge), inset 0 0 0 1px color-mix(in srgb, var(--card-accent) 30%, var(--border-subtle)), inset 0 -18px 28px -20px var(--card-accent);
+}
+/* Aura behind the character */
+.ens-agentcard__art::before{
+  content:""; position:absolute; inset:0;
+  opacity:0.7;
+  background:radial-gradient(46% 40% at 50% 52%,
+    color-mix(in srgb, var(--card-accent) 22%, transparent) 0%, transparent 72%);
+}
+/* Floor shadow the mini hovers over */
+.ens-agentcard__art::after{
+  content:""; position:absolute; left:28%; right:28%; bottom:5%; height:6%;
+  border-radius:50%;
+  background:color-mix(in srgb, var(--card-accent) 34%, transparent);
+  filter:blur(9px);
+}
+:root[data-theme="dark"] .ens-agentcard__art::before{
+  background:radial-gradient(46% 40% at 50% 52%,
+    color-mix(in srgb, var(--card-accent) 34%, transparent) 0%, transparent 72%);
+}
+/* The minis hover: a slow idle bob; on cursor-over they get excited — a bouncy
+   squash-and-stretch jump loop, the aura flares and a light sweep crosses the glass. */
+@keyframes ens-agent-hover{
+  0%, 100%{ transform:translateY(1.2%) scale(1); }
+  50%{ transform:translateY(-1.8%) scale(1); }
+}
+@keyframes ens-agent-excited{
+  0%, 100%{ transform:translateY(1.5%) scale(1.05, 1.01); }
+  28%{ transform:translateY(-5.5%) rotate(-2.5deg) scale(1.04, 1.07); }
+  48%{ transform:translateY(1%) rotate(0.5deg) scale(1.07, 1.01); }
+  72%{ transform:translateY(-3.5%) rotate(2.5deg) scale(1.04, 1.06); }
+}
+.ens-agentcard__art img{
+  position:relative; z-index:1;
+  display:block; width:100%; height:100%; object-fit:cover;
+  animation:ens-agent-hover 4.6s ease-in-out infinite;
+  transition:filter var(--dur-base) var(--ease-out);
+}
+.cgrid .ens-agentcard--portrait:nth-child(3n+2) .ens-agentcard__art img{ animation-delay:-1.5s; }
+.cgrid .ens-agentcard--portrait:nth-child(3n) .ens-agentcard__art img{ animation-delay:-3s; }
+.ens-agentcard--interactive:hover .ens-agentcard__art img{
+  animation:ens-agent-excited 0.95s ease-in-out infinite;
+}
+/* Aura flares up when the mini gets excited */
+.ens-agentcard__art::before{ transition:opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+.ens-agentcard--interactive:hover .ens-agentcard__art::before{ opacity:1; transform:scale(1.07); }
+/* Light sweep across the glass on hover */
+.ens-agentcard__glare{
+  position:absolute; z-index:2; top:-30%; bottom:-30%; left:-18%; width:38%;
+  pointer-events:none;
+  background:linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.30) 45%, rgba(255,255,255,0.06) 60%, transparent 100%);
+  transform:rotate(10deg) translateX(-160%);
+  transition:transform 0.65s var(--ease-out);
+}
+:root[data-theme="dark"] .ens-agentcard__glare{
+  background:linear-gradient(105deg, transparent 0%, rgba(252,252,254,0.16) 45%, rgba(252,252,254,0.03) 60%, transparent 100%);
+}
+.ens-agentcard--interactive:hover .ens-agentcard__glare{ transform:rotate(10deg) translateX(340%); }
+@media (prefers-reduced-motion: reduce){
+  .ens-agentcard__art img{ animation:none; }
+  .ens-agentcard--interactive:hover .ens-agentcard__art img{ animation:none; }
+  .ens-agentcard__glare{ transition:none; }
+}
+.ens-agentcard--portrait .ens-agentcard__bar{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  min-height:34px; padding:2px 4px 2px 8px;
+}
+.ens-agentcard--portrait .ens-agentcard__name{ font-size:16.5px; }
+/* Chip now sits over the card surface, so it uses theme tokens */
+.ens-agentcard__soonchip{
+  position:absolute; top:6px; right:6px; z-index:2;
+  padding:4px 11px; border-radius:var(--radius-pill);
+  background:var(--gray-100); color:var(--text-secondary);
+  border:1px solid var(--border-subtle);
+  font-size:11.5px; font-weight:600; letter-spacing:0.01em;
+}
+.ens-agentcard--portrait[data-soon="1"] .ens-agentcard__art img{ filter:saturate(0.35) opacity(0.8); }
+.ens-agentcard--portrait[data-soon="1"] .ens-agentcard__art::before,
+.ens-agentcard--portrait[data-soon="1"] .ens-agentcard__art::after{ opacity:0.5; }
+.ens-agentcard--portrait[data-soon="1"] .ens-agentcard__name{ color:var(--text-tertiary); }
+
 /* Glyph "app-tiles" — premium iOS look: white Solar glyph on a per-category
    gradient squircle with a top sheen and a soft drop shadow. */
 .glyphtile{

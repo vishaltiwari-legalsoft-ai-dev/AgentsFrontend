@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { agents, isAgentLive } from "@/lib/console-data";
 import { Icon, Button, IconButton, Avatar, Badge, Tabs, AgentCard } from "@/lib/kit-ui";
 import { GlyphTile } from "@/lib/glyph";
+import { useCardsV2 } from "@/lib/ui-flags";
 
 export function HomeView({
   onOpenAgents,
@@ -19,6 +20,7 @@ export function HomeView({
   userName: string;
 }) {
   const firstName = userName.split(" ")[0] || "there";
+  const [cardsV2] = useCardsV2();
 
   return (
     <div className="cview">
@@ -48,6 +50,7 @@ export function HomeView({
                 key={a.id}
                 {...a}
                 glyph={<Icon name={a.glyph} />}
+                portrait={cardsV2 ? `/agents/${a.id}.webp` : undefined}
                 interactive
                 comingSoon={!live}
                 status={live ? "success" : undefined}
@@ -79,6 +82,7 @@ export function AgentsView({
   onOpenAgent: (id: string) => void;
 }) {
   const [cat, setCat] = useState("all");
+  const [cardsV2] = useCardsV2();
   const list = cat === "all" ? agents : agents.filter((a) => a.category === cat);
 
   return (
@@ -102,6 +106,7 @@ export function AgentsView({
               key={a.id}
               {...a}
               glyph={<Icon name={a.glyph} />}
+              portrait={cardsV2 ? `/agents/${a.id}.webp` : undefined}
               interactive
               comingSoon={!live}
               status={live ? "success" : undefined}
@@ -109,10 +114,14 @@ export function AgentsView({
             />
           );
         })}
-        <div className="caddcard" style={{ opacity: 0.72 }}>
-          <span className="caddcard__ic">
-            <Icon name="sparkles" />
-          </span>
+        <div className="caddcard" style={cardsV2 ? undefined : { opacity: 0.72 }}>
+          {cardsV2 ? (
+            <img className="caddcard__art" src="/agents/soon.webp" alt="" loading="lazy" />
+          ) : (
+            <span className="caddcard__ic">
+              <Icon name="sparkles" />
+            </span>
+          )}
           <div style={{ fontWeight: 600, fontSize: 14 }}>Need something else?</div>
           <div style={{ fontSize: 12.5, color: "var(--text-tertiary)", textAlign: "center", marginBottom: 10 }}>
             More specialist agents are on the way.

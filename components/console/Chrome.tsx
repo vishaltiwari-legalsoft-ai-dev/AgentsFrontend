@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { User } from "@/lib/api";
 import { getNews } from "@/lib/api";
 import { Icon, Avatar, IconButton } from "@/lib/kit-ui";
+import { useCardsV2 } from "@/lib/ui-flags";
 
 /** Fired by the creator's config panel after saving, so open bars refresh live. */
 export const NEWS_UPDATED_EVENT = "agentos:news-updated";
@@ -242,6 +243,25 @@ function StickyNotePill() {
   );
 }
 
+/** Opt-in switch for the new mascot agent cards — saved per browser. */
+function NewLookPill() {
+  const [on, toggle] = useCardsV2();
+  return (
+    <button
+      type="button"
+      className="cstatsbar__stat cstatsbar__notebtn"
+      onClick={toggle}
+      aria-pressed={on}
+      title={on ? "Switch back to the classic agent cards" : "Try the new agent-card look"}
+    >
+      <Icon name="sparkles" /> New look
+      <span className="csswitch csswitch--sm" data-on={on ? "1" : "0"} aria-hidden>
+        <span />
+      </span>
+    </button>
+  );
+}
+
 /**
  * Top strip: viewer-local clock + sticky note, live OpenRouter stats (tokens
  * used, credits left, 30-day spend) plus a notification bell on the right. The
@@ -358,6 +378,7 @@ export function StatsBar() {
         </>
       )}
       <div className="cstatsbar__spacer" />
+      <NewLookPill />
       <div className="cstatsbar__bellwrap" ref={bellRef}>
         <button
           type="button"

@@ -263,6 +263,7 @@ export function AgentCard({
   description,
   category = "design",
   glyph,
+  portrait,
   status,
   added,
   onAdd,
@@ -277,6 +278,8 @@ export function AgentCard({
   description?: string;
   category?: string;
   glyph?: ReactNode;
+  /** Character art shown as a full-bleed portrait; switches the card to the portrait layout. */
+  portrait?: string;
   status?: string;
   added?: boolean;
   onAdd?: () => void;
@@ -285,6 +288,35 @@ export function AgentCard({
   interactive?: boolean;
   className?: string;
 }) {
+  if (portrait) {
+    return (
+      <div
+        className={cx("ens-agentcard ens-agentcard--portrait", interactive && !comingSoon ? "ens-agentcard--interactive" : undefined, className)}
+        data-category={category}
+        data-soon={comingSoon ? "1" : undefined}
+        onClick={!comingSoon && onOpen ? onOpen : undefined}
+        {...rest}
+      >
+        <div className="ens-agentcard__art">
+          <img src={portrait} alt={`${name} agent character`} loading="lazy" />
+          <span className="ens-agentcard__glare" aria-hidden="true" />
+          {comingSoon ? <span className="ens-agentcard__soonchip">Coming soon</span> : null}
+        </div>
+        <div className="ens-agentcard__bar">
+          <div className="ens-agentcard__name">{name}</div>
+          {comingSoon ? null : onOpen ? (
+            <Button size="sm" variant="brand" onClick={onOpen} iconRight={<Icon name="arrow-right" size={15} />}>
+              Open
+            </Button>
+          ) : onAdd ? (
+            <Button size="sm" variant={added ? "secondary" : "primary"} onClick={onAdd}>
+              {added ? "Added" : "Add to team"}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
   return (
     <div
       className={cx("ens-agentcard", interactive && !comingSoon ? "ens-agentcard--interactive" : undefined, className)}
