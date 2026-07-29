@@ -1276,15 +1276,17 @@ export async function gdFontBlob(name: string, brand?: string | null): Promise<s
   return URL.createObjectURL(await response.blob());
 }
 
-/** Upload an image to use as the Stage-2 SUBJECT or BACKGROUND (composite mode). Accepts
- *  PNG/WebP/JPEG; the backend normalizes to PNG. Store the returned `ref` via
- *  gdUpdateConfig({ subject_asset_ref }) or gdUpdateConfig({ background_asset_ref }) and generate Stage 2 with variant
- *  "UPLOAD" — a deterministic Pillow composite, no image model involved. The `role` param defaults to "subject"
- *  and can be overridden to "background" for multi-layer compositing. */
+/** Upload an image for a run. role="subject"/"background": the deterministic
+ *  composite modes — store the returned `ref` via gdUpdateConfig
+ *  ({ subject_asset_ref } / { background_asset_ref }) and generate with variant
+ *  "UPLOAD" (Pillow composite, no image model). role="prompt": an image the
+ *  user attached WITH the brief — the backend appends it to
+ *  config.prompt_image_refs (max 3, deduped) and Stage-1/2 AI generation
+ *  manipulates/incorporates it as the brief directs. */
 export async function gdSubjectUpload(
   runId: string,
   file: File,
-  role: "subject" | "background" = "subject",
+  role: "subject" | "background" | "prompt" = "subject",
 ): Promise<{ ref: string }> {
   const form = new FormData();
   form.append("file", file);
