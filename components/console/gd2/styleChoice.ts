@@ -10,8 +10,12 @@ export function styleBadge(a: Pick<GdAttempt, "ai" | "qa">): string {
   return a.qa === "skipped" ? "✨ AI polished · QA skipped" : "✨ AI polished";
 }
 
-/** Default selection for a fresh set: brand_strict, else the first attempt. */
+/** Default selection for a fresh set: prefer QA-passed styles (brand_strict
+ *  first among them) — never default to a QA-skipped/failed style while a
+ *  passed sibling exists. Falls back to brand_strict, then the first attempt. */
 export function pickDefaultStyle(attempts: GdAttempt[]): number | null {
   if (!attempts.length) return null;
-  return (attempts.find((a) => a.style === "brand_strict") ?? attempts[0]).attempt;
+  const passed = attempts.filter((a) => a.qa === "passed");
+  const pool = passed.length ? passed : attempts;
+  return (pool.find((a) => a.style === "brand_strict") ?? pool[0]).attempt;
 }

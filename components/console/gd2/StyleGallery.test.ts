@@ -48,4 +48,29 @@ describe("pickDefaultStyle", () => {
   it("returns null for an empty set", () => {
     expect(pickDefaultStyle([])).toBeNull();
   });
+
+  it("prefers a QA-passed style over a QA-skipped brand_strict", () => {
+    const set = [
+      attempt(1, "brand_strict", true, "skipped"),
+      attempt(2, "highlighted", true, "passed"),
+      attempt(3, "sharp_minimal", false, "failed"),
+    ];
+    expect(pickDefaultStyle(set)).toBe(2);
+  });
+
+  it("still prefers brand_strict among QA-passed siblings", () => {
+    const set = [
+      attempt(1, "highlighted", true, "passed"),
+      attempt(2, "brand_strict", true, "passed"),
+    ];
+    expect(pickDefaultStyle(set)).toBe(2);
+  });
+
+  it("falls back to brand_strict when nothing passed QA", () => {
+    const set = [
+      attempt(1, "brand_strict", true, "skipped"),
+      attempt(2, "highlighted", true, "skipped"),
+    ];
+    expect(pickDefaultStyle(set)).toBe(1);
+  });
 });
