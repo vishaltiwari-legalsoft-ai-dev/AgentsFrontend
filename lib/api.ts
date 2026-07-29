@@ -2059,3 +2059,127 @@ export const seoUpdatePlan = (brandId: string, page: string) =>
 
 export const seoAsk = (brandId: string, question: string) =>
   postJson<{ question: string; answer: string }>(`/api/seo-geo/ask/${brandId}`, { question });
+
+/* ---------------------------------------------------------------- seo blog (a9) */
+
+export interface BlogRunSummary {
+  id: string;
+  keyword: string;
+  created: string;
+  stage: "research" | "outline" | "draft";
+}
+
+export interface BlogGapRow {
+  keyword: string;
+  tag: "main" | "secondary" | "long_tail" | "aio";
+  volume: number | null;
+  overlap: number;
+  source: "ahrefs_pasted" | "serp_estimated";
+}
+
+export interface BlogSheet {
+  keyword: string;
+  metrics: { volume: number | null; kd: number | null; traffic_potential: number | null };
+  serp: { top3: { url: string; title: string; position: number }[]; paa: string[]; related: string[]; aio_present: boolean };
+  competitors: { url: string; intent: string; page_type: string; audience: string }[];
+  mixed_intent: boolean;
+  gap: BlogGapRow[];
+  usage: { main_count_top1: number; target_min: number; target_max: number; frequent_terms: { term: string; count: number }[] };
+  lsi: { term: string; fit_note: string }[];
+  data_source: "ahrefs_pasted" | "serp_estimated";
+  degraded: string[];
+}
+
+export interface BlogOutlineItem {
+  heading: string;
+  level: number;
+  note: string;
+  keywords: string[];
+}
+
+export interface BlogCitation {
+  id: string;
+  claim: string;
+  source_name: string;
+  url: string;
+  domain: string;
+  dr: number | null;
+  dr_status: "ok" | "unverified";
+  section: string;
+  verified: boolean;
+}
+
+export interface BlogComplianceCheck {
+  id: string;
+  label: string;
+  pass: boolean;
+  detail: string;
+}
+
+export interface BlogRun {
+  id: string;
+  keyword: string;
+  created: string;
+  stage: "research" | "outline" | "draft";
+  gates: { keywords: boolean; outline: boolean };
+  pasted: { metrics: Record<string, number | null>; competitor_keywords: Record<string, unknown[]>; dr: Record<string, number> };
+  sheet: BlogSheet | null;
+  outline_doc: {
+    competitor_outlines: {
+      url: string;
+      title?: string;
+      h2?: string[];
+      word_count?: number;
+      external_links?: number;
+      features?: { eeat: boolean; key_takeaways: boolean; tables: boolean; tools: boolean; lacks: string[] };
+    }[];
+    meta: { title: string; description: string; slug: string };
+    targets: { word_count: number; links: number };
+    outline: BlogOutlineItem[];
+    evaluator: { rounds: number; beats_all: boolean | null; scores: Record<string, unknown>; note: string };
+    degraded: string[];
+  } | null;
+  citations: { items: BlogCitation[]; short_by: number; rounds: number; degraded: string[] } | null;
+  draft: {
+    markdown: string;
+    meta: { title: string; description: string; slug: string };
+    compliance: { checks: BlogComplianceCheck[]; all_pass: boolean };
+    edited: boolean;
+  } | null;
+}
+
+export const blogRuns = () => getJson<{ runs: BlogRunSummary[] }>("/api/seo-blog/runs");
+
+export const blogRun = (id: string) => getJson<BlogRun>(`/api/seo-blog/runs/${id}`);
+
+export const blogCreateRun = (p: { keyword: string; metrics_paste?: string; competitor_keywords_paste?: Record<string, string> }) =>
+  postJson<BlogRun>("/api/seo-blog/runs", p);
+
+export const blogApproveKeywords = (id: string, sheet: BlogSheet) =>
+  postJson<BlogRun>(`/api/seo-blog/runs/${id}/approve-keywords`, { sheet });
+
+export const blogBuildOutline = (id: string) => postJson<BlogRun>(`/api/seo-blog/runs/${id}/build-outline`, {});
+
+export const blogVetCitations = (id: string, drPaste: string) =>
+  postJson<BlogRun>(`/api/seo-blog/runs/${id}/vet-citations`, { dr_paste: drPaste });
+
+export const blogApproveOutline = (id: string, outlineItems: BlogOutlineItem[]) =>
+  postJson<BlogRun>(`/api/seo-blog/runs/${id}/approve-outline`, { outline: outlineItems });
+
+export const blogDraft = (id: string) => postJson<BlogRun>(`/api/seo-blog/runs/${id}/draft`, {});
+
+export async function blogSaveDraft(id: string, markdown: string): Promise<BlogRun> {
+  const response = await request(`/api/seo-blog/runs/${id}/draft`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ markdown }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as BlogRun;
+}
+
+export async function blogExport(id: string, format: "md" | "docx"): Promise<Blob> {
+  const response = await request(`/api/seo-blog/runs/${id}/export?format=${format}`, { method: "GET" });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.blob();
+}
