@@ -1234,3 +1234,33 @@
 /* ── Step 5 · final tweak card ──────────────────────────────────────────────── */
 .gd2-tweakcard { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 10px; padding: 12px; border: 1px solid var(--gd2-line); border-radius: 12px; }
 .gd2-tweakcard img { width: 100%; border-radius: 10px; display: block; }
+
+/* ── Prompt-image attach (entry screen) ─────────────────────────────────────── */
+.gdx-attach { margin-top: 10px; display: grid; gap: 8px; justify-items: start; }
+.gd2 .gdx-attachbtn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 10px;
+  border: 1.5px dashed var(--gdx-field-border);
+  background: transparent; color: var(--gdx-muted); cursor: pointer;
+  font-size: 13px; font-weight: 600;
+}
+.gd2 .gdx-attachbtn:hover { border-color: var(--gdx-accent); color: var(--gdx-ink); }
+.gd2 .gdx-attachbtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.gdx-attachbtn svg { width: 15px; height: 15px; }
+.gdx-attachrow { display: flex; flex-wrap: wrap; gap: 8px; }
+.gdx-attachchip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 6px 4px 4px; border-radius: 9px;
+  border: 1px solid var(--gdx-border); background: var(--gdx-card);
+  max-width: 220px;
+}
+.gdx-attachchip img { width: 28px; height: 28px; object-fit: cover; border-radius: 6px; display: block; }
+.gdx-attachname {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; font-weight: 600; color: var(--gdx-ink);
+}
+.gd2 .gdx-attachchip button {
+  border: 0; background: transparent; color: var(--gdx-muted); cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 2px 5px;
+}
+.gd2 .gdx-attachchip button:hover { color: var(--gdx-ink); }

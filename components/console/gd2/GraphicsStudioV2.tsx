@@ -11,6 +11,7 @@ import { PlanReview } from "./PlanReview";
 import { StyleGallery } from "./StyleGallery";
 import { pickDefaultStyle } from "./styleChoice";
 import { DEFAULT_PLAN_LAYOUT } from "./wireframe";
+import { attachErrorMessage, canAttach, MAX_PROMPT_IMAGES } from "./promptAttach";
 import {
   creativeTypes,
   gdApprove,
@@ -163,6 +164,8 @@ export function GraphicsStudioV2({
   const [cfg, setCfg] = useState<GdConfig | null>(null);
   const [aspect, setAspect] = useState<string>("");
   const [brief, setBrief] = useState("");
+  const [attached, setAttached] = useState<{ file: File; url: string }[]>([]);
+  const attachInput = useRef<HTMLInputElement | null>(null);
   const [run, setRun] = useState<GdRun | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [autoMode, setAutoMode] = useState(false);
@@ -624,6 +627,32 @@ export function GraphicsStudioV2({
       (v) => (v.weight >= 600) === bold && isItalicStyle(v.style) === italic,
     )?.name ?? null;
 
+  const onAttachFiles = (list: FileList | null) => {
+    if (!list) return;
+    setAttached((prev) => {
+      const next = [...prev];
+      for (const file of Array.from(list)) {
+        const verdict = canAttach(next.length, file);
+        if (!verdict.ok) {
+          onToast(attachErrorMessage(file.name, verdict.reason));
+          if (verdict.reason === "limit") break;
+          continue;
+        }
+        next.push({ file, url: URL.createObjectURL(file) });
+      }
+      return next;
+    });
+    if (attachInput.current) attachInput.current.value = "";
+  };
+
+  const removeAttached = (i: number) => {
+    setAttached((prev) => {
+      const hit = prev[i];
+      if (hit) URL.revokeObjectURL(hit.url);
+      return prev.filter((_, j) => j !== i);
+    });
+  };
+
   const start = () => {
     if (autoMode && !brief.trim()) {
       onToast("Auto mode needs a brief — tell the studio what this is about.");
@@ -636,6 +665,15 @@ export function GraphicsStudioV2({
         remix_enabled: true,
         ...(brief.trim() ? { creative_brief: { goal: brief.trim() } } : {}),
       });
+      // Brief-attached images go up before anything generates (or plans) so
+      // Stage-1/2 AI generation sees them; a failed upload never blocks the run.
+      for (const a of attached) {
+        try {
+          await gdSubjectUpload(created.id, a.file, "prompt");
+        } catch {
+          onToast(`Couldn't attach ${a.file.name} — continuing without it.`);
+        }
+      }
       setRun(created);
       setSel1(null);
       setSel2(null);
@@ -1193,6 +1231,37 @@ export function GraphicsStudioV2({
                       <span className={`gdx-counter${overBrief ? " gdx-counter--max" : brief.length >= briefMax - 150 ? " gdx-counter--warn" : ""}`}>
                         {brief.length} / {briefMax}
                       </span>
+                    </div>
+                    <div className="gdx-attach">
+                      <input
+                        ref={attachInput}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        multiple
+                        hidden
+                        onChange={(e) => onAttachFiles(e.target.files)}
+                      />
+                      <button
+                        type="button"
+                        className="gdx-attachbtn"
+                        disabled={attached.length >= MAX_PROMPT_IMAGES}
+                        onClick={() => attachInput.current?.click()}
+                        title="Attach up to 3 images — the studio works them into the design as your brief directs"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                        Attach images <span className="gdx-opt">(optional, up to {MAX_PROMPT_IMAGES})</span>
+                      </button>
+                      {attached.length > 0 ? (
+                        <div className="gdx-attachrow">
+                          {attached.map((a, i) => (
+                            <span key={a.url} className="gdx-attachchip" title={a.file.name}>
+                              <img src={a.url} alt="" />
+                              <span className="gdx-attachname">{a.file.name}</span>
+                              <button type="button" aria-label={`Remove ${a.file.name}`} onClick={() => removeAttached(i)}>×</button>
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}
