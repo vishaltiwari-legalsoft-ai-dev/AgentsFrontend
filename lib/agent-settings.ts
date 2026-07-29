@@ -62,7 +62,7 @@ export function toggleListItem(list: string[], id: string, on: boolean): string[
 export function defaultAgentSettingsConfig(): AgentSettingsConfig {
   const defaults: AgentSettingsValues = {
     image_model: "google/gemini-3-pro-image-preview",
-    enabled_tools: ["brand_kit", "web_search", "file_attachments", "logo_composite", "canva_export"],
+    enabled_tools: ["brand_kit", "web_search", "file_attachments", "logo_composite"],
     enabled_abilities: ["generate_creatives", "analyze_brand", "brief_intake"],
   };
   return {
@@ -153,12 +153,6 @@ export function defaultAgentSettingsConfig(): AgentSettingsConfig {
         id: "logo_composite",
         name: "Logo compositing",
         description: "Overlay the exact brand logo onto generated creatives.",
-        default: true,
-      },
-      {
-        id: "canva_export",
-        name: "Canva export",
-        description: "Send finished creatives to Canva for editing.",
         default: true,
       },
     ],

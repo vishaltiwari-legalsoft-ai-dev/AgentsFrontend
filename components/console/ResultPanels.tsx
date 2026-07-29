@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 import {
-  API_URL,
-  importToCanva,
   PERSONA_FIELDS,
   type AgentResult,
   type AssetsResult,
@@ -319,7 +317,7 @@ function AssetsView({ result }: { result: AssetsResult }) {
         ) : (
           "from your brief"
         )}
-        , and rendered two variations. Variation A has the real brand logo composited in; Variation B leaves a placeholder for Canva.
+        , and rendered two variations. Variation A has the real brand logo composited in; Variation B leaves a logo placeholder.
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <AssetCard title="Variation A — With Logo" badge="A" url={result.assets.with_logo.url} />
@@ -327,8 +325,6 @@ function AssetsView({ result }: { result: AssetsResult }) {
           title="Variation B — Logo Placeholder"
           badge="B"
           url={result.assets.with_placeholder.url}
-          canvaConfigured={result.canva.configured}
-          logo={result.logo}
         />
       </div>
     </div>
@@ -339,42 +335,12 @@ function AssetCard({
   title,
   badge,
   url,
-  canvaConfigured,
-  logo,
 }: {
   title: string;
   badge: string;
   url: string;
-  canvaConfigured?: boolean;
-  logo?: { file_name: string; view_url: string } | null;
 }) {
-  const [canvaLabel, setCanvaLabel] = useState(logo ? "Import + logo to Canva" : "Import to Canva");
-  const [canvaBusy, setCanvaBusy] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-
-  async function onImport() {
-    setCanvaBusy(true);
-    setCanvaLabel("Importing...");
-    const design = await importToCanva(url, title);
-    if (!design.ok) {
-      if (design.needsAuth) {
-        window.location.href = `${API_URL}/api/canva/authorize`;
-        return;
-      }
-      setCanvaLabel("Import failed");
-      setCanvaBusy(false);
-      return;
-    }
-    if (logo) {
-      const logoOutcome = await importToCanva(logo.view_url, `Logo — ${logo.file_name}`);
-      if (!logoOutcome.ok && logoOutcome.needsAuth) {
-        window.location.href = `${API_URL}/api/canva/authorize`;
-        return;
-      }
-    }
-    setCanvaLabel(logo ? "Design + logo imported" : "Imported");
-    setCanvaBusy(false);
-  }
 
   return (
     <div
@@ -427,16 +393,6 @@ function AssetCard({
           <a href={url} download style={{ fontSize: 12, fontWeight: 600, color: "var(--brand)" }}>
             Download
           </a>
-          {canvaConfigured && (
-            <button
-              type="button"
-              onClick={() => void onImport()}
-              disabled={canvaBusy}
-              style={{ fontSize: 12, fontWeight: 600, color: "var(--brand)", background: "none", border: 0, cursor: "pointer" }}
-            >
-              {canvaLabel}
-            </button>
-          )}
         </div>
       </div>
       {previewOpen ? (

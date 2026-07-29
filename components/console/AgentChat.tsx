@@ -131,15 +131,6 @@ export function AgentChat({
   }, [messages, tab]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const canva = params.get("canva");
-    if (!canva) return;
-    if (canva === "connected") onToast("Canva connected. Try import again.");
-    else onToast("Canva connection failed.");
-    window.history.replaceState({}, "", window.location.pathname + window.location.hash);
-  }, [onToast]);
-
-  useEffect(() => {
     if (!settingsOpen) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setSettingsOpen(false);

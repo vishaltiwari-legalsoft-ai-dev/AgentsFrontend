@@ -109,7 +109,6 @@ export interface AssetsResult {
   assets: { with_logo: GeneratedImage; with_placeholder: GeneratedImage };
   logo: LogoRef | null;
   logos?: LogoRef[];
-  canva: { configured: boolean; import_url: string | null };
 }
 
 export interface BrandMetadata {
@@ -313,23 +312,6 @@ export async function runAgent(
   const data = (await response.json()) as { conversation_id: string } & AgentResult;
   const { conversation_id, ...result } = data;
   return { conversation_id, result: result as AgentResult };
-}
-
-export async function importToCanva(
-  imageUrl: string,
-  name: string,
-): Promise<{ ok: true } | { ok: false; needsAuth: boolean; error: string }> {
-  const response = await request("/api/canva/import", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ image_url: imageUrl, name }),
-  });
-  if (response.ok) return { ok: true };
-  return {
-    ok: false,
-    needsAuth: response.status === 401,
-    error: await parseError(response),
-  };
 }
 
 /* ------------------------------ Library / data --------------------------- */
