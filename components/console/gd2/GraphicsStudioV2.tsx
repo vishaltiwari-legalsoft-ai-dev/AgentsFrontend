@@ -628,29 +628,28 @@ export function GraphicsStudioV2({
     )?.name ?? null;
 
   const onAttachFiles = (list: FileList | null) => {
-    if (!list) return;
-    setAttached((prev) => {
-      const next = [...prev];
-      for (const file of Array.from(list)) {
-        const verdict = canAttach(next.length, file);
-        if (!verdict.ok) {
-          onToast(attachErrorMessage(file.name, verdict.reason));
-          if (verdict.reason === "limit") break;
-          continue;
-        }
-        next.push({ file, url: URL.createObjectURL(file) });
-      }
-      return next;
-    });
+    if (!list || list.length === 0) return;
+    // Snapshot NOW — e.target.files is a LIVE FileList and we clear the input
+    // below, which would empty it before React runs any deferred updater.
+    const files = Array.from(list);
     if (attachInput.current) attachInput.current.value = "";
+    const additions: { file: File; url: string }[] = [];
+    for (const file of files) {
+      const verdict = canAttach(attached.length + additions.length, file);
+      if (!verdict.ok) {
+        onToast(attachErrorMessage(file.name, verdict.reason));
+        if (verdict.reason === "limit") break;
+        continue;
+      }
+      additions.push({ file, url: URL.createObjectURL(file) });
+    }
+    if (additions.length) setAttached((prev) => [...prev, ...additions]);
   };
 
   const removeAttached = (i: number) => {
-    setAttached((prev) => {
-      const hit = prev[i];
-      if (hit) URL.revokeObjectURL(hit.url);
-      return prev.filter((_, j) => j !== i);
-    });
+    const hit = attached[i];
+    if (hit) URL.revokeObjectURL(hit.url);
+    setAttached((prev) => prev.filter((_, j) => j !== i));
   };
 
   const start = () => {
