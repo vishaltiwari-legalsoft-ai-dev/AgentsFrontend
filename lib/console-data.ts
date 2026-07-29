@@ -15,11 +15,14 @@ export const LIVE_AGENT_ID = "a1";
 export const MARKETING_AGENT_ID = "a6";
 /** SEO agent (backed by /api/seo-geo). Uses the "SEO Analyst" slot. */
 export const SEO_AGENT_ID = "a2";
+/** SEO Blog Writer (backed by /api/seo-blog). */
+export const BLOG_AGENT_ID = "a9";
 /** Agents wired to a live backend, mapped to the console nav key they open. */
 export const LIVE_AGENTS: Record<string, string> = {
   [LIVE_AGENT_ID]: "studio",
   [MARKETING_AGENT_ID]: "marketing",
   [SEO_AGENT_ID]: "seo",
+  [BLOG_AGENT_ID]: "blog",
 };
 
 export function isAgentLive(id: string): boolean {
@@ -62,6 +65,7 @@ export const agents: AgentItem[] = [
   { id: "a6", name: "Marketing Research", role: "Campaigns, competitors & funnel", category: "data", glyph: "bar-chart-3", description: "Aggregates campaign performance, tracks competitors, analyzes the lead funnel, and surfaces media opportunities." },
   { id: "a7", name: "Email Marketer", role: "Lifecycle & nurture", category: "copy", glyph: "mail", description: "Builds sequences and writes nurture flows that re-engage leads." },
   { id: "a8", name: "Brand Strategist", role: "Positioning & messaging", category: "design", glyph: "compass", description: "Shapes positioning, tone, and messaging pillars for campaigns." },
+  { id: "a9", name: "SEO Blog Writer", role: "Ranking blog drafts", category: "copy", glyph: "pen-line", description: "Runs the team's 12-step SEO process: SERP research, outline engineering, vetted citations, publish-ready drafts." },
 ];
 
 export const graphicDesignerAgent = agents.find((a) => a.id === LIVE_AGENT_ID)!;
