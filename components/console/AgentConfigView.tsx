@@ -22,16 +22,48 @@ const FIELD_LABEL: Record<AgentModelField, string> = {
   openrouter_model: "Reasoning model",
   openrouter_fast_model: "Fast / parsing model",
   openrouter_vision_model: "Vision model",
+  gd_planner_model: "Planner model",
 };
 const FIELD_ORDER: AgentModelField[] = [
   "openrouter_image_model",
   "openrouter_model",
   "openrouter_fast_model",
   "openrouter_vision_model",
+  "gd_planner_model",
 ];
+/** Per-agent label overrides where the generic name would mislead (the SEO Blog
+ *  pipeline runs entirely on the "fast" slot, so to the creator it IS the
+ *  writing model). */
+const AGENT_FIELD_LABEL: Record<string, Partial<Record<AgentModelField, string>>> = {
+  a9: { openrouter_fast_model: "Writing model (all steps)" },
+};
 
 function modelName(options: ModelOption[], id: string): string {
   return options.find((m) => m.id === id)?.name ?? id ?? "—";
+}
+
+/** Dropdown grouping order + fallback labels for the model quality tiers. */
+const TIER_SEQUENCE = ["flagship", "balanced", "fast"];
+const TIER_FALLBACK_LABEL: Record<string, string> = {
+  flagship: "Flagship — top quality",
+  balanced: "Balanced — strong, cheaper",
+  fast: "Fast — cheapest",
+};
+
+/** Options grouped by tier in display order; unknown/missing tiers group last. */
+function tierGroups(options: ModelOption[]): [string, ModelOption[]][] {
+  const groups = new Map<string, ModelOption[]>();
+  for (const option of options) {
+    const tier = option.tier ?? "other";
+    const bucket = groups.get(tier) ?? [];
+    bucket.push(option);
+    groups.set(tier, bucket);
+  }
+  const ordered = [
+    ...TIER_SEQUENCE.filter((t) => groups.has(t)),
+    ...[...groups.keys()].filter((t) => !TIER_SEQUENCE.includes(t)),
+  ];
+  return ordered.map((t) => [t, groups.get(t)!]);
 }
 
 const inputStyle: React.CSSProperties = {
@@ -150,16 +182,24 @@ function NewsEditor() {
 function AgentCard({
   agent,
   catalog,
+  tierLabels,
   globalDefaults,
   onSaved,
 }: {
   agent: AgentConfigItem;
   catalog: AgentConfigResponse["catalog"];
+  tierLabels: AgentConfigResponse["tier_labels"];
   globalDefaults: AgentConfigResponse["global_defaults"];
   onSaved: (next: AgentConfigResponse) => void;
 }) {
+  // The dropdowns this agent gets — only the model fields its engine consumes.
+  const agentFields = useMemo(
+    () => FIELD_ORDER.filter((f) => agent.fields.includes(f)),
+    [agent.fields],
+  );
+
   // Local draft of this agent's overrides ("" = inherit global default).
-  const [draft, setDraft] = useState<Record<AgentModelField, string>>(agent.overrides);
+  const [draft, setDraft] = useState<Partial<Record<AgentModelField, string>>>(agent.overrides);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
@@ -167,8 +207,8 @@ function AgentCard({
   useEffect(() => setDraft(agent.overrides), [agent.overrides]);
 
   const dirty = useMemo(
-    () => FIELD_ORDER.some((f) => (draft[f] ?? "") !== (agent.overrides[f] ?? "")),
-    [draft, agent.overrides],
+    () => agentFields.some((f) => (draft[f] ?? "") !== (agent.overrides[f] ?? "")),
+    [agentFields, draft, agent.overrides],
   );
 
   const save = async () => {
@@ -223,25 +263,32 @@ function AgentCard({
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        {FIELD_ORDER.map((field) => {
+        {agentFields.map((field) => {
           const options = catalog[field] ?? [];
           const globalName = modelName(options, globalDefaults[field]);
           const value = draft[field] ?? "";
           const inheriting = value === "";
           return (
             <label key={field} style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>
-              {FIELD_LABEL[field]}
+              {AGENT_FIELD_LABEL[agent.id]?.[field] ?? FIELD_LABEL[field]}
               <select
                 value={value}
                 onChange={(e) => setDraft((d) => ({ ...d, [field]: e.target.value }))}
                 style={inputStyle}
               >
                 <option value="">Inherit global · {globalName}</option>
-                {options.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                    {m.recommended ? " ★" : ""} — {m.provider}
-                  </option>
+                {tierGroups(options).map(([tier, group]) => (
+                  <optgroup
+                    key={tier}
+                    label={tierLabels?.[tier] ?? TIER_FALLBACK_LABEL[tier] ?? tier}
+                  >
+                    {group.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                        {m.recommended ? " ★" : ""} — {m.provider}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
               <span style={{ display: "block", fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", marginTop: 4 }}>
@@ -341,6 +388,7 @@ export function AgentConfigView({ onBack }: { onBack: () => void }) {
               key={agent.id}
               agent={agent}
               catalog={data.catalog}
+              tierLabels={data.tier_labels}
               globalDefaults={data.global_defaults}
               onSaved={setData}
             />

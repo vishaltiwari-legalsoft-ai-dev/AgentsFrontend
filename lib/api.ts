@@ -533,8 +533,11 @@ export interface ModelOption {
   id: string;
   name: string;
   provider: string;
-  description: string;
+  /** Curated entries carry one; live OpenRouter entries may not. */
+  description?: string;
   recommended?: boolean;
+  /** Quality tier for dropdown grouping: "flagship" | "balanced" | "fast". */
+  tier?: string;
 }
 
 /** A model field that can be overridden per agent (matches backend slugs). */
@@ -542,7 +545,8 @@ export type AgentModelField =
   | "openrouter_model"
   | "openrouter_fast_model"
   | "openrouter_image_model"
-  | "openrouter_vision_model";
+  | "openrouter_vision_model"
+  | "gd_planner_model";
 
 export interface AgentConfigItem {
   id: string;
@@ -550,16 +554,20 @@ export interface AgentConfigItem {
   role: string;
   category: string;
   live: boolean;
-  /** Explicit per-agent choice ("" = inherit the global default). */
-  overrides: Record<AgentModelField, string>;
-  /** What the agent actually uses right now (agent → global → env). */
-  effective: Record<AgentModelField, string>;
+  /** The model fields this agent actually consumes — the only dropdowns shown. */
+  fields: AgentModelField[];
+  /** Explicit per-agent choice ("" = inherit the global default). Keys ⊆ fields. */
+  overrides: Partial<Record<AgentModelField, string>>;
+  /** What the agent actually uses right now (agent → global → env). Keys ⊆ fields. */
+  effective: Partial<Record<AgentModelField, string>>;
 }
 
 export interface AgentConfigResponse {
   agents: AgentConfigItem[];
   fields: AgentModelField[];
   catalog: Record<AgentModelField, ModelOption[]>;
+  /** Display labels for the tier groups, keyed by tier slug. */
+  tier_labels?: Record<string, string>;
   global_defaults: Record<AgentModelField, string>;
 }
 
