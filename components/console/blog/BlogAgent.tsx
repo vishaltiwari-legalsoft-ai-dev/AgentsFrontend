@@ -107,7 +107,7 @@ function OutlineEditor({ items, onChange }: { items: BlogOutlineItem[]; onChange
 
 function DrBadge({ c }: { c: BlogCitation }) {
   return c.dr_status === "ok"
-    ? <span className="blog-pill active">DR {c.dr}</span>
+    ? <span className="blog-pill blog-pill--ok">DR {c.dr}</span>
     : <span className="blog-flag">DR unverified</span>;
 }
 

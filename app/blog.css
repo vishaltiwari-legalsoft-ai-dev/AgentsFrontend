@@ -12,6 +12,7 @@
 .blog-pill.active { background: var(--accent); color: var(--on-accent); }
 .blog-pill--btn { cursor: pointer; }
 .blog-pill--btn:hover { background: var(--border); }
+.blog-pill--ok { background: var(--success-bg); color: var(--success); }
 
 .blog-card {
   background: var(--surface-card); border: 1px solid var(--border);
