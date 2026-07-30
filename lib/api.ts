@@ -2116,6 +2116,10 @@ export interface BlogComplianceCheck {
   detail: string;
 }
 
+export interface BlogSiteSummary { domain: string; scanned: string; counts: { sitemap_urls: number; scanned: number; posts: number; pages: number }; }
+export interface BlogTopicSuggestion { keyword: string; angle: string; collisions: { url: string; title: string; overlap: number }[]; }
+export interface BlogSiteProfile extends BlogSiteSummary { pages: unknown[]; posts: { url: string; title: string }[]; pool: { name: string; keywords: string[]; covered_by: string[] }[]; data_source: string; degraded: string[]; }
+
 export interface BlogRun {
   id: string;
   keyword: string;
@@ -2124,6 +2128,7 @@ export interface BlogRun {
   gates: { keywords: boolean; outline: boolean };
   pasted: { metrics: Record<string, number | null>; competitor_keywords: Record<string, unknown[]>; dr: Record<string, number> };
   sheet: BlogSheet | null;
+  site: { domain: string; cannibalization: { url: string; title: string; overlap: number }[]; internal_links: string[] } | null;
   outline_doc: {
     competitor_outlines: {
       url: string;
@@ -2152,7 +2157,7 @@ export const blogRuns = () => getJson<{ runs: BlogRunSummary[] }>("/api/seo-blog
 
 export const blogRun = (id: string) => getJson<BlogRun>(`/api/seo-blog/runs/${id}`);
 
-export const blogCreateRun = (p: { keyword: string; metrics_paste?: string; competitor_keywords_paste?: Record<string, string> }) =>
+export const blogCreateRun = (p: { keyword: string; metrics_paste?: string; competitor_keywords_paste?: Record<string, string>; website?: string }) =>
   postJson<BlogRun>("/api/seo-blog/runs", p);
 
 export const blogApproveKeywords = (id: string, sheet: BlogSheet) =>
@@ -2183,3 +2188,14 @@ export async function blogExport(id: string, format: "md" | "docx"): Promise<Blo
   if (!response.ok) throw new Error(await parseError(response));
   return response.blob();
 }
+
+export const blogSites = () => getJson<{ sites: BlogSiteSummary[] }>("/api/seo-blog/sites");
+
+export const blogScanSite = (website: string) => postJson<BlogSiteProfile>("/api/seo-blog/sites", { website });
+
+export const blogSiteDetail = (domain: string) => getJson<BlogSiteProfile>(`/api/seo-blog/sites/${domain}`);
+
+export const blogSiteTopics = (domain: string) =>
+  postJson<{ suggested: BlogTopicSuggestion[]; avoided: { keyword: string; collisions: BlogTopicSuggestion["collisions"]; covered_by: string[] }[]; degraded: string[] }>(
+    `/api/seo-blog/sites/${domain}/topics`, {},
+  );

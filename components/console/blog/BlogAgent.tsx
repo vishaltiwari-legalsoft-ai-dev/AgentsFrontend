@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   blogApproveKeywords, blogApproveOutline, blogBuildOutline, blogCreateRun,
-  blogDraft, blogExport, blogRun, blogRuns, blogSaveDraft, blogVetCitations,
+  blogDraft, blogExport, blogRun, blogRuns, blogSaveDraft, blogScanSite,
+  blogSites, blogSiteTopics, blogVetCitations,
   type BlogCitation, type BlogGapRow, type BlogOutlineItem, type BlogRun,
-  type BlogRunSummary, type BlogSheet,
+  type BlogRunSummary, type BlogSheet, type BlogSiteSummary, type BlogTopicSuggestion,
 } from "@/lib/api";
 import { Icon } from "@/lib/kit-ui";
 
@@ -133,13 +134,22 @@ function ComplianceRail({ draft }: { draft: NonNullable<BlogRun["draft"]> }) {
 
 /* ----------------------------------------------------------------- main --- */
 
+type BlogTopics = { suggested: BlogTopicSuggestion[]; avoided: unknown[]; degraded: string[] };
+
 export function BlogAgent({ onToast, onBack }: { onToast: (m: string) => void; onBack: () => void }) {
   const [runs, setRuns] = useState<BlogRunSummary[]>([]);
   const [run, setRun] = useState<BlogRun | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  // Kickoff form
-  const [keyword, setKeyword] = useState("");
+  // Website-first home screen
+  const [sites, setSites] = useState<BlogSiteSummary[]>([]);
+  const [activeDomain, setActiveDomain] = useState<string | null>(null);
+  const [websiteInput, setWebsiteInput] = useState("");
+  const [topics, setTopics] = useState<BlogTopics | null>(null);
+  const [topicsLoading, setTopicsLoading] = useState(false);
+
+  // "apna keyword" quick kickoff + collapsed Ahrefs optional
+  const [ownKeyword, setOwnKeyword] = useState("");
   const [metricsPaste, setMetricsPaste] = useState("");
   const [ckRows, setCkRows] = useState<{ url: string; csv: string }[]>([{ url: "", csv: "" }]);
 
@@ -153,8 +163,27 @@ export function BlogAgent({ onToast, onBack }: { onToast: (m: string) => void; o
     blogRuns().then((r) => setRuns(r.runs)).catch((e) => onToast(String(e)));
   }, [onToast]);
 
-  useEffect(() => { loadRuns(); }, [loadRuns]);
+  const loadSites = useCallback(() => {
+    blogSites().then((r) => {
+      setSites(r.sites);
+      setActiveDomain((prev) => prev ?? r.sites[0]?.domain ?? null);
+    }).catch((e) => onToast(String(e)));
+  }, [onToast]);
+
+  const loadTopics = useCallback((domain: string) => {
+    setTopicsLoading(true);
+    return blogSiteTopics(domain)
+      .then((t) => setTopics(t))
+      .catch((e) => onToast(String(e)))
+      .finally(() => setTopicsLoading(false));
+  }, [onToast]);
+
+  useEffect(() => { loadRuns(); loadSites(); }, [loadRuns, loadSites]);
   useEffect(() => { if (run?.draft) setMd(run.draft.markdown); }, [run?.id, run?.draft]);
+  useEffect(() => {
+    if (!activeDomain) { setTopics(null); return; }
+    loadTopics(activeDomain);
+  }, [activeDomain, loadTopics]);
 
   const guard = useCallback(async (label: string, fn: () => Promise<void>) => {
     if (busy) return;
@@ -179,18 +208,46 @@ export function BlogAgent({ onToast, onBack }: { onToast: (m: string) => void; o
     setCkRows((rows) => rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   }
 
-  async function kickoff() {
+  function rememberSite(profile: BlogSiteSummary) {
+    setSites((prev) => [profile, ...prev.filter((s) => s.domain !== profile.domain)]);
+  }
+
+  async function scanWebsite() {
+    const website = websiteInput.trim();
+    if (!website) return;
+    const profile = await blogScanSite(website);
+    rememberSite(profile);
+    setWebsiteInput("");
+    // Selecting a domain the active-site effect doesn't already watch triggers its
+    // topics load; re-scanning the currently-active domain needs an explicit refresh.
+    if (profile.domain === activeDomain) await loadTopics(profile.domain);
+    else setActiveDomain(profile.domain);
+  }
+
+  async function rescanSite(domain: string) {
+    const profile = await blogScanSite(domain);
+    rememberSite(profile);
+    await loadTopics(profile.domain);
+  }
+
+  async function writeTopic(kwKeyword: string) {
+    const created = await blogCreateRun({ keyword: kwKeyword, website: activeDomain ?? undefined });
+    setRun(created);
+  }
+
+  async function kickoffOwnKeyword() {
     const competitor_keywords_paste: Record<string, string> = {};
     for (const r of ckRows) {
       if (r.url.trim() && r.csv.trim()) competitor_keywords_paste[r.url.trim()] = r.csv;
     }
     const created = await blogCreateRun({
-      keyword: keyword.trim(),
+      keyword: ownKeyword.trim(),
       metrics_paste: metricsPaste,
       competitor_keywords_paste,
+      website: activeDomain ?? undefined,
     });
     setRun(created);
-    setKeyword(""); setMetricsPaste(""); setCkRows([{ url: "", csv: "" }]);
+    setOwnKeyword(""); setMetricsPaste(""); setCkRows([{ url: "", csv: "" }]);
   }
 
   const download = (blob: Blob, name: string) => {
@@ -216,36 +273,121 @@ export function BlogAgent({ onToast, onBack }: { onToast: (m: string) => void; o
         </header>
         <div className="mr-body">
           <div className="mr-panel">
-            <div className="blog-card">
-              <h3>New blog run</h3>
-              <input className="blog-input blog-input--full" placeholder="Main target keyword (US)"
-                     value={keyword} onChange={(e) => setKeyword(e.target.value)} />
-              <textarea className="blog-textarea" placeholder="Ahrefs keyword metrics — optional paste (Volume / KD / Traffic potential)"
-                        value={metricsPaste} onChange={(e) => setMetricsPaste(e.target.value)} />
-              <div className="blog-field-label">Competitor organic-keywords CSV (optional) — one row per competitor URL</div>
-              {ckRows.map((r, i) => (
-                <div key={i} className="blog-row">
-                  <input className="blog-input" placeholder="Competitor URL" value={r.url}
-                         onChange={(e) => updateCkRow(i, { url: e.target.value })} />
-                  <textarea className="blog-textarea" placeholder="That competitor's Ahrefs organic-keywords CSV export"
-                            value={r.csv} onChange={(e) => updateCkRow(i, { csv: e.target.value })} />
-                  {ckRows.length > 1 && (
-                    <button className="blog-x" aria-label={`Remove competitor row ${i + 1}`} onClick={() => removeCkRow(i)}>
-                      <Icon name="x" size={13} />
-                    </button>
-                  )}
+            {!sites.length && (
+              <div className="blog-card">
+                <h3>New blog run</h3>
+                <p className="blog-note">Kaunsi website ke liye likhna hai? / Which website do you write for?</p>
+                <input className="blog-input blog-input--full" placeholder="yourdomain.com"
+                       value={websiteInput} onChange={(e) => setWebsiteInput(e.target.value)}
+                       onKeyDown={(e) => { if (e.key === "Enter" && websiteInput.trim() && busy === null) guard("scan-site", scanWebsite); }} />
+                <div className="blog-actions">
+                  <button className="blog-btn blog-btn--primary" disabled={!websiteInput.trim() || busy !== null}
+                          onClick={() => guard("scan-site", scanWebsite)}>
+                    {busy === "scan-site" ? "Reading the site…" : "Analyze website"}
+                  </button>
                 </div>
-              ))}
-              <button className="blog-btn" onClick={addCkRow}>
-                <Icon name="plus" size={13} /> Add competitor
-              </button>
-              <div className="blog-actions">
-                <button className="blog-btn blog-btn--primary" disabled={!keyword.trim() || busy !== null}
-                        onClick={() => guard("kickoff", kickoff)}>
-                  {busy === "kickoff" ? "Researching SERP…" : "Start research"}
-                </button>
               </div>
-            </div>
+            )}
+
+            {!!sites.length && (
+              <>
+                <div className="blog-card">
+                  <h3>Which website?</h3>
+                  <div className="blog-chips">
+                    {sites.map((s) => (
+                      <div key={s.domain} className={`blog-chip${s.domain === activeDomain ? " active" : ""}`}>
+                        <button className="blog-chip__btn" disabled={busy !== null}
+                                onClick={() => setActiveDomain(s.domain)}>
+                          <span className="blog-chip__domain">{s.domain}</span>
+                          <span className="blog-chip__meta">
+                            {s.counts.posts} post{s.counts.posts === 1 ? "" : "s"} · {s.counts.pages} page{s.counts.pages === 1 ? "" : "s"} · scanned {s.scanned}
+                          </span>
+                        </button>
+                        {s.domain === activeDomain && (
+                          <button className="blog-btn" disabled={busy !== null}
+                                  onClick={() => guard("rescan", () => rescanSite(s.domain))}>
+                            {busy === "rescan" ? "Reading the site…" : "Re-scan"}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="blog-row">
+                    <input className="blog-input" placeholder="+ add website" value={websiteInput}
+                           onChange={(e) => setWebsiteInput(e.target.value)}
+                           onKeyDown={(e) => { if (e.key === "Enter" && websiteInput.trim() && busy === null) guard("scan-site", scanWebsite); }} />
+                    <button className="blog-btn" disabled={!websiteInput.trim() || busy !== null}
+                            onClick={() => guard("scan-site", scanWebsite)}>
+                      {busy === "scan-site" ? "Reading the site…" : "Add"}
+                    </button>
+                  </div>
+                </div>
+
+                {activeDomain && (
+                  <div className="blog-card">
+                    <h3>Suggested topics</h3>
+                    {topicsLoading && <p className="blog-note">Finding fresh angles from the site…</p>}
+                    {topics && <DegradedFlags notes={topics.degraded} />}
+                    <div className="blog-topics">
+                      {topics?.suggested.map((t) => (
+                        <div key={t.keyword} className="blog-topic">
+                          <div className="blog-topic__kw">{t.keyword}</div>
+                          <p className="blog-note">{t.angle}</p>
+                          {t.collisions.map((c) => (
+                            <div key={c.url} className="blog-flag">
+                              <Icon name="triangle-alert" size={13} />
+                              overlaps {c.title} — {c.url} ({Math.round(c.overlap * 100)}%)
+                            </div>
+                          ))}
+                          <div className="blog-actions">
+                            <button className="blog-btn blog-btn--primary" disabled={busy !== null}
+                                    onClick={() => guard(`write-topic:${t.keyword}`, () => writeTopic(t.keyword))}>
+                              {busy === `write-topic:${t.keyword}` ? "Opening…" : "Write this →"}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      {topics && !topicsLoading && !topics.suggested.length &&
+                        <p className="blog-empty">No fresh topic ideas right now — apna keyword likh dijiye neeche.</p>}
+                    </div>
+                  </div>
+                )}
+
+                <div className="blog-card">
+                  <h3>Apna keyword</h3>
+                  <input className="blog-input blog-input--full" placeholder="Main target keyword (US)"
+                         value={ownKeyword} onChange={(e) => setOwnKeyword(e.target.value)} />
+                  <div className="blog-actions">
+                    <button className="blog-btn blog-btn--primary" disabled={!ownKeyword.trim() || busy !== null}
+                            onClick={() => guard("kickoff", kickoffOwnKeyword)}>
+                      {busy === "kickoff" ? "Researching SERP…" : "Write this →"}
+                    </button>
+                  </div>
+                  <details className="blog-optional">
+                    <summary>Ahrefs data (optional)</summary>
+                    <textarea className="blog-textarea" placeholder="Ahrefs keyword metrics — optional paste (Volume / KD / Traffic potential)"
+                              value={metricsPaste} onChange={(e) => setMetricsPaste(e.target.value)} />
+                    <div className="blog-field-label">Competitor organic-keywords CSV (optional) — one row per competitor URL</div>
+                    {ckRows.map((r, i) => (
+                      <div key={i} className="blog-row">
+                        <input className="blog-input" placeholder="Competitor URL" value={r.url}
+                               onChange={(e) => updateCkRow(i, { url: e.target.value })} />
+                        <textarea className="blog-textarea" placeholder="That competitor's Ahrefs organic-keywords CSV export"
+                                  value={r.csv} onChange={(e) => updateCkRow(i, { csv: e.target.value })} />
+                        {ckRows.length > 1 && (
+                          <button className="blog-x" aria-label={`Remove competitor row ${i + 1}`} onClick={() => removeCkRow(i)}>
+                            <Icon name="x" size={13} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button className="blog-btn" onClick={addCkRow}>
+                      <Icon name="plus" size={13} /> Add competitor
+                    </button>
+                  </details>
+                </div>
+              </>
+            )}
 
             <div className="blog-card">
               <h3>Previous runs</h3>
@@ -307,6 +449,15 @@ export function BlogAgent({ onToast, onBack }: { onToast: (m: string) => void; o
               {sheet.mixed_intent &&
                 <div className="blog-flag"><Icon name="triangle-alert" size={13} /> Top 3 pages have mixed intent — pick your direction before approving</div>}
               <DegradedFlags notes={sheet.degraded} />
+              {run.site && run.site.cannibalization.map((c) => (
+                <div key={c.url} className="blog-flag">
+                  <Icon name="triangle-alert" size={13} />
+                  overlaps {c.title} — {c.url} ({Math.round(c.overlap * 100)}%)
+                </div>
+              ))}
+              {run.site && !!run.site.internal_links.length && (
+                <p className="blog-note">Internal links the draft will use: {run.site.internal_links.join(", ")}</p>
+              )}
 
               <div className="blog-metrics">
                 {sheet.metrics.volume != null && <span className="blog-pill">Volume {fmt(sheet.metrics.volume)}</span>}
