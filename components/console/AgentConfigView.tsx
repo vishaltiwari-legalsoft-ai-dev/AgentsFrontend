@@ -48,6 +48,7 @@ const TIER_FALLBACK_LABEL: Record<string, string> = {
   flagship: "Flagship — top quality",
   balanced: "Balanced — strong, cheaper",
   fast: "Fast — cheapest",
+  other: "Other models",
 };
 
 /** Options grouped by tier in display order; unknown/missing tiers group last. */
@@ -193,8 +194,10 @@ function AgentCard({
   onSaved: (next: AgentConfigResponse) => void;
 }) {
   // The dropdowns this agent gets — only the model fields its engine consumes.
+  // `fields` may be absent during the deploy-skew window where an older backend
+  // serves the payload — fall back to showing every field rather than crashing.
   const agentFields = useMemo(
-    () => FIELD_ORDER.filter((f) => agent.fields.includes(f)),
+    () => FIELD_ORDER.filter((f) => (agent.fields ?? FIELD_ORDER).includes(f)),
     [agent.fields],
   );
 
