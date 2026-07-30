@@ -139,6 +139,8 @@
   .cgrid{ display:grid; gap:20px; }
   /* Card grids pack narrower columns instead of stretching 3 across the row. */
   .cgrid--3{ grid-template-columns:repeat(auto-fill, minmax(270px, 1fr)); }
+  /* Live agents sit together on one row (wraps only when the viewport can't fit them). */
+  .cgrid--live{ grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); }
   .cgrid--2{ grid-template-columns:repeat(2,1fr); }
 
   /* ---- View entrance choreography ----

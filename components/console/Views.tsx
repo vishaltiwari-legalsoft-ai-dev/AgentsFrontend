@@ -43,7 +43,10 @@ export function HomeView({
           </Button>
         </div>
         <div className="cgrid cgrid--3">
-          {agents.slice(0, 6).map((a) => {
+          {[...agents]
+            .sort((a, b) => Number(isAgentLive(b.id)) - Number(isAgentLive(a.id)))
+            .slice(0, 6)
+            .map((a) => {
             const live = isAgentLive(a.id);
             return (
               <AgentCard
@@ -98,22 +101,40 @@ export function AgentsView({
           </IconButton>
         </div>
       </div>
+      {list.some((a) => isAgentLive(a.id)) && (
+        <>
+          <div className="csechead">
+            <h3>Live now</h3>
+          </div>
+          <div className="cgrid cgrid--live">
+            {list.filter((a) => isAgentLive(a.id)).map((a) => (
+              <AgentCard
+                key={a.id}
+                {...a}
+                glyph={<Icon name={a.glyph} />}
+                portrait={cardsV2 ? `/agents/${a.id}.webp` : undefined}
+                interactive
+                status="success"
+                onOpen={() => onOpenAgent(a.id)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+      <div className="csechead" style={{ marginTop: 18 }}>
+        <h3>Coming soon</h3>
+      </div>
       <div className="cgrid cgrid--3">
-        {list.map((a) => {
-          const live = isAgentLive(a.id);
-          return (
-            <AgentCard
-              key={a.id}
-              {...a}
-              glyph={<Icon name={a.glyph} />}
-              portrait={cardsV2 ? `/agents/${a.id}.webp` : undefined}
-              interactive
-              comingSoon={!live}
-              status={live ? "success" : undefined}
-              onOpen={live ? () => onOpenAgent(a.id) : undefined}
-            />
-          );
-        })}
+        {list.filter((a) => !isAgentLive(a.id)).map((a) => (
+          <AgentCard
+            key={a.id}
+            {...a}
+            glyph={<Icon name={a.glyph} />}
+            portrait={cardsV2 ? `/agents/${a.id}.webp` : undefined}
+            interactive
+            comingSoon
+          />
+        ))}
         <div className="caddcard" style={cardsV2 ? undefined : { opacity: 0.72 }}>
           {cardsV2 ? (
             <img className="caddcard__art" src="/agents/soon.webp" alt="" loading="lazy" />
