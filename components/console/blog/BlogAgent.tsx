@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   blogApproveKeywords, blogApproveOutline, blogBuildOutline, blogCreateRun,
   blogDraft, blogExport, blogRun, blogRuns, blogSaveDraft, blogScanSite,
@@ -170,18 +170,26 @@ export function BlogAgent({ onToast, onBack }: { onToast: (m: string) => void; o
     }).catch((e) => onToast(String(e)));
   }, [onToast]);
 
+  // Guards against rapid site-chip switching: only the *latest* requested domain's
+  // response (success or error) may write to state, so a slow response for a site
+  // the user already navigated away from can never overwrite the active site's
+  // topics/collision flags.
+  const topicsReqRef = useRef<string | null>(null);
+
   const loadTopics = useCallback((domain: string) => {
+    topicsReqRef.current = domain;
     setTopicsLoading(true);
     return blogSiteTopics(domain)
-      .then((t) => setTopics(t))
-      .catch((e) => onToast(String(e)))
-      .finally(() => setTopicsLoading(false));
+      .then((t) => { if (topicsReqRef.current === domain) setTopics(t); })
+      .catch((e) => { if (topicsReqRef.current === domain) onToast(String(e)); })
+      .finally(() => { if (topicsReqRef.current === domain) setTopicsLoading(false); });
   }, [onToast]);
 
   useEffect(() => { loadRuns(); loadSites(); }, [loadRuns, loadSites]);
   useEffect(() => { if (run?.draft) setMd(run.draft.markdown); }, [run?.id, run?.draft]);
   useEffect(() => {
-    if (!activeDomain) { setTopics(null); return; }
+    setTopics(null); // never show a stale site's topics while the new fetch is in flight
+    if (!activeDomain) return;
     loadTopics(activeDomain);
   }, [activeDomain, loadTopics]);
 
