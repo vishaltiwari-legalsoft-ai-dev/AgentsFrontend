@@ -134,7 +134,8 @@ function ComplianceRail({ draft }: { draft: NonNullable<BlogRun["draft"]> }) {
 
 /* ----------------------------------------------------------------- main --- */
 
-type BlogTopics = { suggested: BlogTopicSuggestion[]; avoided: unknown[]; degraded: string[] };
+type BlogAvoidedTopic = { keyword: string; collisions: BlogTopicSuggestion["collisions"]; covered_by: string[] };
+type BlogTopics = { suggested: BlogTopicSuggestion[]; avoided: BlogAvoidedTopic[]; degraded: string[] };
 
 export function BlogAgent({ onToast, onBack }: { onToast: (m: string) => void; onBack: () => void }) {
   const [runs, setRuns] = useState<BlogRunSummary[]>([]);
@@ -358,6 +359,33 @@ export function BlogAgent({ onToast, onBack }: { onToast: (m: string) => void; o
                       {topics && !topicsLoading && !topics.suggested.length &&
                         <p className="blog-empty">No fresh topic ideas right now — apna keyword likh dijiye neeche.</p>}
                     </div>
+
+                    {topics && topics.avoided.length > 0 && (
+                      <>
+                        <h4>Already covered / would cannibalize</h4>
+                        <div className="blog-topics">
+                          {topics.avoided.map((a) => {
+                            const first = a.collisions[0];
+                            return (
+                              <div key={a.keyword} className="blog-topic">
+                                <div className="blog-topic__kw">{a.keyword}</div>
+                                {first ? (
+                                  <div className="blog-flag">
+                                    <Icon name="triangle-alert" size={13} />
+                                    overlaps {first.title} — {first.url} ({Math.round(first.overlap * 100)}%)
+                                  </div>
+                                ) : a.covered_by[0] ? (
+                                  <div className="blog-flag">
+                                    <Icon name="triangle-alert" size={13} />
+                                    already covered by {a.covered_by[0]}
+                                  </div>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
 
