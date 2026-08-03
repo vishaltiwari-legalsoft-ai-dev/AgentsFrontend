@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  seoAsk, seoAuditReport, seoBriefs, seoBuildBrief, seoCompetitors, seoDraftScore, seoKeywordLab,
-  seoRunAudit, seoRunKeywordLab, seoSetCompetitors, seoTrackCompetitors, seoUpdatePlan,
-  type SeoAuditReport, type SeoBrief, type SeoCompetitors, type SeoDraftScore,
-  type SeoKeywordLab, type SeoUpdatePlan,
+  seoAsk, seoAuditReport, seoBriefs, seoBuildBrief, seoCompetitorProfiles, seoCompetitorProfilesRefresh,
+  seoCompetitors, seoDraftScore, seoKeywordLab, seoRunAudit, seoRunKeywordLab, seoSetCompetitors,
+  seoTrackCompetitors, seoUpdatePlan,
+  type SeoAuditReport, type SeoBrief, type SeoCompetitorProfilesDoc, type SeoCompetitors,
+  type SeoDraftScore, type SeoKeywordLab, type SeoUpdatePlan,
 } from "@/lib/api";
 import { Icon } from "@/lib/kit-ui";
 
@@ -196,11 +197,41 @@ export function CompetitorsView({ brandId, isCreator, onToast }: {
 }) {
   const [data, setData] = useState<SeoCompetitors | null>(null);
   const [busy, setBusy] = useState(false);
+  const [profiles, setProfiles] = useState<SeoCompetitorProfilesDoc | null>(null);
+  const [profilesBusy, setProfilesBusy] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const load = useCallback(() => {
     seoCompetitors(brandId).then(setData).catch(() => {});
   }, [brandId]);
   useEffect(load, [load]);
+
+  const loadProfiles = useCallback(() => {
+    seoCompetitorProfiles(brandId).then((r) => setProfiles(r.profiles)).catch(() => {});
+  }, [brandId]);
+  useEffect(loadProfiles, [loadProfiles]);
+
+  function toggleExpanded(domain: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(domain)) next.delete(domain); else next.add(domain);
+      return next;
+    });
+  }
+
+  async function refreshProfiles() {
+    setProfilesBusy(true);
+    onToast("Building competitor profiles — visibility, keywords won, and recent content…");
+    try {
+      const doc = await seoCompetitorProfilesRefresh(brandId);
+      setProfiles(doc);
+      onToast(doc.notes.length ? doc.notes[0] : "Competitor profiles refreshed");
+    } catch (e) {
+      onToast(errMsg(e, "Refresh failed"));
+    } finally {
+      setProfilesBusy(false);
+    }
+  }
 
   async function track() {
     setBusy(true);
@@ -229,6 +260,99 @@ export function CompetitorsView({ brandId, isCreator, onToast }: {
 
   return (
     <div className="seo-stack">
+      <div className="mr-section">
+        <div className="seo-lab__head">
+          <h3 className="mr-section__title">Top competitors — visibility, keywords won, content feed</h3>
+          <button className="seo-btn seo-btn--primary" disabled={profilesBusy} onClick={() => void refreshProfiles()}>
+            <Icon name="refresh-cw" size={13} /> Refresh
+          </button>
+        </div>
+        {profiles && <Notes notes={profiles.notes} />}
+        {!profiles && (
+          <div className="seo-empty">
+            No competitor profiles yet — hit “Refresh data” on this brand first (competitor discovery
+            needs rank snapshots), then hit “Refresh” here.
+          </div>
+        )}
+        {profiles && !profiles.profiles.length && (
+          <div className="seo-empty">No competitors resolved yet — add some below, or hit “Refresh” once rankings are tracked.</div>
+        )}
+        {profiles && !!profiles.profiles.length && (
+          <div className="seo-comp__grid">
+            {profiles.profiles.map((p) => {
+              const open = expanded.has(p.domain);
+              const hasDetail = !!(p.keywords_won.length || p.recent_posts.length || p.hot_topics.length);
+              return (
+                <div key={p.domain} className="seo-comp__card">
+                  <button className="seo-comp__head" onClick={() => toggleExpanded(p.domain)} aria-expanded={open}>
+                    <span className="seo-comp__domain">{p.domain}</span>
+                    <Icon name={open ? "chevron-up" : "chevron-down"} size={15} />
+                  </button>
+                  <div className="seo-comp__stats">
+                    <div className="seo-stat">
+                      <span className="seo-stat__label">Visibility</span>
+                      <span className="seo-stat__num">{p.visibility_pct}%</span>
+                    </div>
+                    <div className="seo-stat">
+                      <span className="seo-stat__label">Avg. position</span>
+                      <span className="seo-stat__num">{p.avg_position != null ? p.avg_position : "—"}</span>
+                    </div>
+                    <div className="seo-stat">
+                      <span className="seo-stat__label">Keywords won</span>
+                      <span className="seo-stat__num">{p.keywords_won.length}</span>
+                    </div>
+                  </div>
+                  {open && !hasDetail && (
+                    <div className="seo-empty">No keyword wins or tracked content for {p.domain} yet.</div>
+                  )}
+                  {open && !!p.keywords_won.length && (
+                    <div className="seo-comp__section">
+                      <div className="seo-lab__meta">Keywords they beat us on</div>
+                      {p.keywords_won.map((k) => (
+                        <div key={k.keyword} className="seo-comp__kw">
+                          <span className="seo-comp__kw-name">{k.keyword}</span>
+                          <span className="seo-comp__kw-pos">
+                            them #{k.their_position} · us {k.our_position != null ? `#${k.our_position}` : "not in top 10"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {open && !!p.recent_posts.length && (
+                    <div className="seo-comp__section">
+                      <div className="seo-lab__meta">Recent content</div>
+                      {p.recent_posts.map((post) => (
+                        <div key={post.url} className="seo-comp__post">
+                          <a className="seo-comp__post-title" href={post.url} target="_blank" rel="noreferrer">
+                            {post.title}
+                          </a>
+                          <span className="seo-comp__post-meta">
+                            <span className="seo-chip">{post.topic}</span>
+                            <span className="seo-comp__reach">
+                              {post.est_monthly_clicks != null
+                                ? `~${fmt(post.est_monthly_clicks)} clicks/mo (estimate)`
+                                : "reach unknown"}
+                            </span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {open && !!p.hot_topics.length && (
+                    <div className="seo-comp__section">
+                      <div className="seo-lab__meta">What they're publishing about</div>
+                      <div className="seo-cluster__kws">
+                        {p.hot_topics.map((t) => <span key={t} className="seo-chip">{t}</span>)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       <div className="mr-section">
         <div className="seo-lab__head">
           <h3 className="mr-section__title">Where we rank — tracked keywords</h3>

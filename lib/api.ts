@@ -2068,6 +2068,37 @@ export const seoTrackCompetitors = (brandId: string) =>
     {},
   );
 
+/** Top-5 competitor profiles: visibility, keywords they beat us on, and a
+ *  content feed with honestly labelled reach estimates (never a bare number). */
+export interface SeoCompetitorPost {
+  url: string;
+  title: string;
+  topic: string;
+  est_monthly_clicks: number | null;
+  estimate_basis: string;
+}
+
+export interface SeoCompetitorProfile {
+  domain: string;
+  visibility_pct: number;
+  avg_position: number | null;
+  keywords_won: { keyword: string; their_position: number; our_position: number | null }[];
+  recent_posts: SeoCompetitorPost[];
+  hot_topics: string[];
+}
+
+export interface SeoCompetitorProfilesDoc {
+  at: string;
+  notes: string[];
+  profiles: SeoCompetitorProfile[];
+}
+
+export const seoCompetitorProfiles = (brandId: string) =>
+  getJson<{ profiles: SeoCompetitorProfilesDoc | null }>(`/api/seo-geo/competitors/${brandId}/profiles`);
+
+export const seoCompetitorProfilesRefresh = (brandId: string) =>
+  postJson<SeoCompetitorProfilesDoc>(`/api/seo-geo/competitors/${brandId}/profiles/refresh`, {});
+
 export const seoBriefs = (brandId: string) =>
   getJson<{ briefs: SeoBrief[] }>(`/api/seo-geo/briefs/${brandId}`);
 

@@ -348,3 +348,30 @@ a.seo-pages__path:hover { color: var(--green-500); }
   .seo-pages__row { flex-direction: column; }
   .seo-pages__nums { justify-items: start; text-align: left; }
 }
+
+/* Top competitors — profile cards + content feed --------------------------- */
+.seo-comp__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.seo-comp__card {
+  display: grid; gap: 12px; align-content: start;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+.seo-comp__head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  border: 0; background: none; padding: 0;
+  font: inherit; color: var(--text-primary);
+  cursor: pointer; text-align: left;
+}
+.seo-comp__head svg { color: var(--text-tertiary); flex-shrink: 0; }
+.seo-comp__domain { font: 600 13.5px/1.3 var(--font-mono); }
+.seo-comp__stats { display: flex; gap: 18px; }
+.seo-comp__section { display: grid; gap: 8px; padding-top: 4px; border-top: 1px solid var(--border); }
+.seo-comp__kw { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.seo-comp__kw-name { font: 600 12.5px/1.35 var(--font-sans); min-width: 0; }
+.seo-comp__kw-pos { font: 500 11.5px/1 var(--font-mono); color: var(--text-tertiary); white-space: nowrap; }
+.seo-comp__post { display: grid; gap: 4px; }
+.seo-comp__post-title { font: 600 12.5px/1.4 var(--font-sans); color: var(--text-primary); word-break: break-word; }
+.seo-comp__post-title:hover { color: var(--green-500); }
+.seo-comp__post-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.seo-comp__reach { font: 500 11.5px/1 var(--font-mono); color: var(--text-tertiary); }
