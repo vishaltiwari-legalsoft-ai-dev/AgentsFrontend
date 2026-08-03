@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   seoAnalyzeSite, seoBrandDetail, seoDeleteBrand, seoOauthDisconnect, seoOauthStart, seoOverview,
   seoRunBrand, seoSaveBrand, seoSetTodoStatus,
-  type SeoBrand, type SeoGscStatus, type SeoOverview, type SeoPlanItem, type SeoRun,
+  type SeoBrand, type SeoGa, type SeoGscStatus, type SeoOverview, type SeoPlanItem, type SeoRun,
   type SeoSiteReview, type SeoTodoStatus, type SeoTopic,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -56,12 +56,92 @@ function DegradedNotes({ notes, domain }: { notes: string[]; domain: string }) {
       ? `Search Console access is missing for ${domain} — share the property with the backend service account, then refresh.`
       : n.startsWith("Serper")
         ? "Serper key is not set — blog topics are limited to our own search data (no live Google checks)."
-        : n,
+        : n.startsWith("Google Analytics")
+          ? `Google Analytics is not connected for ${domain} — give the backend service account Viewer access to the GA4 property, then refresh.`
+          : n,
   );
   return (
     <div className="seo-degraded">
       <Icon name="alert-triangle" size={14} />
       <div>{friendly.map((n, i) => <div key={i}>{n}</div>)}</div>
+    </div>
+  );
+}
+
+function GaSection({ ga }: { ga: SeoGa }) {
+  const t = ga.totals;
+  const p = ga.prev_totals;
+  return (
+    <div className="mr-section">
+      <h3 className="mr-section__title">
+        Website analytics · 28d
+        <span className="seo-ga__src">{ga.property_name || "Google Analytics"}</span>
+      </h3>
+      <div className="seo-summary">
+        <div className="seo-stat">
+          <span className="seo-stat__label">Sessions</span>
+          <span className="seo-stat__num">{fmt(t.sessions)}<Delta now={t.sessions} prev={p.sessions} /></span>
+        </div>
+        <div className="seo-stat">
+          <span className="seo-stat__label">Visitors</span>
+          <span className="seo-stat__num">{fmt(t.users)}<Delta now={t.users} prev={p.users} /></span>
+        </div>
+        <div className="seo-stat">
+          <span className="seo-stat__label">New visitors</span>
+          <span className="seo-stat__num">{fmt(t.new_users)}</span>
+        </div>
+        <div className="seo-stat">
+          <span className="seo-stat__label">Engagement</span>
+          <span className="seo-stat__num">{Math.round(t.engagement_rate * 100)}%</span>
+        </div>
+        <div className="seo-stat">
+          <span className="seo-stat__label">Pageviews</span>
+          <span className="seo-stat__num">{fmt(t.pageviews)}<Delta now={t.pageviews} prev={p.pageviews} /></span>
+        </div>
+      </div>
+      {(ga.top_pages.length > 0 || ga.channels.length > 0) && (
+        <div className="seo-ga__cols">
+          {ga.top_pages.length > 0 && (
+            <div>
+              <div className="seo-lab__meta">Most visited pages</div>
+              <ul className="seo-ga__list">
+                {ga.top_pages.map((pg) => (
+                  <li key={pg.path}>
+                    <span className="seo-ga__name" title={pg.path}>{pg.path}</span>
+                    <span className="seo-ga__num">{fmt(pg.views)} views</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {ga.channels.length > 0 && (
+            <div>
+              <div className="seo-lab__meta">Where traffic comes from</div>
+              <ul className="seo-ga__list">
+                {ga.channels.map((c) => (
+                  <li key={c.channel}>
+                    <span className="seo-ga__name">{c.channel}</span>
+                    <span className="seo-ga__num">
+                      {fmt(c.sessions)}
+                      <Delta now={c.sessions} prev={c.prev_sessions} />
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+      {ga.key_events.length > 0 && (
+        <>
+          <div className="seo-lab__meta">Key events (conversions)</div>
+          <div className="seo-cluster__kws">
+            {ga.key_events.map((e) => (
+              <span key={e.event} className="seo-chip seo-chip--on">{e.event} · {fmt(e.count)}</span>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -491,6 +571,8 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                     </div>
                   </div>
                 )}
+
+                {run.ga && <GaSection ga={run.ga} />}
 
                 {run.insights.length > 0 && (
                   <div className="mr-section">

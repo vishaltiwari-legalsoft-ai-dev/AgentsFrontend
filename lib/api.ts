@@ -1834,6 +1834,26 @@ export interface SeoTopic {
   score: number;
 }
 
+export interface SeoGaTotals {
+  sessions: number;
+  users: number;
+  new_users: number;
+  engagement_rate: number;
+  avg_session_sec: number;
+  pageviews: number;
+}
+
+/** Live Google Analytics (GA4) overview — null when GA isn't shared with the service account. */
+export interface SeoGa {
+  property: string;
+  property_name: string;
+  totals: SeoGaTotals;
+  prev_totals: SeoGaTotals;
+  top_pages: { path: string; views: number; sessions: number }[];
+  channels: { channel: string; sessions: number; prev_sessions: number }[];
+  key_events: { event: string; count: number }[];
+}
+
 export interface SeoRun {
   brand_id: string;
   at: string;
@@ -1843,6 +1863,7 @@ export interface SeoRun {
   insights: string[];
   todos: SeoTodo[];
   topics: SeoTopic[];
+  ga?: SeoGa | null;
 }
 
 export const seoOverview = () => getJson<SeoOverview>("/api/seo-geo/overview");
