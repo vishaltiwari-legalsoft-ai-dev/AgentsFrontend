@@ -28,6 +28,9 @@ const STATUS_LABEL: Record<string, string> = {
   capped: "Deep enough — go deeper if you want",
 };
 
+/** The open run survives dev-server reloads: remounting restores it from here. */
+const OPEN_RUN_KEY = "bw-open-run";
+
 function fmtDate(iso: string): string {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -89,6 +92,46 @@ export function BlogWriter({ onToast, onBack }: { onToast: (m: string) => void; 
     autoRef.current = false; // leaving the view stops any research loop
   }, []);
 
+  // A dev-server reload (or any remount) must not lose the desk: reopen the
+  // remembered run and, if it was mid-research, pick the loop back up.
+  useEffect(() => {
+    const savedId = typeof window !== "undefined" ? localStorage.getItem(OPEN_RUN_KEY) : null;
+    if (!savedId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const full = await bwRun(savedId);
+        if (cancelled) return;
+        setRun(full);
+        try {
+          const b = await bwBrands();
+          if (cancelled) return;
+          const owner = b.brands.find((x) => x.id === full.brand_id) ?? null;
+          setBrand(owner);
+          if (owner) {
+            try {
+              setInventory(await bwInventory(owner.id));
+            } catch {
+              /* not scanned yet */
+            }
+          }
+        } catch {
+          /* brand context is cosmetic here; the run view stands alone */
+        }
+        if (!cancelled && full.status === "research") {
+          setBusy("research");
+          void researchLoop(full);
+        }
+      } catch {
+        localStorage.removeItem(OPEN_RUN_KEY); // run gone — forget it
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function openBrand(b: BwBrand) {
     setBrand(b);
     setRun(null);
@@ -135,6 +178,7 @@ export function BlogWriter({ onToast, onBack }: { onToast: (m: string) => void; 
     try {
       const created = await bwCreateRun({ brand_id: brand.id, topic: topic.trim(), notes: notes.trim() || undefined });
       setRun(created);
+      localStorage.setItem(OPEN_RUN_KEY, created.id);
       setTopic("");
       setNotes("");
       void bwRuns().then((r) => setRuns(r.runs)).catch(() => undefined);
@@ -229,6 +273,7 @@ export function BlogWriter({ onToast, onBack }: { onToast: (m: string) => void; 
         }
       }
       setRun(full);
+      localStorage.setItem(OPEN_RUN_KEY, full.id);
     } catch (e) {
       fail(e, "Could not open the run");
     }
@@ -238,6 +283,7 @@ export function BlogWriter({ onToast, onBack }: { onToast: (m: string) => void; 
     if (run) {
       stopResearch();
       setRun(null);
+      localStorage.removeItem(OPEN_RUN_KEY);
     } else if (brand) {
       setBrand(null);
       setInventory(null);

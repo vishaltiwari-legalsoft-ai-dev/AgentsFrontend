@@ -102,14 +102,16 @@ export default function ConsoleApp() {
   }, [user?.is_admin, user?.is_creator]);
 
   // Keep the URL hash in sync with the current view. replaceState avoids
-  // piling up history entries while still surviving a reload.
+  // piling up history entries while still surviving a reload. Never write
+  // before auth resolves: on a reload nav is still "home" while the restore
+  // effect waits for the user, and writing then would clobber the saved hash.
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !user) return;
     const target = `#/${nav}`;
     if (window.location.hash !== target) {
       window.history.replaceState(null, "", target);
     }
-  }, [nav]);
+  }, [nav, user]);
 
   const fire = useCallback((msg: string) => {
     setToast({ msg, k: Date.now() });
