@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   bwBrands, bwBuildDraft, bwCommentBlock, bwCreateRun, bwExport, bwPlanVisuals,
   bwResearchStep, bwRun, bwRuns, bwScanInventory, bwInventory, bwStudyVoice, bwVoice,
@@ -43,6 +43,40 @@ function download(blob: Blob, filename: string) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+const MD_LINK = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
+
+function renderInline(line: string, key: string) {
+  const parts: ReactNode[] = [];
+  const re = new RegExp(MD_LINK.source, "g");
+  let last = 0;
+  let i = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(line))) {
+    if (m.index > last) parts.push(line.slice(last, m.index));
+    parts.push(
+      <a key={`${key}-${i++}`} href={m[2]} target="_blank" rel="noreferrer">{m[1]}</a>,
+    );
+    last = m.index + m[0].length;
+  }
+  parts.push(line.slice(last));
+  return parts;
+}
+
+/** Draft text renderer: markdown links become anchors, "### " lines become sub-headings. */
+function BlockText({ text }: { text: string }) {
+  return (
+    <>
+      {text.split("\n").map((line, i) =>
+        line.startsWith("### ") ? (
+          <span key={i} className="bw-block__sub">{line.slice(4)}{"\n"}</span>
+        ) : (
+          <span key={i}>{renderInline(line, String(i))}{"\n"}</span>
+        ),
+      )}
+    </>
+  );
 }
 
 /** Stable citation numbers: n = 1-based ledger order of the cited items (matches exports). */
@@ -597,7 +631,7 @@ export function BlogWriter({ onToast, onBack }: { onToast: (m: string) => void; 
                     <div key={block.id} className="bw-block">
                       {block.heading && <h3 className="bw-block__heading">{block.heading}</h3>}
                       <p className="bw-block__text">
-                        {block.text}
+                        <BlockText text={block.text} />
                         {block.cites.map((c) =>
                           numbers[c] ? (
                             <sup key={c} className="bw-cite" title={run.ledger.find((e) => e.id === c)?.claim}>
