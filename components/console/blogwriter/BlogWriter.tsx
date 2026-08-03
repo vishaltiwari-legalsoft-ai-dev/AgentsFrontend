@@ -530,6 +530,11 @@ export function BlogWriter({ onToast, onBack }: { onToast: (m: string) => void; 
               <div className="mr-panel">
                 <div className="mr-panel__head">
                   <h2 className="mr-panel__title">{run.draft.meta.title}</h2>
+                  {run.draft.guidelines_applied && (
+                    <span className="bw-chip bw-chip--ok" title="Every block was line-edited against the company writing guidelines before you saw it.">
+                      House style applied
+                    </span>
+                  )}
                   <span className="mr-panel__sub">Comment on any block — the agent rewrites it, or researches first when you ask for facts.</span>
                 </div>
                 {run.draft.notes.map((n) => (

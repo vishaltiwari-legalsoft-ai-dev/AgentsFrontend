@@ -2184,6 +2184,8 @@ export interface BwDraft {
   blocks: BwBlock[];
   internal_links: { url: string; title: string }[];
   notes: string[];
+  /** True once the house writing guidelines line-edit has run on every block. */
+  guidelines_applied?: boolean;
 }
 
 export interface BwVisual {
