@@ -2139,6 +2139,15 @@ export interface BwBrand {
   name: string;
   domain: string;
   inventory: { counts: BwCounts; scanned: string } | null;
+  voice: { studied: string; count: number } | null;
+}
+
+export interface BwVoice {
+  brand_id: string;
+  studied: string;
+  posts_read: string[];
+  count: number;
+  profile: Record<string, string | string[]>;
 }
 
 export interface BwInventory {
@@ -2229,6 +2238,10 @@ export const bwBrands = () => getJson<{ brands: BwBrand[] }>("/api/blog/brands")
 export const bwInventory = (brandId: string) => getJson<BwInventory>(`/api/blog/brands/${brandId}/inventory`);
 
 export const bwScanInventory = (brandId: string) => postJson<BwInventory>(`/api/blog/brands/${brandId}/inventory`, {});
+
+export const bwVoice = (brandId: string) => getJson<BwVoice>(`/api/blog/brands/${brandId}/voice`);
+
+export const bwStudyVoice = (brandId: string) => postJson<BwVoice>(`/api/blog/brands/${brandId}/voice`, {});
 
 export const bwRuns = () => getJson<{ runs: BwRunSummary[] }>("/api/blog/runs");
 

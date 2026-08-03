@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   bwBrands, bwBuildDraft, bwCommentBlock, bwCreateRun, bwExport, bwPlanVisuals,
-  bwResearchStep, bwRun, bwRuns, bwScanInventory, bwInventory,
+  bwResearchStep, bwRun, bwRuns, bwScanInventory, bwInventory, bwStudyVoice, bwVoice,
   type BwBlock, type BwBrand, type BwExportFormat, type BwInventory as BwInventoryDoc,
-  type BwRun as BwRunDoc, type BwRunSummary,
+  type BwRun as BwRunDoc, type BwRunSummary, type BwVoice as BwVoiceDoc,
 } from "@/lib/api";
 import { Icon } from "@/lib/kit-ui";
 import { useReportWork } from "@/lib/work";
@@ -58,6 +58,7 @@ export function BlogWriter({ onToast, onBack }: { onToast: (m: string) => void; 
   const [brands, setBrands] = useState<BwBrand[] | null>(null);
   const [brand, setBrand] = useState<BwBrand | null>(null);
   const [inventory, setInventory] = useState<BwInventoryDoc | null>(null);
+  const [voiceDoc, setVoiceDoc] = useState<BwVoiceDoc | null>(null);
   const [runs, setRuns] = useState<BwRunSummary[]>([]);
   const [run, setRun] = useState<BwRunDoc | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -136,10 +137,28 @@ export function BlogWriter({ onToast, onBack }: { onToast: (m: string) => void; 
     setBrand(b);
     setRun(null);
     setInventory(null);
+    setVoiceDoc(null);
     try {
       setInventory(await bwInventory(b.id));
     } catch {
       /* 404 = not scanned yet; the panel offers the scan button */
+    }
+    try {
+      setVoiceDoc(await bwVoice(b.id));
+    } catch {
+      /* 404 = voice not studied yet */
+    }
+  }
+
+  async function studyVoice() {
+    if (!brand || busy) return;
+    setBusy("voice-study");
+    try {
+      setVoiceDoc(await bwStudyVoice(brand.id));
+    } catch (e) {
+      fail(e, "Voice study failed");
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -348,6 +367,11 @@ export function BlogWriter({ onToast, onBack }: { onToast: (m: string) => void; 
                         <Icon name="search" size={13} /> Site not scanned yet
                       </div>
                     )}
+                    {b.voice && (
+                      <div className="bw-card__meta">
+                        <Icon name="book-open" size={13} /> voice studied from {b.voice.count} posts
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -401,6 +425,34 @@ export function BlogWriter({ onToast, onBack }: { onToast: (m: string) => void; 
                   </ul>
                 </>
               )}
+
+              <div className="bw-voice">
+                <div className="bw-voice__head">
+                  <span className="bw-desk__past-label">Brand voice</span>
+                  <button className="bw-btn" disabled={busy === "voice-study" || !inventory} onClick={() => void studyVoice()}>
+                    {busy === "voice-study" ? <Icon name="loader-circle" size={14} className="bw-spin" /> : <Icon name="book-open" size={14} />}
+                    {voiceDoc ? "Restudy" : "Study the blog's voice"}
+                  </button>
+                </div>
+                {!voiceDoc && (
+                  <div className="bw-hint">
+                    {inventory
+                      ? `Reads up to 12 published posts and stores how ${brand.name} writes. Every draft and revision then matches that voice.`
+                      : "Scan the site first, then study the voice."}
+                  </div>
+                )}
+                {voiceDoc && (
+                  <div className="bw-voice__body">
+                    <div className="bw-voice__meta">{voiceDoc.count} posts studied · {fmtDate(voiceDoc.studied)}</div>
+                    {typeof voiceDoc.profile.summary === "string" && (
+                      <p className="bw-voice__summary">{voiceDoc.profile.summary}</p>
+                    )}
+                    {typeof voiceDoc.profile.tone === "string" && (
+                      <div className="bw-voice__row">Tone: {voiceDoc.profile.tone}</div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="mr-panel bw-desk__writing">
