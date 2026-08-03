@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   seoAnalyzeSite, seoBrandDetail, seoDeleteBrand, seoOauthDisconnect, seoOauthStart, seoOverview,
   seoPages, seoPagesRefresh, seoRunBrand, seoSaveBrand, seoSetTodoStatus,
@@ -8,10 +8,17 @@ import {
   type SeoRun, type SeoSiteReview, type SeoTodoStatus, type SeoTopic,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { Icon, Tabs } from "@/lib/kit-ui";
+import { Icon } from "@/lib/kit-ui";
 import { AskView, AuditView, BriefsView, CompetitorsView, KeywordsView, UpdatePlanButton } from "./labs";
 
-type SeoTab = "todos" | "pages" | "ask" | "keywords" | "topics" | "competitors" | "briefs" | "audit";
+type SeoTool = "ask" | "keywords" | "briefs" | "audit";
+
+const TOOL_LABELS: Record<SeoTool, string> = {
+  ask: "Ask the analyst",
+  keywords: "Keyword lab",
+  briefs: "Content briefs",
+  audit: "Site audit",
+};
 
 /** SEO agent (a2) — per-brand insights, traffic-estimated to-dos, blog topic lab. */
 
@@ -127,6 +134,83 @@ function PagesView({ doc, busy, onRefresh }: {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function pctPhrase(now: number, prev: number): string {
+  if (!prev) return "";
+  const d = Math.round(((now - prev) / prev) * 100);
+  if (d === 0) return "steady vs the month before";
+  return d > 0 ? `up ${d}% vs the month before` : `down ${Math.abs(d)}% vs the month before`;
+}
+
+/** The panel speaks first: what happened, in sentences a busy owner can read in 5 seconds. */
+function Story({ run }: { run: SeoRun | null }) {
+  if (!run) {
+    return (
+      <div className="seo-story">
+        <p>No analysis yet. Hit <strong>Refresh data</strong> and this page will tell you exactly what to do next.</p>
+      </div>
+    );
+  }
+  const ga = run.ga;
+  if (ga) {
+    const lead = ga.key_events.find((e) => e.event === "generate_lead");
+    const organic = ga.channels.find((c) => c.channel === "Organic Search");
+    const organicRank = organic ? ga.channels.filter((c) => c.sessions > organic.sessions).length + 1 : 0;
+    const trend = pctPhrase(ga.totals.sessions, ga.prev_totals.sessions);
+    return (
+      <div className="seo-story">
+        <p>
+          <strong>{fmt(ga.totals.sessions)} people</strong> visited your site in the last 28 days
+          {trend ? ` — ${trend}` : ""}.
+        </p>
+        <p>
+          {lead && <><strong>{fmt(lead.count)}</strong> became leads. </>}
+          {organic && (
+            <>Google search brought <strong>{fmt(organic.sessions)}</strong> of them
+              {organicRank > 0 ? ` — your #${organicRank} traffic source` : ""}.</>
+          )}
+        </p>
+      </div>
+    );
+  }
+  if (run.summary.mode === "rank-tracking") {
+    return (
+      <div className="seo-story">
+        <p>
+          <strong>{run.summary.top10 ?? 0} of {run.summary.tracked ?? 0}</strong> keywords we track are on
+          page 1 of Google. The plan below is the fastest way to add more.
+        </p>
+      </div>
+    );
+  }
+  const trend = pctPhrase(run.summary.clicks_28d, run.summary.clicks_prev_28d);
+  return (
+    <div className="seo-story">
+      <p>
+        <strong>{fmt(run.summary.clicks_28d)} visits came from Google</strong> in the last 28 days
+        {trend ? ` — ${trend}` : ""}.
+      </p>
+    </div>
+  );
+}
+
+/** A quiet, collapsed section: the headline carries the takeaway, the body carries the detail. */
+function Fold({ title, hint, count, defaultOpen = false, children }: {
+  title: string; hint?: string; count?: number; defaultOpen?: boolean; children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="seo-fold">
+      <button className="seo-fold__head" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <Icon name={open ? "chevron-down" : "chevron-right"} size={14} />
+        <span className="seo-fold__title">{title}</span>
+        {count != null && count > 0 && <span className="seo-fold__count">{fmt(count)}</span>}
+        {hint && !open && <span className="seo-fold__hint">{hint}</span>}
+      </button>
+      {open && <div className="seo-fold__body">{children}</div>}
     </div>
   );
 }
@@ -269,7 +353,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
   const [siteBusy, setSiteBusy] = useState(false);
   const [pagesDoc, setPagesDoc] = useState<SeoPagesDoc | null>(null);
   const [pagesBusy, setPagesBusy] = useState(false);
-  const [tab, setTab] = useState<SeoTab>("todos");
+  const [tool, setTool] = useState<SeoTool | null>(null);
   const [busy, setBusy] = useState(false);
   const [showAllTodos, setShowAllTodos] = useState(false);
   const [showAvoided, setShowAvoided] = useState(false);
@@ -292,7 +376,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       setGsc(detail.gsc ?? null);
       setPlan(detail.plan ?? []);
       setSiteReview(detail.site_review ?? null);
-      setTab("todos");
+      setTool(null);
       setShowAllTodos(false);
       setPagesDoc(null);
       try {
@@ -537,27 +621,30 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
               </div>
             </div>
 
+            <Story run={run} />
+
             {plan.length > 0 && (
-              <div className="mr-section seo-poa">
-                <h3 className="mr-section__title">Plan of action — do these first</h3>
-                {plan.map((p, i) => (
-                  <div key={i} className="seo-poa__item">
-                    <span className="seo-poa__num">{i + 1}</span>
-                    <div className="seo-poa__body">
-                      <span className="seo-poa__action">{p.action}</span>
-                      <span className="seo-poa__detail">{p.detail}</span>
+              <div className="seo-hero">
+                <div className="seo-hero__title">This week — do these {Math.min(plan.length, 3)}</div>
+                {plan.slice(0, 3).map((p, i) => (
+                  <div key={i} className="seo-hero__item">
+                    <span className="seo-hero__num">{i + 1}</span>
+                    <div className="seo-hero__body">
+                      <span className="seo-hero__action">{p.action}</span>
+                      <span className="seo-hero__detail">{p.detail}</span>
                     </div>
-                    <span className="seo-chip">{p.source}</span>
                   </div>
                 ))}
               </div>
             )}
 
+            {run && <DegradedNotes notes={run.degraded} domain={brand.domain} />}
+
             {siteReview && (
+              <Fold title="Website health"
+                    hint={`${siteReview.issues.length} finding(s) · ${siteReview.page_count} pages read`}>
               <div className="mr-section">
-                <h3 className="mr-section__title">
-                  Site review — {siteReview.page_count} pages read · {siteReview.at}
-                </h3>
+                <h3 className="mr-section__title">What the expert review found · {siteReview.at}</h3>
                 {siteReview.positioning && <div className="seo-poa__action">{siteReview.positioning}</div>}
                 {siteReview.scorecard && Object.keys(siteReview.scorecard).length > 0 && (
                   <div className="seo-cluster__kws">
@@ -566,7 +653,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                         intent: "Intent", content_depth: "Content depth", architecture: "Architecture",
                         trust: "Trust", conversion: "Conversion", ai_search: "AI search",
                       }[key] ?? key;
-                      const cls = cell.grade >= 4 ? "seo-chip--on" : cell.grade === 3 ? "seo-chip--sev-medium" : "seo-chip--sev-high";
+                      const cls = cell.grade >= 4 ? "seo-chip--on" : "";
                       return (
                         <span key={key} className={`seo-chip ${cls}`} title={cell.note}>
                           {label} {cell.grade}/5
@@ -596,12 +683,16 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                   Findings are in the Fix list with everything else — nothing to read twice.
                 </div>
               </div>
+              </Fold>
             )}
 
-            {run && <DegradedNotes notes={run.degraded} domain={brand.domain} />}
-
             {run && (
-              <>
+              <Fold title="Traffic & rankings"
+                    hint={run.ga
+                      ? `${fmt(run.ga.totals.sessions)} visits · ${fmt(run.ga.key_events.find((e) => e.event === "generate_lead")?.count ?? 0)} leads`
+                      : run.summary.mode === "rank-tracking"
+                        ? `${run.summary.top10 ?? 0}/${run.summary.tracked ?? 0} keywords on page 1`
+                        : `${fmt(run.summary.clicks_28d)} clicks from Google`}>
                 {run.summary.mode === "rank-tracking" ? (
                   <div className="seo-summary">
                     <div className="seo-stat">
@@ -671,43 +762,36 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                     </ul>
                   </div>
                 )}
-              </>
+              </Fold>
             )}
 
-            <Tabs
-              items={[
-                { value: "todos", label: "Fix list", count: run?.todos.length || undefined },
-                { value: "pages", label: "Pages", count: pagesDoc?.pages.length || undefined },
-                { value: "ask", label: "Ask" },
-                { value: "keywords", label: "Keywords" },
-                { value: "topics", label: "Blog topics", count: run?.topics.length || undefined },
-                { value: "competitors", label: "Competitors" },
-                { value: "briefs", label: "Briefs" },
-                { value: "audit", label: "Audit" },
-              ]}
-              value={tab}
-              onChange={(v) => setTab(v as SeoTab)}
-            />
-
-            {tab === "pages" && (
+            <Fold title="Pages" count={pagesDoc?.pages.length} hint="traffic + health, page by page">
               <PagesView doc={pagesDoc} busy={pagesBusy} onRefresh={() => void refreshPages(brand.id)} />
-            )}
-            {tab === "ask" && <AskView brandId={brand.id} brandName={brand.name} />}
-            {tab === "keywords" && <KeywordsView brandId={brand.id} onToast={onToast} />}
-            {tab === "competitors" && (
+            </Fold>
+
+            <Fold title="Competitors" hint="top 5 — and what they publish">
               <CompetitorsView brandId={brand.id} isCreator={!!user?.is_creator} onToast={onToast} />
-            )}
-            {tab === "briefs" && <BriefsView brandId={brand.id} onToast={onToast} />}
-            {tab === "audit" && <AuditView brandId={brand.id} brandName={brand.name} onToast={onToast} />}
-            {(tab === "todos" || tab === "topics") && !run && (
-              <div className="mr-section seo-empty">
-                No analysis yet — hit “Refresh data” to pull the first 28 days of search performance.
+            </Fold>
+
+            <Fold title="More tools" hint="ask · keyword lab · briefs · audit">
+              <div className="seo-cluster__kws">
+                {(Object.keys(TOOL_LABELS) as SeoTool[]).map((t) => (
+                  <button key={t} className={`seo-chip${tool === t ? " seo-chip--on" : ""}`}
+                          onClick={() => setTool(tool === t ? null : t)}>
+                    {TOOL_LABELS[t]}
+                  </button>
+                ))}
               </div>
-            )}
+              {tool === "ask" && <AskView brandId={brand.id} brandName={brand.name} />}
+              {tool === "keywords" && <KeywordsView brandId={brand.id} onToast={onToast} />}
+              {tool === "briefs" && <BriefsView brandId={brand.id} onToast={onToast} />}
+              {tool === "audit" && <AuditView brandId={brand.id} brandName={brand.name} onToast={onToast} />}
+            </Fold>
 
             {run && (
               <>
-                {tab === "todos" && (
+                <Fold title="Fix list" count={run.todos.length} hint="every fix, biggest win first">
+                {(
                   <div className="mr-section">
                     <h3 className="mr-section__title">
                       {run.summary.mode === "rank-tracking"
@@ -753,8 +837,11 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                     )}
                   </div>
                 )}
+                </Fold>
 
-                {tab === "topics" && (() => {
+                <Fold title="Blog plan" count={run.topics.filter((t) => !t.avoided).length}
+                      hint="the next posts to publish">
+                {(() => {
                   const liveTopics = run.topics.filter((t) => !t.avoided);
                   const avoidedTopics = run.topics.filter((t) => t.avoided);
                   return (
@@ -809,6 +896,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                     </div>
                   );
                 })()}
+                </Fold>
               </>
             )}
           </div>
