@@ -31,12 +31,8 @@ const FIELD_ORDER: AgentModelField[] = [
   "openrouter_vision_model",
   "gd_planner_model",
 ];
-/** Per-agent label overrides where the generic name would mislead (the SEO Blog
- *  pipeline runs entirely on the "fast" slot, so to the creator it IS the
- *  writing model). */
-const AGENT_FIELD_LABEL: Record<string, Partial<Record<AgentModelField, string>>> = {
-  a9: { openrouter_fast_model: "Writing model (all steps)" },
-};
+/** Per-agent label overrides where the generic field name would mislead. */
+const AGENT_FIELD_LABEL: Record<string, Partial<Record<AgentModelField, string>>> = {};
 
 function modelName(options: ModelOption[], id: string): string {
   return options.find((m) => m.id === id)?.name ?? id ?? "—";
