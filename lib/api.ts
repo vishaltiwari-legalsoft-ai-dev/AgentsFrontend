@@ -2089,6 +2089,42 @@ export const seoUpdatePlan = (brandId: string, page: string) =>
 export const seoAsk = (brandId: string, question: string) =>
   postJson<{ question: string; answer: string }>(`/api/seo-geo/ask/${brandId}`, { question });
 
+/* --------------------------- SEO agent: Pages ------------------------------ */
+// Per-page traffic + crawl intel: where analytics and the site crawl disagree,
+// what's underperforming, and what to do about each page.
+
+export interface SeoPageIntel {
+  path: string;
+  url: string;
+  title: string;
+  views: number;
+  sessions: number;
+  engagement_rate: number;
+  clicks: number;
+  impressions: number;
+  position: number | null;
+  best_query: string | null;
+  /** Beyond content/structure/trust flags, "not-crawled" = seen in analytics but
+   *  absent from the site crawl; its recommendation explains why. */
+  flags: string[];
+  recommendation: string;
+  word_count: number;
+}
+
+export interface SeoPagesDoc {
+  brand_id: string;
+  at: string;
+  ai: boolean;
+  notes: string[];
+  pages: SeoPageIntel[];
+}
+
+export const seoPages = (id: string) =>
+  getJson<{ pages: SeoPagesDoc | null }>(`/api/seo-geo/pages/${id}`);
+
+export const seoPagesRefresh = (id: string) =>
+  postJson<SeoPagesDoc>(`/api/seo-geo/pages/${id}/refresh`, {});
+
 /* ---------------------------------------------------------------- seo blog (a9) */
 
 export interface BlogRunSummary {

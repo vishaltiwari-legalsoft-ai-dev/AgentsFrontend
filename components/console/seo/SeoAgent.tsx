@@ -3,15 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   seoAnalyzeSite, seoBrandDetail, seoDeleteBrand, seoOauthDisconnect, seoOauthStart, seoOverview,
-  seoRunBrand, seoSaveBrand, seoSetTodoStatus,
-  type SeoBrand, type SeoGa, type SeoGscStatus, type SeoOverview, type SeoPlanItem, type SeoRun,
-  type SeoSiteReview, type SeoTodoStatus, type SeoTopic,
+  seoPages, seoPagesRefresh, seoRunBrand, seoSaveBrand, seoSetTodoStatus,
+  type SeoBrand, type SeoGa, type SeoGscStatus, type SeoOverview, type SeoPagesDoc, type SeoPlanItem,
+  type SeoRun, type SeoSiteReview, type SeoTodoStatus, type SeoTopic,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Icon, Tabs } from "@/lib/kit-ui";
 import { AskView, AuditView, BriefsView, CompetitorsView, KeywordsView, UpdatePlanButton } from "./labs";
 
-type SeoTab = "todos" | "ask" | "keywords" | "topics" | "competitors" | "briefs" | "audit";
+type SeoTab = "todos" | "pages" | "ask" | "keywords" | "topics" | "competitors" | "briefs" | "audit";
 
 /** SEO agent (a2) — per-brand insights, traffic-estimated to-dos, blog topic lab. */
 
@@ -64,6 +64,69 @@ function DegradedNotes({ notes, domain }: { notes: string[]; domain: string }) {
     <div className="seo-degraded">
       <Icon name="alert-triangle" size={14} />
       <div>{friendly.map((n, i) => <div key={i}>{n}</div>)}</div>
+    </div>
+  );
+}
+
+function PagesView({ doc, busy, onRefresh }: {
+  doc: SeoPagesDoc | null; busy: boolean; onRefresh: () => void;
+}) {
+  if (!doc) {
+    return (
+      <div className="mr-section">
+        <div className="seo-empty">Run the site analysis first — then refresh this tab.</div>
+        <button className="seo-btn seo-btn--primary" disabled={busy} onClick={onRefresh}>
+          <Icon name="refresh-cw" size={13} /> Refresh
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="mr-section">
+      <div className="seo-lab__head">
+        <h3 className="mr-section__title">Pages — {fmt(doc.pages.length)} tracked · {doc.at}</h3>
+        <button className="seo-btn seo-btn--primary" disabled={busy} onClick={onRefresh}>
+          <Icon name="refresh-cw" size={13} /> Refresh
+        </button>
+      </div>
+      {doc.notes.length > 0 && (
+        <div className="seo-degraded">
+          <Icon name="alert-triangle" size={14} />
+          <div>{doc.notes.map((n, i) => <div key={i}>{n}</div>)}</div>
+        </div>
+      )}
+      {doc.pages.length === 0 && (
+        <div className="seo-empty">No pages found — run the site analysis, then refresh this tab.</div>
+      )}
+      {doc.pages.map((p) => (
+        <div key={p.path} className="seo-pages__row">
+          <div className="seo-pages__main">
+            <div className="seo-pages__head">
+              {p.url ? (
+                <a className="seo-pages__path" href={p.url} target="_blank" rel="noreferrer">{p.path}</a>
+              ) : (
+                <span className="seo-pages__path">{p.path}</span>
+              )}
+              <span className="seo-pages__title">{p.title || "No title"}</span>
+            </div>
+            {p.flags.length > 0 && (
+              <div className="seo-pages__flags">
+                {p.flags.map((f) => <span key={f} className="seo-chip seo-chip--sev-medium">{f}</span>)}
+              </div>
+            )}
+            <div className="seo-pages__rec">{doc.ai ? "AI: " : "Rule: "}{p.recommendation}</div>
+          </div>
+          <div className="seo-pages__nums">
+            <span>{fmt(p.views)} views</span>
+            <span>{fmt(p.sessions)} sessions</span>
+            <span>{Math.round(p.engagement_rate * 100)}% engaged</span>
+            <span>{fmt(p.clicks)} clicks</span>
+            <span>{fmt(p.impressions)} impressions</span>
+            <span>{p.position != null ? `pos ${p.position}` : "not ranked"}</span>
+            {p.best_query && <span className="seo-pages__query" title={p.best_query}>{p.best_query}</span>}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -204,8 +267,11 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
   const [plan, setPlan] = useState<SeoPlanItem[]>([]);
   const [siteReview, setSiteReview] = useState<SeoSiteReview | null>(null);
   const [siteBusy, setSiteBusy] = useState(false);
+  const [pagesDoc, setPagesDoc] = useState<SeoPagesDoc | null>(null);
+  const [pagesBusy, setPagesBusy] = useState(false);
   const [tab, setTab] = useState<SeoTab>("todos");
   const [busy, setBusy] = useState(false);
+  const [showAllTodos, setShowAllTodos] = useState(false);
 
   const refreshOverview = useCallback(async () => {
     try {
@@ -226,8 +292,29 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       setPlan(detail.plan ?? []);
       setSiteReview(detail.site_review ?? null);
       setTab("todos");
+      setShowAllTodos(false);
+      setPagesDoc(null);
+      try {
+        const pagesRes = await seoPages(id);
+        setPagesDoc(pagesRes.pages);
+      } catch {
+        setPagesDoc(null);
+      }
     } catch (e) {
       onToast(e instanceof Error ? e.message : "Failed to load brand");
+    }
+  }
+
+  async function refreshPages(id: string) {
+    setPagesBusy(true);
+    try {
+      const doc = await seoPagesRefresh(id);
+      setPagesDoc(doc);
+      onToast(`Pages refreshed — ${fmt(doc.pages.length)} page(s)`);
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "Could not refresh pages");
+    } finally {
+      setPagesBusy(false);
     }
   }
 
@@ -588,6 +675,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
             <Tabs
               items={[
                 { value: "todos", label: "Fix list", count: run?.todos.length || undefined },
+                { value: "pages", label: "Pages", count: pagesDoc?.pages.length || undefined },
                 { value: "ask", label: "Ask" },
                 { value: "keywords", label: "Keywords" },
                 { value: "topics", label: "Blog topics", count: run?.topics.length || undefined },
@@ -599,6 +687,9 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
               onChange={(v) => setTab(v as SeoTab)}
             />
 
+            {tab === "pages" && (
+              <PagesView doc={pagesDoc} busy={pagesBusy} onRefresh={() => void refreshPages(brand.id)} />
+            )}
             {tab === "ask" && <AskView brandId={brand.id} brandName={brand.name} />}
             {tab === "keywords" && <KeywordsView brandId={brand.id} onToast={onToast} />}
             {tab === "competitors" && (
@@ -618,12 +709,13 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                   <div className="mr-section">
                     <h3 className="mr-section__title">
                       {run.summary.mode === "rank-tracking"
-                        ? "Prioritized fixes — from live rankings (drops first)"
-                        : "Prioritized fixes — biggest estimated gain first"}
+                        ? "Top 10 actions — from live rankings (drops first)"
+                        : "Top 10 actions — biggest estimated gain first"}
                     </h3>
                     {run.todos.length === 0 && <div className="seo-empty">Nothing above the impact threshold — refresh after the next content push.</div>}
-                    {run.todos.map((t) => (
+                    {(showAllTodos ? run.todos : run.todos.slice(0, 10)).map((t, i) => (
                       <div key={t.id} className={`seo-todo${t.status === "done" ? " seo-todo--done" : ""}`}>
+                        <span className="seo-todo__rank">{i + 1}</span>
                         {t.est_monthly_clicks != null ? (
                           <div className="seo-todo__gain">+{fmt(t.est_monthly_clicks)}<small>est. clicks/mo</small></div>
                         ) : (
@@ -652,6 +744,11 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                         </select>
                       </div>
                     ))}
+                    {run.todos.length > 10 && (
+                      <button className="seo-btn seo-todo__more" onClick={() => setShowAllTodos((v) => !v)}>
+                        {showAllTodos ? "Show top 10 only" : `Show all ${run.todos.length}`}
+                      </button>
+                    )}
                   </div>
                 )}
 
