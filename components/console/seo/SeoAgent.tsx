@@ -297,8 +297,9 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       try {
         const pagesRes = await seoPages(id);
         setPagesDoc(pagesRes.pages);
-      } catch {
+      } catch (e) {
         setPagesDoc(null);
+        onToast(e instanceof Error ? e.message : "Could not load pages");
       }
     } catch (e) {
       onToast(e instanceof Error ? e.message : "Failed to load brand");

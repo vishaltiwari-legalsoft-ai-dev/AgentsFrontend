@@ -2095,8 +2095,10 @@ export const seoAsk = (brandId: string, question: string) =>
 
 export interface SeoPageIntel {
   path: string;
-  url: string;
-  title: string;
+  /** Null for pages known only from GA/GSC — never crawled into the corpus
+   *  (see the "not-crawled" flag), so there's no on-page fact to source these from. */
+  url: string | null;
+  title: string | null;
   views: number;
   sessions: number;
   engagement_rate: number;
