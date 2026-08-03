@@ -44,11 +44,11 @@
 .bw-btn:hover:not(:disabled) { background: var(--surface-hover); }
 .bw-btn:disabled { opacity: 0.5; cursor: default; }
 .bw-btn--primary {
-  background: var(--text-primary);
-  color: var(--surface-page);
-  border-color: var(--text-primary);
+  background: var(--action);
+  color: var(--on-action);
+  border-color: var(--action);
 }
-.bw-btn--primary:hover:not(:disabled) { background: var(--text-primary); opacity: 0.88; }
+.bw-btn--primary:hover:not(:disabled) { background: var(--action-hover); }
 
 /* Brand catalogue --------------------------------------------------------- */
 .bw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
