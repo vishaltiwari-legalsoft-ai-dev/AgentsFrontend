@@ -1832,6 +1832,12 @@ export interface SeoTopic {
   est_monthly_clicks: number | null;
   why: string;
   score: number;
+  /** Search intent (e.g. "informational", "commercial") — absent on old persisted runs. */
+  intent?: string;
+  /** True when this topic was excluded from the live Top-10 to avoid cannibalizing an existing page. */
+  avoided?: boolean;
+  /** Why this topic was avoided, e.g. "overlaps https://example.com/page" — null/absent when not avoided. */
+  avoided_reason?: string | null;
 }
 
 export interface SeoGaTotals {

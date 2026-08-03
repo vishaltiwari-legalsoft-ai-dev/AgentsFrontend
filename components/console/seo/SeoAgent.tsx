@@ -272,6 +272,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
   const [tab, setTab] = useState<SeoTab>("todos");
   const [busy, setBusy] = useState(false);
   const [showAllTodos, setShowAllTodos] = useState(false);
+  const [showAvoided, setShowAvoided] = useState(false);
 
   const refreshOverview = useCallback(async () => {
     try {
@@ -753,36 +754,61 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                   </div>
                 )}
 
-                {tab === "topics" && (
-                  <div className="mr-section">
-                    <h3 className="mr-section__title">Blog topics — ranked by opportunity</h3>
-                    {run.topics.length === 0 && <div className="seo-empty">No topics yet — add seed keywords to this brand and refresh.</div>}
-                    {run.topics.map((t) => (
-                      <div key={t.keyword} className="seo-topic">
-                        <div className="seo-topic__main">
-                          <span className="seo-topic__kw">{t.keyword}</span>
-                          <div className="seo-topic__chips">
-                            <span className={`seo-chip seo-chip--tier-${t.priority === "high" ? "high" : t.priority === "medium" ? "medium" : "watch"}`}>
-                              {t.priority} priority
-                            </span>
-                            {t.source === "new idea" && <span className="seo-chip seo-chip--trend-new">new idea</span>}
-                            <span className="seo-chip">{t.angle}</span>
-                            <TrendChip trend={t.trend} />
-                            <DifficultyChip difficulty={t.difficulty} />
+                {tab === "topics" && (() => {
+                  const liveTopics = run.topics.filter((t) => !t.avoided);
+                  const avoidedTopics = run.topics.filter((t) => t.avoided);
+                  return (
+                    <div className="mr-section">
+                      <h3 className="mr-section__title">Next 10 blogs to publish</h3>
+                      {liveTopics.length === 0 && avoidedTopics.length === 0 && (
+                        <div className="seo-empty">No topics yet — add seed keywords to this brand and refresh.</div>
+                      )}
+                      {liveTopics.map((t, i) => (
+                        <div key={t.keyword} className="seo-topic">
+                          <div className="seo-topic__main">
+                            <span className="seo-topic__kw"><span className="seo-topic__num">{i + 1}</span> {t.keyword}</span>
+                            <div className="seo-topic__chips">
+                              <span className={`seo-chip seo-chip--tier-${t.priority === "high" ? "high" : t.priority === "medium" ? "medium" : "watch"}`}>
+                                {t.priority} priority
+                              </span>
+                              {t.source === "new idea" && <span className="seo-chip seo-chip--trend-new">new idea</span>}
+                              <span className="seo-chip">{t.angle}</span>
+                              {t.intent && <span className="seo-chip">{t.intent}</span>}
+                              <TrendChip trend={t.trend} />
+                              <DifficultyChip difficulty={t.difficulty} />
+                            </div>
+                            <div className="seo-topic__why">{t.why}</div>
+                            <div className="seo-topic__impact">{t.impact}</div>
                           </div>
-                          <div className="seo-topic__why">{t.why}</div>
-                          <div className="seo-topic__impact">{t.impact}</div>
+                          <div className="seo-topic__nums">
+                            <span className="seo-topic__vol">{t.volume_label}</span>
+                            {t.est_monthly_clicks != null && (
+                              <span className="seo-stat__num--good">≈ +{fmt(t.est_monthly_clicks)} clicks/mo</span>
+                            )}
+                          </div>
                         </div>
-                        <div className="seo-topic__nums">
-                          <span className="seo-topic__vol">{t.volume_label}</span>
-                          {t.est_monthly_clicks != null && (
-                            <span className="seo-stat__num--good">≈ +{fmt(t.est_monthly_clicks)} clicks/mo</span>
+                      ))}
+                      {avoidedTopics.length > 0 && (
+                        <div className="seo-avoided">
+                          <button className="seo-btn seo-avoided__toggle" onClick={() => setShowAvoided((v) => !v)}>
+                            <Icon name={showAvoided ? "chevron-down" : "chevron-right"} size={13} />
+                            Avoided (would cannibalize existing pages) · {avoidedTopics.length}
+                          </button>
+                          {showAvoided && (
+                            <div className="seo-avoided__list">
+                              {avoidedTopics.map((t) => (
+                                <div key={t.keyword} className="seo-avoided__row">
+                                  <span className="seo-topic__kw">{t.keyword}</span>
+                                  <span className="seo-avoided__reason">{t.avoided_reason ?? "overlaps an existing page"}</span>
+                                </div>
+                              ))}
+                            </div>
                           )}
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      )}
+                    </div>
+                  );
+                })()}
               </>
             )}
           </div>
