@@ -2086,7 +2086,9 @@ export interface SeoCompetitorPost {
 
 export interface SeoCompetitorProfile {
   domain: string;
-  visibility_pct: number;
+  /** Null when there are no tracked keywords to compute visibility from —
+   *  distinct from a real 0%; render "—" (matches avg_position's pattern). */
+  visibility_pct: number | null;
   avg_position: number | null;
   keywords_won: { keyword: string; their_position: number; our_position: number | null }[];
   recent_posts: SeoCompetitorPost[];
@@ -2286,6 +2288,10 @@ export interface SeoPageIntel {
    *  absent from the site crawl; its recommendation explains why. */
   flags: string[];
   recommendation: string;
+  /** True only when THIS page's recommendation came from the AI pass (top-traffic
+   *  slice + successful call). Older persisted docs lack the field — falsy is the
+   *  honest default ("Rule:"), never assume AI wrote it. */
+  ai?: boolean;
   word_count: number;
 }
 

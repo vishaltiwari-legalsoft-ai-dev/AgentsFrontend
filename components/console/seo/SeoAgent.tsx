@@ -114,7 +114,7 @@ function PagesView({ doc, busy, onRefresh }: {
                 {p.flags.map((f) => <span key={f} className="seo-chip seo-chip--sev-medium">{f}</span>)}
               </div>
             )}
-            <div className="seo-pages__rec">{doc.ai ? "AI: " : "Rule: "}{p.recommendation}</div>
+            <div className="seo-pages__rec">{p.ai ? "AI: " : "Rule: "}{p.recommendation}</div>
           </div>
           <div className="seo-pages__nums">
             <span>{fmt(p.views)} views</span>

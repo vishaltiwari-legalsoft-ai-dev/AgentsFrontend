@@ -291,7 +291,7 @@ export function CompetitorsView({ brandId, isCreator, onToast }: {
                   <div className="seo-comp__stats">
                     <div className="seo-stat">
                       <span className="seo-stat__label">Visibility</span>
-                      <span className="seo-stat__num">{p.visibility_pct}%</span>
+                      <span className="seo-stat__num">{p.visibility_pct != null ? `${p.visibility_pct}%` : "—"}</span>
                     </div>
                     <div className="seo-stat">
                       <span className="seo-stat__label">Avg. position</span>
@@ -328,10 +328,10 @@ export function CompetitorsView({ brandId, isCreator, onToast }: {
                           </a>
                           <span className="seo-comp__post-meta">
                             <span className="seo-chip">{post.topic}</span>
-                            <span className="seo-comp__reach">
+                            <span className="seo-comp__reach" title={post.estimate_basis || undefined}>
                               {post.est_monthly_clicks != null
                                 ? `~${fmt(post.est_monthly_clicks)} clicks/mo (estimate)`
-                                : "reach unknown"}
+                                : post.estimate_basis || "reach unknown"}
                             </span>
                           </span>
                         </div>
