@@ -2089,6 +2089,130 @@ export const seoUpdatePlan = (brandId: string, page: string) =>
 export const seoAsk = (brandId: string, question: string) =>
   postJson<{ question: string; answer: string }>(`/api/seo-geo/ask/${brandId}`, { question });
 
+/* ---------------------------------------------------------------- blog writer (a9) */
+
+export interface BwCounts {
+  sitemap_urls: number;
+  blog_urls: number;
+  titled: number;
+}
+
+export interface BwBrand {
+  id: string;
+  name: string;
+  domain: string;
+  inventory: { counts: BwCounts; scanned: string } | null;
+}
+
+export interface BwInventory {
+  domain: string;
+  scanned: string;
+  posts: { url: string; title: string }[];
+  counts: BwCounts;
+  notes: string[];
+}
+
+export interface BwEvidence {
+  id: string;
+  claim: string;
+  quote: string;
+  url: string;
+  source_name: string;
+  source_class: "studies" | "experts" | "news" | "anecdotes" | "competitors" | string;
+  date: string;
+  credibility: string;
+}
+
+export interface BwRound {
+  n: number;
+  at: string;
+  queries: { angle: string; q: string; hits: number }[];
+  read: string[];
+  added: number;
+  gaps: string[];
+}
+
+export interface BwBlock {
+  id: string;
+  kind: "intro" | "section" | "conclusion" | string;
+  heading: string;
+  text: string;
+  cites: string[];
+  history: string[];
+  last_comment?: string;
+}
+
+export interface BwDraft {
+  meta: { title: string; description: string; slug: string };
+  blocks: BwBlock[];
+  internal_links: { url: string; title: string }[];
+  notes: string[];
+}
+
+export interface BwVisual {
+  n: number;
+  section: string;
+  type: string;
+  theme: string;
+  prompt: string;
+  rationale: string;
+}
+
+export interface BwRunSummary {
+  id: string;
+  brand_id: string;
+  brand_name: string;
+  topic: string;
+  created: string;
+  status: string;
+}
+
+export interface BwRun {
+  id: string;
+  brand_id: string;
+  brand_name: string;
+  domain: string;
+  topic: string;
+  notes: string;
+  created: string;
+  status: "research" | "saturated" | "capped";
+  rounds: BwRound[];
+  ledger: BwEvidence[];
+  gaps: string[];
+  draft: BwDraft | null;
+  visuals: { items: BwVisual[]; notes: string[] } | null;
+}
+
+export type BwExportFormat = "md" | "html" | "txt" | "visuals-md" | "visuals-txt";
+
+export const bwBrands = () => getJson<{ brands: BwBrand[] }>("/api/blog/brands");
+
+export const bwInventory = (brandId: string) => getJson<BwInventory>(`/api/blog/brands/${brandId}/inventory`);
+
+export const bwScanInventory = (brandId: string) => postJson<BwInventory>(`/api/blog/brands/${brandId}/inventory`, {});
+
+export const bwRuns = () => getJson<{ runs: BwRunSummary[] }>("/api/blog/runs");
+
+export const bwRun = (id: string) => getJson<BwRun>(`/api/blog/runs/${id}`);
+
+export const bwCreateRun = (p: { brand_id: string; topic: string; notes?: string }) =>
+  postJson<BwRun>("/api/blog/runs", p);
+
+export const bwResearchStep = (id: string) => postJson<BwRun>(`/api/blog/runs/${id}/research/step`, {});
+
+export const bwBuildDraft = (id: string) => postJson<BwRun>(`/api/blog/runs/${id}/draft`, {});
+
+export const bwCommentBlock = (id: string, blockId: string, comment: string) =>
+  postJson<BwRun>(`/api/blog/runs/${id}/blocks/${blockId}/comment`, { comment });
+
+export const bwPlanVisuals = (id: string) => postJson<BwRun>(`/api/blog/runs/${id}/visuals`, {});
+
+export async function bwExport(id: string, format: BwExportFormat): Promise<Blob> {
+  const response = await request(`/api/blog/runs/${id}/export?format=${format}`, { method: "GET" });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.blob();
+}
+
 /* --------------------------- SEO agent: Pages ------------------------------ */
 // Per-page traffic + crawl intel: where analytics and the site crawl disagree,
 // what's underperforming, and what to do about each page.

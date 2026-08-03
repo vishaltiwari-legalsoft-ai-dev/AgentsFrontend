@@ -15,11 +15,14 @@ export const LIVE_AGENT_ID = "a1";
 export const MARKETING_AGENT_ID = "a6";
 /** SEO agent (backed by /api/seo-geo). Uses the "SEO Analyst" slot. */
 export const SEO_AGENT_ID = "a2";
+/** Blog Writer (backed by /api/blog). */
+export const BLOG_AGENT_ID = "a9";
 /** Agents wired to a live backend, mapped to the console nav key they open. */
 export const LIVE_AGENTS: Record<string, string> = {
   [LIVE_AGENT_ID]: "studio",
   [MARKETING_AGENT_ID]: "marketing",
   [SEO_AGENT_ID]: "seo",
+  [BLOG_AGENT_ID]: "blog",
 };
 
 export function isAgentLive(id: string): boolean {

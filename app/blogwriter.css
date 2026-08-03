@@ -1,0 +1,192 @@
+/* Blog Writer (a9) — rides the MR desk chrome (.mr-app/.mr-top/.mr-panel) and
+   adds only its own vocabulary: brand cards, the writing desk, research rounds,
+   draft blocks with per-block comments, and the visual plan. Token-driven so
+   every data-theme variant holds. */
+
+/* Status + chips ---------------------------------------------------------- */
+.bw-status {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: 600 11.5px/1 var(--font-sans);
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.bw-status--saturated { color: var(--green-500); border-color: color-mix(in srgb, var(--green-500) 45%, transparent); }
+.bw-status--capped { color: var(--amber-500); border-color: color-mix(in srgb, var(--amber-500) 45%, transparent); }
+
+.bw-chip {
+  font: 600 11px/1 var(--font-sans);
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.bw-chip--src { margin-right: 6px; text-transform: capitalize; }
+
+.bw-spin { animation: bw-rotate 0.9s linear infinite; }
+@keyframes bw-rotate { to { transform: rotate(360deg); } }
+
+/* Buttons ----------------------------------------------------------------- */
+.bw-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  font: 600 12.5px/1 var(--font-sans);
+  padding: 9px 13px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.bw-btn:hover:not(:disabled) { background: var(--surface-hover); }
+.bw-btn:disabled { opacity: 0.5; cursor: default; }
+.bw-btn--primary {
+  background: var(--text-primary);
+  color: var(--surface-page);
+  border-color: var(--text-primary);
+}
+.bw-btn--primary:hover:not(:disabled) { background: var(--text-primary); opacity: 0.88; }
+
+/* Brand catalogue --------------------------------------------------------- */
+.bw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.bw-card {
+  display: grid; gap: 10px; align-content: start;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  text-align: left;
+  cursor: pointer;
+}
+.bw-card:hover { background: var(--surface-hover); }
+.bw-card__head { display: grid; gap: 2px; }
+.bw-card__name { font: 600 15px/1.2 var(--font-display); }
+.bw-card__domain { font: 500 12px/1.2 var(--font-mono); color: var(--text-tertiary); }
+.bw-card__meta { display: flex; gap: 7px; align-items: center; font: 500 12px/1.3 var(--font-sans); color: var(--text-secondary); }
+.bw-card__meta--dim { color: var(--text-tertiary); }
+
+.bw-empty { font: 500 13px/1.5 var(--font-sans); color: var(--text-tertiary); padding: 6px 0; }
+.bw-note { font: 500 12px/1.4 var(--font-sans); color: var(--amber-500); padding: 2px 0; }
+.bw-hint { font: 500 12px/1.5 var(--font-sans); color: var(--text-tertiary); }
+
+/* Run history rows -------------------------------------------------------- */
+.bw-runs { display: grid; gap: 6px; }
+.bw-runrow {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.bw-runrow:hover { background: var(--surface-hover); }
+.bw-runrow__topic { font: 600 13px/1.3 var(--font-sans); color: var(--text-primary); }
+.bw-runrow__meta { font: 500 11.5px/1.3 var(--font-sans); color: var(--text-tertiary); white-space: nowrap; }
+
+/* Writing desk ------------------------------------------------------------ */
+.bw-desk { display: grid; grid-template-columns: minmax(280px, 5fr) minmax(320px, 6fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .bw-desk { grid-template-columns: 1fr; } }
+.bw-desk__writing { display: grid; gap: 12px; align-content: start; }
+.bw-inv__counts { font: 500 12.5px/1.4 var(--font-sans); color: var(--text-secondary); }
+.bw-inv__list {
+  display: grid; gap: 6px;
+  margin: 8px 0 0; padding: 0 0 0 18px;
+  max-height: 420px; overflow-y: auto;
+}
+.bw-inv__list li { font: 500 12.5px/1.45 var(--font-sans); }
+.bw-inv__list a { color: var(--text-secondary); text-decoration: none; }
+.bw-inv__list a:hover { color: var(--text-primary); text-decoration: underline; }
+
+.bw-topic {
+  font: 500 14px/1.5 var(--font-sans);
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  resize: vertical;
+}
+.bw-topic--notes { font-size: 12.5px; }
+.bw-collapse {
+  display: inline-flex; align-items: center; gap: 5px;
+  font: 600 12px/1 var(--font-sans);
+  color: var(--text-tertiary);
+  background: none; border: none; padding: 0; cursor: pointer;
+}
+.bw-collapse:hover { color: var(--text-primary); }
+.bw-desk__past { display: grid; gap: 6px; margin-top: 8px; }
+.bw-desk__past-label { font: 600 11.5px/1 var(--font-sans); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* Research rounds --------------------------------------------------------- */
+.bw-actions { display: flex; gap: 8px; margin-left: auto; }
+.bw-rounds { display: grid; gap: 10px; }
+.bw-round {
+  display: grid; gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.bw-round--live { grid-auto-flow: column; justify-content: start; align-items: center; gap: 8px; color: var(--text-secondary); font: 500 12.5px/1 var(--font-sans); }
+.bw-round__head { display: flex; gap: 12px; align-items: baseline; }
+.bw-round__n { font: 600 12.5px/1 var(--font-sans); }
+.bw-round__added { font: 600 12px/1 var(--font-sans); color: var(--green-500); }
+.bw-round__queries { display: flex; flex-wrap: wrap; gap: 6px; }
+.bw-round__gaps { font: 500 12px/1.4 var(--font-sans); color: var(--text-tertiary); }
+
+.bw-ledger { margin-top: 4px; }
+.bw-ledger summary { font: 600 12.5px/1.3 var(--font-sans); color: var(--text-secondary); cursor: pointer; }
+.bw-ledger ul { display: grid; gap: 8px; margin: 10px 0 0; padding: 0 0 0 2px; list-style: none; }
+.bw-ledger li { font: 500 12.5px/1.5 var(--font-sans); color: var(--text-secondary); }
+.bw-ledger__claim { color: var(--text-primary); }
+.bw-ledger__src { color: var(--text-secondary); }
+.bw-ledger__cred { color: var(--text-tertiary); }
+
+/* Draft blocks ------------------------------------------------------------ */
+.bw-blocks { display: grid; gap: 14px; }
+.bw-block {
+  display: grid; gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+}
+.bw-block__heading { font: 600 15px/1.3 var(--font-display); margin: 0; }
+.bw-block__text { font: 500 13.5px/1.65 var(--font-sans); color: var(--text-primary); margin: 0; white-space: pre-wrap; }
+.bw-block__old {
+  font: 500 12.5px/1.5 var(--font-sans);
+  color: var(--text-tertiary);
+  border-left: 2px solid var(--border);
+  padding-left: 10px;
+  margin: 0;
+  white-space: pre-wrap;
+}
+.bw-cite { font-size: 0.7em; color: var(--text-tertiary); margin-left: 2px; cursor: help; }
+.bw-block__commentrow { display: flex; gap: 8px; }
+.bw-comment {
+  flex: 1;
+  font: 500 12.5px/1.3 var(--font-sans);
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.bw-downloads { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+
+/* Visual plan ------------------------------------------------------------- */
+.bw-visuals { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.bw-visual {
+  display: grid; gap: 7px; align-content: start;
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.bw-visual__head { display: flex; gap: 8px; align-items: center; }
+.bw-visual__where { font: 600 12px/1.3 var(--font-sans); color: var(--text-secondary); }
+.bw-visual__theme { font: 500 12px/1.4 var(--font-sans); color: var(--text-tertiary); }
+.bw-visual__prompt { font: 500 12.5px/1.5 var(--font-sans); color: var(--text-primary); }
