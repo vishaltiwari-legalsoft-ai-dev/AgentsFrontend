@@ -42,6 +42,7 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
   const [downloading, setDownloading] = useState(false);
   const [picker, setPicker] = useState<MrReportKind | null>(null);
   const [periods, setPeriods] = useState<MrReportPeriods | null>(null);
+  const [periodsLoading, setPeriodsLoading] = useState(false);
   const pickerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -87,12 +88,16 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
       return;
     }
     setPicker(kind);
-    if (!periods) {
+    if (!periods && !periodsLoading) {
+      setPeriodsLoading(true);
       try {
         setPeriods(await mrReportPeriods());
       } catch (e) {
+        // Not cached: the next open retries, and the menu falls back to the
+        // default entry meanwhile.
         onToast(e instanceof Error ? e.message : "Couldn't load available months");
-        setPeriods({ months: [], quarters: [] }); // menu shows the default entry
+      } finally {
+        setPeriodsLoading(false);
       }
     }
   }
@@ -151,7 +156,9 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
                 </button>
                 {picker === k && (
                   <div className="mr-genmenu" role="menu">
-                    {list.length > 0 ? (
+                    {periodsLoading ? (
+                      <span className="mr-genmenu__item" aria-disabled="true">Loading…</span>
+                    ) : list.length > 0 ? (
                       list.map((p) => (
                         <button
                           key={p.period} className="mr-genmenu__item" role="menuitem"
