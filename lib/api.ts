@@ -1514,6 +1514,7 @@ export interface MrRunSummary {
   id: string;
   kind: MrReportKind;
   generated_at: string;
+  period?: string | null;
 }
 
 export type MrMetricStatus = "good" | "warn" | "bad" | "na";
@@ -1737,8 +1738,22 @@ export const mrWorkbookScan = () =>
 export const mrAsk = (question: string, timeframe?: string) =>
   postJson<MrAskAnswer>("/api/mr/ask", { question, timeframe });
 
-export const mrBuildReport = (kind: MrReportKind) =>
-  postJson<MrReport>(`/api/mr/reports/${kind}`, {});
+export interface MrReportPeriod {
+  period: string;   // "2026-07" | "2026-Q3"
+  label: string;    // "July 2026" | "Q3 2026"
+  current: boolean; // the month/quarter containing yesterday
+}
+
+export interface MrReportPeriods {
+  months: MrReportPeriod[];
+  quarters: MrReportPeriod[];
+}
+
+export const mrReportPeriods = () =>
+  getJson<MrReportPeriods>("/api/mr/report-periods");
+
+export const mrBuildReport = (kind: MrReportKind, period?: string) =>
+  postJson<MrReport>(`/api/mr/reports/${kind}`, period ? { period } : {});
 
 export const mrListRuns = () => getJson<MrRunSummary[]>("/api/mr/runs");
 
