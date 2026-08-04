@@ -511,10 +511,27 @@
   color: var(--text-primary);
   cursor: pointer;
   transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+  display: inline-flex; align-items: center; gap: 5px;
 }
 .mr-genbtn:hover:not(:disabled) { border-color: var(--brand); color: var(--brand); background: var(--brand-subtle); }
 .mr-genbtn[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
 .mr-genbtn:disabled { opacity: 0.55; cursor: default; }
+.mr-genwrap { position: relative; display: inline-block; }
+.mr-genmenu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
+  min-width: 200px; padding: 4px;
+  display: grid; gap: 2px;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+.mr-genmenu__item {
+  padding: 8px 11px; border: 0; border-radius: calc(var(--radius-md) - 3px);
+  background: transparent; text-align: left; cursor: pointer; width: 100%;
+  font: 500 12.5px/1.2 var(--font-sans); color: var(--text-primary);
+}
+.mr-genmenu__item:hover { background: var(--surface-hover); color: var(--brand); }
 .mr-rpts__view { min-width: 0; }
 @media (max-width: 960px) { .mr-rpts { grid-template-columns: 1fr; } .mr-rpts__rail { position: static; } }
 .mr-hist { display: grid; gap: 4px; }
@@ -530,6 +547,8 @@
 .mr-hist__row[aria-current="true"] { border-color: var(--brand); }
 .mr-hist__kind { font: 500 13px/1.2 var(--font-sans); }
 .mr-hist__ts { font: 500 12px/1.2 var(--font-mono); color: var(--text-secondary); }
+.mr-hist__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mr-hist__period { font: 500 11px/1.3 var(--font-mono); color: var(--text-secondary); }
 
 /* The report document — financial-masthead treatment -------------------------- */
 .mr-doc {
