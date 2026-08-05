@@ -1730,6 +1730,31 @@ export interface MrAskAnswer {
   used_tabs: string[];
 }
 
+export interface MrSheetSource {
+  id: string;
+  label: string;
+  primary: boolean;
+  include_in_dashboard: boolean;
+  added_at?: string;
+}
+export interface MrSheetSources {
+  enabled: boolean;
+  service_account: string;
+  sources: MrSheetSource[];
+}
+
+export const mrSources = () => getJson<MrSheetSources>("/api/mr/sources");
+
+/** Connect another Google Sheet by pasted link; returns the agent's first-pass read of its tabs. */
+export const mrAddSource = (url: string) =>
+  postJson<{ source: MrSheetSource; tabs: MrTabProfile[]; tab_count: number }>("/api/mr/sources", { url });
+
+/** Disconnect a secondary sheet — the agent stops reading it immediately. */
+export async function mrDeleteSource(id: string): Promise<void> {
+  const response = await request(`/api/mr/sources/${id}`, { method: "DELETE" });
+  if (!response.ok) throw new Error(await parseError(response));
+}
+
 export const mrWorkbook = () => getJson<{ tabs: MrTabProfile[]; count: number }>("/api/mr/workbook");
 
 export const mrWorkbookScan = () =>

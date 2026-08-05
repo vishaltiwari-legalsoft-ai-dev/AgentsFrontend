@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import {
   mrGetTargets, mrSaveTargets,
   type MrConfig, type MrConnector, type MrDataset, type MrPlatform,
-  type MrSnapshotMeta, type MrTabProfile, type MrTargets,
+  type MrSheetSource, type MrSheetSources, type MrSnapshotMeta,
+  type MrTabProfile, type MrTargets,
 } from "@/lib/api";
 import { Badge, Button, Icon } from "@/lib/kit-ui";
 import { fmtTime, sourceLabel } from "./shared";
@@ -181,12 +182,13 @@ function TargetsCard({ onToast }: { onToast: (m: string) => void }) {
   );
 }
 
-export function DataView({ datasets, snapshots, connectors, config, catalog, busy, year, onYear, onPull, onUpload, onUploadPdf, onRemove, onScan, onToast }: {
+export function DataView({ datasets, snapshots, connectors, config, catalog, sheetSources, busy, year, onYear, onPull, onUpload, onUploadPdf, onRemove, onScan, onAddSheet, onRemoveSheet, onToast }: {
   datasets: MrDataset[];
   snapshots: MrSnapshotMeta[];
   connectors: MrConnector[];
   config: MrConfig | null;
   catalog: MrTabProfile[];
+  sheetSources: MrSheetSources | null;
   busy: boolean;
   year: number | null;
   onYear: (y: number) => void;
@@ -195,10 +197,20 @@ export function DataView({ datasets, snapshots, connectors, config, catalog, bus
   onUploadPdf: (f: File) => void;
   onRemove: (d: MrDataset) => void;
   onScan: () => void;
+  onAddSheet: (url: string) => void;
+  onRemoveSheet: (s: MrSheetSource) => void;
   onToast: (m: string) => void;
 }) {
+  const [sheetUrl, setSheetUrl] = useState("");
   const usefulTabs = catalog.filter((t) => t.useful);
   const years = config ? [config.year - 1, config.year, config.year + 1] : [];
+
+  const submitSheet = () => {
+    const url = sheetUrl.trim();
+    if (!url) return;
+    onAddSheet(url);
+    setSheetUrl("");
+  };
 
   return (
     <div className="mr-panel">
@@ -241,6 +253,55 @@ export function DataView({ datasets, snapshots, connectors, config, catalog, bus
             />
           </label>
         </div>
+
+        {sheetSources?.enabled && (
+          <>
+            <h3 className="mr-section__title" style={{ marginTop: 12 }}>Connected sheets — what the agent reads</h3>
+            {sheetSources.sources.map((s) => (
+              <div className="mr-src" key={s.id}>
+                <span className="mr-src__icon"><Icon name="database" size={18} /></span>
+                <div className="mr-src__id">
+                  <span className="mr-src__name">{s.label}</span>
+                  <span className="mr-src__meta">
+                    {s.primary
+                      ? "Primary tracker — feeds the dashboard, reports and vendor snapshots"
+                      : "Read for Ask & insights — never counted into dashboard numbers"}
+                  </span>
+                </div>
+                {s.primary ? (
+                  <Badge variant="success" dot>Primary</Badge>
+                ) : (
+                  <button
+                    className="mr-src__del" disabled={busy} title="Disconnect this sheet"
+                    aria-label={`Disconnect ${s.label}`}
+                    onClick={() => onRemoveSheet(s)}
+                  >
+                    <Icon name="trash-2" size={15} />
+                  </button>
+                )}
+              </div>
+            ))}
+            <div className="mr-actions" style={{ marginTop: 8 }}>
+              <input
+                type="url" placeholder="Paste a Google Sheets link to connect it…"
+                value={sheetUrl} disabled={busy}
+                onChange={(e) => setSheetUrl(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") submitSheet(); }}
+                style={{
+                  flex: 1, minWidth: 260, padding: "8px 10px", borderRadius: 8,
+                  border: "1px solid var(--border)", background: "var(--surface-card)", color: "inherit",
+                }}
+              />
+              <Button variant="secondary" disabled={busy || !sheetUrl.trim()} onClick={submitSheet}>
+                Connect sheet
+              </Button>
+            </div>
+            <p className="mr-src__meta" style={{ margin: "6px 0 0" }}>
+              Share the sheet with <b>{sheetSources.service_account}</b> as Viewer first — the agent reads it,
+              understands every tab, and you can ask questions about it right away.
+            </p>
+          </>
+        )}
         {datasets.length === 0 ? (
           <div className="mr-empty">No data pulled yet. Pull the live Google Sheet or upload a platform CSV.</div>
         ) : (
@@ -340,7 +401,7 @@ export function DataView({ datasets, snapshots, connectors, config, catalog, bus
         ) : (
           <div className="mr-cat">
             {catalog.map((t) => (
-              <div className={`mr-cat__row${t.useful ? "" : " mr-cat__row--off"}`} key={t.gid}>
+              <div className={`mr-cat__row${t.useful ? "" : " mr-cat__row--off"}`} key={t.title}>
                 <span className="mr-cat__name">{t.title}</span>
                 <span className="mr-cat__tags">
                   <span className="mr-tag">{t.kind.replace(/_/g, " ")}</span>

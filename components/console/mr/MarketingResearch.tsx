@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  mrConfig, mrConnectors, mrDatasets, mrDeleteDataset, mrIngest, mrIngestPdf,
-  mrIngestSheet, mrListRuns, mrOverview, mrSnapshots, mrWorkbook, mrWorkbookScan,
-  type MrConfig, type MrConnector, type MrDataset, type MrOverview,
-  type MrPlatform, type MrRunSummary, type MrSnapshotMeta, type MrTabProfile,
+  mrAddSource, mrConfig, mrConnectors, mrDatasets, mrDeleteDataset, mrDeleteSource,
+  mrIngest, mrIngestPdf, mrIngestSheet, mrListRuns, mrOverview, mrSnapshots,
+  mrSources, mrWorkbook, mrWorkbookScan,
+  type MrConfig, type MrConnector, type MrDataset, type MrOverview, type MrPlatform,
+  type MrRunSummary, type MrSheetSource, type MrSheetSources, type MrSnapshotMeta,
+  type MrTabProfile,
 } from "@/lib/api";
 import { Icon, Tabs } from "@/lib/kit-ui";
 import { AskView } from "./AskView";
@@ -29,6 +31,7 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
   const [config, setConfig] = useState<MrConfig | null>(null);
   const [catalog, setCatalog] = useState<MrTabProfile[]>([]);
   const [snapshots, setSnapshots] = useState<MrSnapshotMeta[]>([]);
+  const [sheetSources, setSheetSources] = useState<MrSheetSources | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -50,6 +53,7 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
       setYear((y) => y ?? c.year);
     }).catch(() => {});
     mrWorkbook().then((w) => setCatalog(w.tabs)).catch(() => {});
+    mrSources().then(setSheetSources).catch(() => {});
   }, [refresh]);
 
   // Near-real-time dashboard: the cloud pull refreshes the data every 3
@@ -120,6 +124,36 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
     }
   }
 
+  async function addSheet(url: string) {
+    setBusy(true);
+    try {
+      const res = await mrAddSource(url);
+      const n = res.tabs.length || res.tab_count;
+      onToast(`"${res.source.label}" connected — the agent understood ${n} tab${n === 1 ? "" : "s"}. Ask away.`);
+      mrSources().then(setSheetSources).catch(() => {});
+      mrWorkbook().then((w) => setCatalog(w.tabs)).catch(() => {});
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "Could not connect that sheet");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeSheet(s: MrSheetSource) {
+    if (!window.confirm(`Disconnect "${s.label}"? The agent stops reading it immediately.`)) return;
+    setBusy(true);
+    try {
+      await mrDeleteSource(s.id);
+      onToast("Sheet disconnected");
+      mrSources().then(setSheetSources).catch(() => {});
+      mrWorkbook().then((w) => setCatalog(w.tabs)).catch(() => {});
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "Disconnect failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function deepScan() {
     setBusy(true);
     onToast("Profiling every tab with the LLM…");
@@ -181,6 +215,7 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
             connectors={connectors}
             config={config}
             catalog={catalog}
+            sheetSources={sheetSources}
             busy={busy}
             year={year}
             onYear={setYear}
@@ -189,6 +224,8 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
             onUploadPdf={uploadPdf}
             onRemove={removeDataset}
             onScan={deepScan}
+            onAddSheet={addSheet}
+            onRemoveSheet={removeSheet}
             onToast={onToast}
           />
         )}
