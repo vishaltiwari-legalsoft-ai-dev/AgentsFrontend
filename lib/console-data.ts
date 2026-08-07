@@ -48,14 +48,6 @@ export interface TeamItem {
   tint?: AgentCategory;
 }
 
-export interface RunStep {
-  t: string;
-  agent: string;
-  cat: AgentCategory;
-  msg: string;
-  status: "idle" | "running" | "success";
-}
-
 export const agents: AgentItem[] = [
   { id: "a1", name: "Graphic Designer", role: "Brand & visual assets", category: "design", glyph: "palette", description: "Produces on-brand graphics, social creatives, and ad variants from a brief." },
   { id: "a2", name: "SEO Analyst", role: "Search & rankings", category: "seo", glyph: "search", description: "Audits pages, finds keyword gaps, and writes optimization briefs." },
@@ -139,13 +131,4 @@ export const teams: TeamItem[] = [
       { name: "Email Marketer", category: "copy" },
     ],
   },
-];
-
-export const runSteps: RunStep[] = [
-  { t: "14:02:31", agent: "Brand Strategist", cat: "design", msg: "Defined 3 messaging pillars", status: "success" },
-  { t: "14:03:08", agent: "Market Researcher", cat: "data", msg: "Summarized 12 competitor campaigns", status: "success" },
-  { t: "14:05:44", agent: "Copywriter", cat: "copy", msg: "Drafted 8 post variants + 2 emails", status: "success" },
-  { t: "14:07:12", agent: "Graphic Designer", cat: "design", msg: "Rendering 6 creatives…", status: "running" },
-  { t: "—", agent: "Social Scheduler", cat: "social", msg: "Queue posts to calendar", status: "idle" },
-  { t: "—", agent: "Ads Optimizer", cat: "ads", msg: "Set budgets & launch", status: "idle" },
 ];

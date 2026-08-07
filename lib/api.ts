@@ -60,64 +60,6 @@ export interface User {
   is_creator?: boolean;
 }
 
-export interface GeneratedImage {
-  url: string;
-  mime_type: string;
-}
-
-export interface LogoRef {
-  file_name: string;
-  view_url: string;
-}
-
-/** Brand persona built from the brand's website (auto-research step). */
-export interface BrandPersona {
-  tone_of_voice?: string;
-  target_audience?: string;
-  color_palette?: string;
-  typography?: string;
-  visual_direction?: string;
-  visual_language?: string;
-  key_selling_points?: string;
-}
-
-export const PERSONA_FIELDS: { key: keyof BrandPersona; label: string }[] = [
-  { key: "tone_of_voice", label: "Tone of voice" },
-  { key: "target_audience", label: "Target audience" },
-  { key: "color_palette", label: "Color palette" },
-  { key: "typography", label: "Typography" },
-  { key: "visual_direction", label: "Visual direction" },
-  { key: "visual_language", label: "Visual language (from site imagery)" },
-  { key: "key_selling_points", label: "Key selling points" },
-];
-
-export interface AspectRatioOption {
-  ratio: string;
-  label: string;
-}
-
-export interface AssetsResult {
-  type: "assets";
-  brand: string | null;
-  category: string;
-  creative_type?: string;
-  aspect_ratio?: string | null;
-  master_prompt: string;
-  brand_profile?: string | null;
-  brand_website?: string | null;
-  persona?: BrandPersona;
-  assets: { with_logo: GeneratedImage; with_placeholder: GeneratedImage };
-  logo: LogoRef | null;
-  logos?: LogoRef[];
-}
-
-export interface BrandMetadata {
-  primary_colors?: string[];
-  fonts?: string[];
-  tone_of_voice?: string;
-  [key: string]: unknown;
-}
-
 export interface GalleryItem {
   file_name: string;
   file_type: string;
@@ -125,87 +67,11 @@ export interface GalleryItem {
   is_image: boolean;
 }
 
-export interface BrandAnalysisResult {
-  type: "brand_analysis";
-  brand: { id: string; brand_name: string; brand_metadata: BrandMetadata };
-  creative_count: number;
-  summary: string;
-  gallery: GalleryItem[];
-}
-
-export interface MessageResult {
-  type: "message";
-  text: string;
-}
-
-export interface IntakeResult {
-  type: "intake";
-  text: string;
-  missing_fields: string[];
-  suggestions: {
-    aspect_ratio?: string | null;
-    brief?: string | null;
-  };
-  aspect_ratios?: AspectRatioOption[];
-  brand?: string | null;
-  brand_website?: string | null;
-  persona?: BrandPersona;
-  logo?: LogoRef | null;
-  logos?: LogoRef[];
-  logos_found?: number;
-  style_refs_loaded?: number;
-}
-
-export type AgentResult = AssetsResult | BrandAnalysisResult | MessageResult | IntakeResult;
-
-export interface ChatMessage {
-  role: "user" | "assistant";
-  text?: string;
-  attachments?: string[];
-  result?: AgentResult;
-  created_at?: string;
-}
-
-export interface ConversationSummary {
-  id: string;
-  title: string;
-  updated_at: string;
-}
-
-export interface ConversationDetail {
-  id: string;
-  title: string;
-  messages: ChatMessage[];
-}
-
 export interface LibraryBrand {
   id: string;
   brand_name: string;
   creative_count: number;
   creatives: GalleryItem[];
-}
-
-export interface BrandSummary {
-  id: string;
-  brand_name: string;
-  brand_metadata?: BrandMetadata;
-}
-
-export interface BrandKit {
-  brand_name: string;
-  colors: string[];
-  fonts: string[];
-  tone_of_voice?: string | null;
-  logo_url?: string | null;
-}
-
-export async function listBrands(): Promise<BrandSummary[]> {
-  const data = await getJson<{ brands: BrandSummary[] }>("/api/brands");
-  return data.brands;
-}
-
-export async function getBrandKit(brandId: string): Promise<BrandKit> {
-  return getJson<BrandKit>(`/api/brands/${brandId}/kit`);
 }
 
 export interface AdminUser {
@@ -253,67 +119,6 @@ export async function googleLogin(
   return (await response.json()) as { token: string; user: User };
 }
 
-/* --------------------------------- Agent --------------------------------- */
-
-export interface AgentResponse {
-  conversation_id: string;
-  result: AgentResult;
-}
-
-export interface AgentSettingsConfigResponse {
-  agent_id: string;
-  agent_name: string;
-  image_models: {
-    id: string;
-    name: string;
-    provider: string;
-    description: string;
-    recommended?: boolean;
-  }[];
-  abilities: { id: string; name: string; description: string }[];
-  tools: { id: string; name: string; description: string; default?: boolean }[];
-  defaults: {
-    image_model: string;
-    enabled_tools: string[];
-    enabled_abilities: string[];
-  };
-}
-
-export async function getAgentSettings(): Promise<AgentSettingsConfigResponse> {
-  return getJson<AgentSettingsConfigResponse>("/api/agent/settings");
-}
-
-export async function runAgent(
-  message: string,
-  files: File[] = [],
-  conversationId?: string | null,
-  brandId?: string | null,
-  logo?: File | null,
-  settings?: {
-    image_model: string;
-    enabled_tools: string[];
-    enabled_abilities: string[];
-  },
-): Promise<AgentResponse> {
-  const form = new FormData();
-  form.append("message", message);
-  if (conversationId) form.append("conversation_id", conversationId);
-  if (brandId) form.append("brand_id", brandId);
-  if (settings) {
-    form.append("image_model", settings.image_model);
-    form.append("enabled_tools", JSON.stringify(settings.enabled_tools));
-    form.append("enabled_abilities", JSON.stringify(settings.enabled_abilities));
-  }
-  for (const file of files) form.append("files", file);
-  if (logo) form.append("logo", logo);
-
-  const response = await request("/api/agent", { method: "POST", body: form });
-  if (!response.ok) throw new Error(await parseError(response));
-  const data = (await response.json()) as { conversation_id: string } & AgentResult;
-  const { conversation_id, ...result } = data;
-  return { conversation_id, result: result as AgentResult };
-}
-
 /* ------------------------------ Library / data --------------------------- */
 
 export async function loadLibrary(perBrand = 24): Promise<LibraryBrand[]> {
@@ -321,27 +126,6 @@ export async function loadLibrary(perBrand = 24): Promise<LibraryBrand[]> {
     `/api/library?per_brand=${perBrand}`,
   );
   return data.brands;
-}
-
-/* ------------------------------ Conversations ---------------------------- */
-
-export async function listConversations(): Promise<ConversationSummary[]> {
-  const data = await getJson<{ conversations: ConversationSummary[] }>(
-    "/api/conversations",
-  );
-  return data.conversations;
-}
-
-export async function getConversation(id: string): Promise<ConversationDetail> {
-  const data = await getJson<{ conversation: ConversationDetail }>(
-    `/api/conversations/${id}`,
-  );
-  return data.conversation;
-}
-
-export async function deleteConversation(id: string): Promise<void> {
-  const response = await request(`/api/conversations/${id}`, { method: "DELETE" });
-  if (!response.ok) throw new Error(await parseError(response));
 }
 
 /* --------------------------------- Admin --------------------------------- */
@@ -466,48 +250,6 @@ export function purgeTelemetry(
   confirm: string,
 ): Promise<{ deleted: Record<string, number>; kept: string }> {
   return postJson("/api/admin/db/purge-telemetry", { confirm });
-}
-
-/* ----------------------------- Usage dashboard --------------------------- */
-/* Per-user (or creator all-users) activity for the Home panel.               */
-
-export interface UsageAgent {
-  agent_id: string;
-  name: string;
-  role: string;
-  category: string;
-  live: boolean;
-  sessions: number;
-  creatives: number;
-}
-
-export interface UsageDay {
-  day: string;
-  creatives: number;
-  sessions: number;
-}
-
-export interface UsageUser {
-  user_id: string;
-  email: string;
-  name: string;
-  picture?: string;
-  sessions: number;
-  creatives: number;
-  agents_used: number;
-}
-
-export interface UsageResponse {
-  days: number;
-  scope: "me" | "all";
-  per_agent: UsageAgent[];
-  per_user: UsageUser[];
-  daily: UsageDay[];
-  totals: { sessions: number; creatives: number; active_days: number };
-}
-
-export function getUsage(days = 30, scope: "me" | "all" = "me"): Promise<UsageResponse> {
-  return getJson<UsageResponse>(`/api/usage?days=${days}&scope=${scope}`);
 }
 
 /* ---------------------------- News banner -------------------------------- */
@@ -973,13 +715,6 @@ export interface GdConfig {
   content_tokens: string[];
 }
 
-export interface GdPromptBuild {
-  text: string;
-  diffs: GdDiff[];
-  warnings: string[];
-  negative_prompt: string | null;
-}
-
 export interface GdHookSuggestion {
   headlines: { headline: string; highlight: string }[];
   ctas: { cta: string }[];
@@ -1009,11 +744,6 @@ const _brandQuery = (brand?: string | null) =>
 export const gdGetConfig = (brand?: string | null) =>
   getJson<GdConfig>(`/api/gd/config${_brandQuery(brand)}`);
 
-export const gdGetPrompts = (brand?: string | null) =>
-  getJson<{ prompts: { filename: string; hash: string; expected: string; ok: boolean; bytes: number }[] }>(
-    `/api/gd/prompts${_brandQuery(brand)}`,
-  );
-
 export const gdCreateRun = (
   brandId?: string | null,
   init?: { aspect_ratio?: string; creative_type?: string; creative_brief?: Record<string, string>; remix_enabled?: boolean },
@@ -1022,15 +752,6 @@ export const gdCreateRun = (
 /* ---------------- Brand Reference Library (ingestion + retrieval) --------- */
 // Test/debug surface so a human can SEE which reference creatives the agent
 // picks up for a given brand + creative type + brief. Backed by /api/ref-library.
-
-export interface RefCreativeType {
-  key: string;
-  label: string;
-  aspect_ratio: string;
-  orientation: string;
-  multi_frame: boolean;
-  notes: string;
-}
 
 export interface RefRecord {
   id: string;
@@ -1051,15 +772,6 @@ export interface RefRecord {
   _why?: string[];
 }
 
-export const gdRefTypes = () =>
-  getJson<{ types: RefCreativeType[] }>("/api/ref-library/types");
-
-export const gdRefIngest = (useLlm = false) =>
-  postJson<{ ingested: number; source: string; by_brand: Record<string, Record<string, number>> }>(
-    `/api/ref-library/ingest?use_llm=${useLlm}`,
-    {},
-  );
-
 export interface RefDriveSyncResult {
   source: string;
   folder_id: string;
@@ -1074,30 +786,6 @@ export interface RefDriveSyncResult {
  *  the library (admin/creator only). Backed by POST /api/ref-library/sync-drive. */
 export const gdRefSyncDrive = (useLlm = false) =>
   postJson<RefDriveSyncResult>(`/api/ref-library/sync-drive?use_llm=${useLlm}`, {});
-
-/** Reference images need the Bearer header, so fetch as a blob and hand back an
- *  object URL (callers should revoke it on unmount). */
-export async function gdRefAssetBlob(recordId: string): Promise<string> {
-  const response = await request(`/api/ref-library/asset/${encodeURIComponent(recordId)}`);
-  if (!response.ok) throw new Error(await parseError(response));
-  return URL.createObjectURL(await response.blob());
-}
-
-export const gdRefRetrieve = (
-  brief: string,
-  brand?: string | null,
-  type?: string | null,
-  k = 5,
-) => {
-  const p = new URLSearchParams();
-  if (brief) p.set("brief", brief);
-  if (brand) p.set("brand", brand);
-  if (type) p.set("type", type);
-  p.set("k", String(k));
-  return getJson<{ count: number; results: RefRecord[]; prompt_block: string }>(
-    `/api/ref-library/retrieve?${p.toString()}`,
-  );
-};
 
 export const gdUpdateConfig = (
   id: string,
@@ -1159,9 +847,6 @@ export const gdTweak = (id: string, instruction: string) =>
 export const gdBack = (id: string, stage: number) =>
   postJson<GdRun>(`/api/gd/runs/${id}/back`, { stage });
 
-export const gdPromptPreview = (id: string, stage: number, variant: string) =>
-  getJson<GdPromptBuild>(`/api/gd/runs/${id}/prompt?stage=${stage}&variant=${encodeURIComponent(variant)}`);
-
 export const gdSuggest = (id: string, body: Record<string, unknown>) =>
   postJson<Record<string, unknown>>(`/api/gd/runs/${id}/suggest`, body);
 
@@ -1189,17 +874,6 @@ export interface GdPlanLayout {
 
 export const gdPlan = (id: string, brief: string) =>
   postJson<{ plan: GdPlan; run: GdRun }>(`/api/gd/runs/${id}/plan`, { brief });
-
-/** Whether the run's brand has a logo on file (so Stage 4 can skip the upload). */
-export interface GdBrandLogo {
-  available: boolean;
-  view_url: string | null;
-  file_name: string | null;
-  brand_name: string | null;
-}
-
-export const gdBrandLogo = (id: string) =>
-  getJson<GdBrandLogo>(`/api/gd/runs/${id}/brand-logo`);
 
 export interface GdBrandLogoVariant {
   id: string;
@@ -1795,10 +1469,6 @@ export const mrReportPdfUrl = (id: string) => mrPdfBlobUrl(`/api/mr/runs/${id}/p
 export const mrVendorPdfUrl = (slug: string, date?: string) =>
   mrPdfBlobUrl(`/api/mr/snapshots/vendor/${slug}/pdf${date ? `?date_iso=${date}` : ""}`);
 
-export const mrSchedule = (period: "daily" | "weekly" | "biweekly" | "monthly") =>
-  postJson<MrReport>(`/api/mr/schedule/${period}`, {});
-
-
 /* ------------------------------ SEO agent (a2) ---------------------------- */
 
 export interface SeoBrand {
@@ -2349,142 +2019,3 @@ export const seoPages = (id: string) =>
 export const seoPagesRefresh = (id: string) =>
   postJson<SeoPagesDoc>(`/api/seo-geo/pages/${id}/refresh`, {});
 
-/* ---------------------------------------------------------------- seo blog (a9) */
-
-export interface BlogRunSummary {
-  id: string;
-  keyword: string;
-  created: string;
-  stage: "research" | "outline" | "draft";
-}
-
-export interface BlogGapRow {
-  keyword: string;
-  tag: "main" | "secondary" | "long_tail" | "aio";
-  volume: number | null;
-  overlap: number;
-  source: "ahrefs_pasted" | "serp_estimated";
-}
-
-export interface BlogSheet {
-  keyword: string;
-  metrics: { volume: number | null; kd: number | null; traffic_potential: number | null };
-  serp: { top3: { url: string; title: string; position: number }[]; paa: string[]; related: string[]; aio_present: boolean };
-  competitors: { url: string; intent: string; page_type: string; audience: string }[];
-  mixed_intent: boolean;
-  gap: BlogGapRow[];
-  usage: { main_count_top1: number; target_min: number; target_max: number; frequent_terms: { term: string; count: number }[] };
-  lsi: { term: string; fit_note: string }[];
-  data_source: "ahrefs_pasted" | "serp_estimated";
-  degraded: string[];
-}
-
-export interface BlogOutlineItem {
-  heading: string;
-  level: number;
-  note: string;
-  keywords: string[];
-}
-
-export interface BlogCitation {
-  id: string;
-  claim: string;
-  source_name: string;
-  url: string;
-  domain: string;
-  dr: number | null;
-  dr_status: "ok" | "unverified";
-  section: string;
-  verified: boolean;
-}
-
-export interface BlogComplianceCheck {
-  id: string;
-  label: string;
-  pass: boolean;
-  detail: string;
-}
-
-export interface BlogSiteSummary { domain: string; scanned: string; counts: { sitemap_urls: number; scanned: number; posts: number; pages: number }; }
-export interface BlogTopicSuggestion { keyword: string; angle: string; collisions: { url: string; title: string; overlap: number }[]; }
-export interface BlogSiteProfile extends BlogSiteSummary { pages: unknown[]; posts: { url: string; title: string }[]; pool: { name: string; keywords: string[]; covered_by: string[] }[]; data_source: string; degraded: string[]; }
-
-export interface BlogRun {
-  id: string;
-  keyword: string;
-  created: string;
-  stage: "research" | "outline" | "draft";
-  gates: { keywords: boolean; outline: boolean };
-  pasted: { metrics: Record<string, number | null>; competitor_keywords: Record<string, unknown[]>; dr: Record<string, number> };
-  sheet: BlogSheet | null;
-  site: { domain: string; cannibalization: { url: string; title: string; overlap: number }[]; internal_links: string[] } | null;
-  outline_doc: {
-    competitor_outlines: {
-      url: string;
-      title?: string;
-      h2?: string[];
-      word_count?: number;
-      external_links?: number;
-      features?: { eeat: boolean; key_takeaways: boolean; tables: boolean; tools: boolean; lacks: string[] };
-    }[];
-    meta: { title: string; description: string; slug: string };
-    targets: { word_count: number; links: number };
-    outline: BlogOutlineItem[];
-    evaluator: { rounds: number; beats_all: boolean | null; scores: Record<string, unknown>; note: string };
-    degraded: string[];
-  } | null;
-  citations: { items: BlogCitation[]; short_by: number; rounds: number; degraded: string[] } | null;
-  draft: {
-    markdown: string;
-    meta: { title: string; description: string; slug: string };
-    compliance: { checks: BlogComplianceCheck[]; all_pass: boolean };
-    edited: boolean;
-  } | null;
-}
-
-export const blogRuns = () => getJson<{ runs: BlogRunSummary[] }>("/api/seo-blog/runs");
-
-export const blogRun = (id: string) => getJson<BlogRun>(`/api/seo-blog/runs/${id}`);
-
-export const blogCreateRun = (p: { keyword: string; metrics_paste?: string; competitor_keywords_paste?: Record<string, string>; website?: string }) =>
-  postJson<BlogRun>("/api/seo-blog/runs", p);
-
-export const blogApproveKeywords = (id: string, sheet: BlogSheet) =>
-  postJson<BlogRun>(`/api/seo-blog/runs/${id}/approve-keywords`, { sheet });
-
-export const blogBuildOutline = (id: string) => postJson<BlogRun>(`/api/seo-blog/runs/${id}/build-outline`, {});
-
-export const blogVetCitations = (id: string, drPaste: string) =>
-  postJson<BlogRun>(`/api/seo-blog/runs/${id}/vet-citations`, { dr_paste: drPaste });
-
-export const blogApproveOutline = (id: string, outlineItems: BlogOutlineItem[]) =>
-  postJson<BlogRun>(`/api/seo-blog/runs/${id}/approve-outline`, { outline: outlineItems });
-
-export const blogDraft = (id: string) => postJson<BlogRun>(`/api/seo-blog/runs/${id}/draft`, {});
-
-export async function blogSaveDraft(id: string, markdown: string): Promise<BlogRun> {
-  const response = await request(`/api/seo-blog/runs/${id}/draft`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ markdown }),
-  });
-  if (!response.ok) throw new Error(await parseError(response));
-  return (await response.json()) as BlogRun;
-}
-
-export async function blogExport(id: string, format: "md" | "docx"): Promise<Blob> {
-  const response = await request(`/api/seo-blog/runs/${id}/export?format=${format}`, { method: "GET" });
-  if (!response.ok) throw new Error(await parseError(response));
-  return response.blob();
-}
-
-export const blogSites = () => getJson<{ sites: BlogSiteSummary[] }>("/api/seo-blog/sites");
-
-export const blogScanSite = (website: string) => postJson<BlogSiteProfile>("/api/seo-blog/sites", { website });
-
-export const blogSiteDetail = (domain: string) => getJson<BlogSiteProfile>(`/api/seo-blog/sites/${domain}`);
-
-export const blogSiteTopics = (domain: string) =>
-  postJson<{ suggested: BlogTopicSuggestion[]; avoided: { keyword: string; collisions: BlogTopicSuggestion["collisions"]; covered_by: string[] }[]; degraded: string[] }>(
-    `/api/seo-blog/sites/${domain}/topics`, {},
-  );

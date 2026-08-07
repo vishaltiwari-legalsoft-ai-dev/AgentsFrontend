@@ -1,8 +1,7 @@
 # LegalSoft Frontend (newfrontend)
 
 Next.js app wired to the AgentOS backend. Uses the **LegalSoft design system**
-(`styles.css`, tokens, and components in this folder) with the same API surface
-as the legacy `frontend/` app.
+(`styles.css`, tokens, and components in this folder).
 
 ## Local dev
 
@@ -23,7 +22,6 @@ Start the backend first (`uvicorn app.main:app --reload --port 8080` from `backe
 
 - `styles.css` — global tokens entry point
 - `components/` — React primitives (Button, Input, AgentCard, etc.)
-- `ui_kits/console/` — static UI kit mocks (reference only; production app is in `app/`)
 
 ## Deploy (Vercel)
 

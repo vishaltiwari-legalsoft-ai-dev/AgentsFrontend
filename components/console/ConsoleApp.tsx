@@ -6,7 +6,6 @@ import { Sidebar, StatsBar } from "@/components/console/Chrome";
 import { HomeView, AgentsView, TeamsView, SettingsView } from "@/components/console/Views";
 import { IntegrationsView } from "@/components/console/IntegrationsView";
 import { isAgentLive, LIVE_AGENTS } from "@/lib/console-data";
-import { AgentChat } from "@/components/console/AgentChat";
 import { GraphicsStudioV2 } from "@/components/console/gd2/GraphicsStudioV2";
 import { MarketingResearch } from "@/components/console/mr/MarketingResearch";
 import { SeoAgent } from "@/components/console/seo/SeoAgent";
@@ -34,7 +33,6 @@ const NAV_VIEWS = [
   "home",
   "agents",
   "teams",
-  "workspace",
   "studio",
   "marketing",
   "seo",
@@ -144,8 +142,8 @@ export default function ConsoleApp() {
       <Sidebar nav={nav} setNav={setNav} user={user} isAdmin={user.is_admin} isCreator={user.is_creator} onLogout={logout} />
       <div className="cmain">
         <WorkBar />
-        {nav !== "workspace" && nav !== "studio" && <StatsBar />}
-        <div className="cscroll" style={nav === "workspace" || nav === "studio" ? { overflow: "hidden" } : undefined}>
+        {nav !== "studio" && <StatsBar />}
+        <div className="cscroll" style={nav === "studio" ? { overflow: "hidden" } : undefined}>
           {nav === "home" && (
             <HomeView
               onOpenAgents={() => setNav("agents")}
@@ -157,12 +155,11 @@ export default function ConsoleApp() {
           )}
           {nav === "agents" && <AgentsView onOpenAgent={onOpenAgent} />}
           {nav === "teams" && <TeamsView />}
-          {nav === "workspace" && <AgentChat onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "studio" && <GraphicsStudioV2 onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "marketing" && <MarketingResearch onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "seo" && <SeoAgent onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "blog" && <BlogWriter onToast={fire} onBack={() => setNav("agents")} />}
-          {nav === "library" && <LibraryView onBack={() => setNav("workspace")} />}
+          {nav === "library" && <LibraryView onBack={() => setNav("home")} />}
           {nav === "imagelib" && user.is_admin && <ImageLibraryView onBack={() => setNav("home")} />}
           {nav === "admin" && user.is_admin && <AdminView onBack={() => setNav("home")} />}
           {nav === "database" && user.is_admin && <DatabaseView onBack={() => setNav("home")} />}

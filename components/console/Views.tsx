@@ -171,23 +171,6 @@ export function TeamsView() {
   );
 }
 
-export function PlaceholderView({ title }: { title: string }) {
-  return (
-    <div className="cview">
-      <div className="cplaceholder">
-        <GlyphTile glyph="bolt" tint="design" size={64} glyphSize={32} />
-        <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 18, marginTop: 18 }}>{title}</div>
-        <div style={{ fontSize: 13.5, color: "var(--text-tertiary)", maxWidth: 360, lineHeight: 1.6 }}>
-          Connect your tools and channels here — this area is coming soon.
-        </div>
-        <Badge variant="outline" style={{ marginTop: 14 }}>
-          Coming soon
-        </Badge>
-      </div>
-    </div>
-  );
-}
-
 /** Selectable color themes. `id` matches the `data-theme` value on <html>
  *  ("light" is the default and clears the attribute). */
 const THEMES = [
