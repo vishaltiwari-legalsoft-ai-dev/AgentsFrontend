@@ -151,6 +151,8 @@ export interface AdminSettings {
     vision_model: string;
   };
   sources: Record<string, "override" | "env">;
+  // Secret API keys (OpenRouter + GEO engine keys), masked with provenance.
+  keys: Record<string, { set: boolean; hint: string; source: "override" | "env" | "unset" }>;
   // Curated model choices, keyed by runtime-config field, for dropdowns.
   catalog: Record<AgentModelField, ModelOption[]>;
 }
@@ -161,6 +163,9 @@ export interface AdminSettingsPatch {
   openrouter_fast_model?: string;
   openrouter_image_model?: string;
   openrouter_vision_model?: string;
+  perplexity_api_key?: string;
+  gemini_api_key?: string;
+  openai_api_key?: string;
 }
 
 export function getAdminSettings(): Promise<AdminSettings> {
@@ -2018,4 +2023,162 @@ export const seoPages = (id: string) =>
 
 export const seoPagesRefresh = (id: string) =>
   postJson<SeoPagesDoc>(`/api/seo-geo/pages/${id}/refresh`, {});
+
+/* ---- GEO agent (a10): AI answer visibility ---- */
+
+export type GeoEngineId = "perplexity" | "gemini" | "chatgpt";
+
+export interface GeoGlobalConfig {
+  engines: Record<GeoEngineId, boolean>;
+  default_runs: number;
+  default_daily_cap: number;
+}
+
+export interface GeoBrandRow {
+  id: string;
+  name: string;
+  domain: string;
+  prompts: number;
+  recent_answers: number;
+  calls_used_today: number;
+  competitors: number;
+}
+
+export interface GeoPrompt {
+  id: string;
+  text: string;
+  intent: "brand" | "category" | "problem";
+  stage: "awareness" | "consideration" | "purchase";
+  enabled: boolean;
+}
+
+export interface GeoCompetitor {
+  key: string;
+  name: string;
+  aliases: string[];
+}
+
+export interface GeoBrandConfig {
+  brand_id: string;
+  aliases: Record<string, string[]>;
+  competitors: GeoCompetitor[];
+  daily_cap: number;
+}
+
+export interface GeoPollProgress {
+  done: number;
+  total: number;
+  calls_used_today: number;
+  daily_cap: number;
+  capped: boolean;
+  engines: string[];
+  date: string;
+}
+
+export interface GeoMentionStats {
+  rate: number | null;
+  stdev: number | null;
+  n_prompts: number;
+  n_answers: number;
+}
+
+export interface GeoMetricBlock {
+  mention: GeoMentionStats;
+  sov: {
+    share: Record<string, number | null>;
+    credit: Record<string, number>;
+    unclaimed_answers: number;
+    n_answers: number;
+  };
+  citation: { rate: number | null; n_answers_with_citations: number; cited_answers: number };
+  source_mix: { domain: string; count: number; share: number }[];
+  n_answers: number;
+  n_errors: number;
+}
+
+export interface GeoReport {
+  brand_id: string;
+  days: number;
+  blended: GeoMetricBlock;
+  engines: Record<string, GeoMetricBlock>;
+  source_gap: { domain: string; count: number; example_prompt_ids: string[] }[];
+  competitors: Record<string, GeoMentionStats>;
+  competitor_names: Record<string, string>;
+}
+
+export interface GeoAnswer {
+  engine: string;
+  model: string;
+  text: string;
+  citations: { url: string; domain: string; title: string }[];
+  latency_ms: number;
+  error: string | null;
+  prompt_id: string;
+  prompt_text: string;
+  intent: string;
+  run: number;
+  at: string;
+  mentions?: Record<string, number>;
+  brand_mentioned?: boolean;
+  brand_position?: number | null;
+  brand_cited?: boolean;
+  sentiment?: "positive" | "neutral" | "negative" | null;
+}
+
+export const geoConfig = () => getJson<GeoGlobalConfig>("/api/geo/config");
+
+export const geoBrands = () => getJson<{ brands: GeoBrandRow[] }>("/api/geo/brands");
+
+export const geoPrompts = (brandId: string) =>
+  getJson<{ brand_id: string; prompts: GeoPrompt[] }>(`/api/geo/brands/${brandId}/prompts`);
+
+export const geoGeneratePrompts = (brandId: string) =>
+  postJson<{ brand_id: string; prompts: GeoPrompt[] }>(
+    `/api/geo/brands/${brandId}/prompts/generate`, {},
+  );
+
+export async function geoSavePrompts(brandId: string, prompts: GeoPrompt[]): Promise<{ prompts: GeoPrompt[] }> {
+  const response = await request(`/api/geo/brands/${brandId}/prompts`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompts }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as { prompts: GeoPrompt[] };
+}
+
+export const geoBrandConfig = (brandId: string) =>
+  getJson<GeoBrandConfig>(`/api/geo/brands/${brandId}/config`);
+
+export async function geoSaveBrandConfig(
+  brandId: string,
+  patch: Partial<Pick<GeoBrandConfig, "aliases" | "competitors" | "daily_cap">>,
+): Promise<GeoBrandConfig> {
+  const response = await request(`/api/geo/brands/${brandId}/config`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as GeoBrandConfig;
+}
+
+export const geoPollStep = (
+  brandId: string,
+  body: { engines?: string[]; runs?: number; batch_size?: number } = {},
+) => postJson<GeoPollProgress>(`/api/geo/brands/${brandId}/poll/step`, body);
+
+export const geoReport = (brandId: string, days = 7) =>
+  getJson<GeoReport>(`/api/geo/brands/${brandId}/report?days=${days}`);
+
+export const geoAnswers = (brandId: string, opts: { prompt_id?: string; engine?: string; days?: number } = {}) => {
+  const p = new URLSearchParams();
+  if (opts.prompt_id) p.set("prompt_id", opts.prompt_id);
+  if (opts.engine) p.set("engine", opts.engine);
+  if (opts.days) p.set("days", String(opts.days));
+  const qs = p.toString();
+  return getJson<{ answers: GeoAnswer[]; total: number }>(
+    `/api/geo/brands/${brandId}/answers${qs ? `?${qs}` : ""}`,
+  );
+};
 

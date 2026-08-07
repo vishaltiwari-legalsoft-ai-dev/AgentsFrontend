@@ -32,6 +32,7 @@ export function AdminView({ onBack }: { onBack: () => void }) {
   // Secrets & Integrations form state.
   const [cfg, setCfg] = useState<AdminSettings | null>(null);
   const [keyDraft, setKeyDraft] = useState("");
+  const [geoKeys, setGeoKeys] = useState({ perplexity_api_key: "", gemini_api_key: "", openai_api_key: "" });
   const [models, setModels] = useState({ model: "", fast_model: "", image_model: "", vision_model: "" });
   const [saving, setSaving] = useState(false);
   const [secretMsg, setSecretMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -76,9 +77,13 @@ export function AdminView({ onBack }: { onBack: () => void }) {
       };
       // Only send a key if the admin typed a new one (blank = leave as-is).
       if (keyDraft.trim()) patch.openrouter_api_key = keyDraft.trim();
+      if (geoKeys.perplexity_api_key.trim()) patch.perplexity_api_key = geoKeys.perplexity_api_key.trim();
+      if (geoKeys.gemini_api_key.trim()) patch.gemini_api_key = geoKeys.gemini_api_key.trim();
+      if (geoKeys.openai_api_key.trim()) patch.openai_api_key = geoKeys.openai_api_key.trim();
       const next = await updateAdminSettings(patch);
       setCfg(next);
       setKeyDraft("");
+      setGeoKeys({ perplexity_api_key: "", gemini_api_key: "", openai_api_key: "" });
       setSecretMsg({ kind: "ok", text: "Settings saved." });
     } catch (err) {
       setSecretMsg({ kind: "err", text: err instanceof Error ? err.message : "Save failed" });
@@ -219,6 +224,42 @@ export function AdminView({ onBack }: { onBack: () => void }) {
                     </option>
                   ))}
                 </select>
+              </label>
+            );
+          })}
+        </div>
+
+        {/* GEO agent engine keys — direct provider APIs (citations need them). */}
+        <h4 style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 6px", color: "var(--text-tertiary)" }}>
+          GEO engine keys
+        </h4>
+        <p style={{ fontSize: 12.5, color: "var(--text-secondary)", margin: "0 0 12px", lineHeight: 1.5 }}>
+          The GEO agent polls AI engines directly for citation data. Each key is optional —
+          its engine simply stays unavailable until set.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 18 }}>
+          {([
+            ["perplexity_api_key", "Perplexity", "pplx-…"],
+            ["gemini_api_key", "Gemini", "AIza…"],
+            ["openai_api_key", "OpenAI", "sk-…"],
+          ] as const).map(([field, label, ph]) => {
+            const info = cfg?.keys?.[field];
+            return (
+              <label key={field} style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>
+                {label}
+                {info?.set && (
+                  <span style={{ marginLeft: 6, fontWeight: 500, color: "var(--text-tertiary)" }}>
+                    {info.hint} · {info.source === "override" ? "saved here" : "from environment"}
+                  </span>
+                )}
+                <input
+                  type="password"
+                  value={geoKeys[field]}
+                  placeholder={info?.set ? "Enter a new key to replace it…" : ph}
+                  autoComplete="off"
+                  onChange={(e) => setGeoKeys((k) => ({ ...k, [field]: e.target.value }))}
+                  style={{ width: "100%", marginTop: 5, padding: "9px 12px", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontSize: 13, fontFamily: "var(--font-mono)" }}
+                />
               </label>
             );
           })}
