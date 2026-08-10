@@ -1328,6 +1328,43 @@ export interface MrPortfolio {
 }
 export const mrPortfolio = () => getJson<MrPortfolio>("/api/mr/snapshots/portfolio");
 
+/* Lead-analysis sheet: per-vendor Meeting Outcome / Deal Stage picture + the
+   five lead-quality flags. Auto-detected from any connected workbook. */
+export interface MrLeadFlag { level: string; message: string; metric: string }
+export interface MrLeadVendor {
+  campaign: string; slug: string; matched_vendor: string | null;
+  booked: number; completed: number; no_show: number; canceled: number;
+  bad_lead: number; pending: number; other: number; resolved: number;
+  completed_rate_pct: number | null; no_show_rate_pct: number | null;
+  canceled_rate_pct: number | null; bad_lead_rate_pct: number | null;
+  deal_stages: Record<string, number>;
+  services_sold: number; amount: number; mrr: number;
+  brands: Record<string, number>; sources: Record<string, number>;
+  tracker: {
+    leads: number; qualified_leads: number; demos_booked: number;
+    ql_ratio_pct: number | null; booking_rate_pct: number | null;
+  } | null;
+  flags: MrLeadFlag[];
+  story: string;
+}
+export interface MrLeadMonth {
+  vendors: MrLeadVendor[];
+  totals: Record<string, number | null | Record<string, number>>;
+  flag_count: number;
+}
+export interface MrLeadAnalysis {
+  has_data: boolean;
+  hint?: string;
+  generated_at?: string;
+  source_label?: string;
+  tab?: string;
+  gaps?: string[];
+  months?: Record<string, MrLeadMonth>;
+  latest_month?: string | null;
+  unmatched_campaigns?: string[];
+}
+export const mrLeadAnalysis = () => getJson<MrLeadAnalysis>("/api/mr/lead-analysis");
+
 /** Upload one platform's CSV export and normalize it into a dataset. */
 export async function mrIngest(file: File, platform: MrPlatform): Promise<MrIngestResult> {
   const form = new FormData();

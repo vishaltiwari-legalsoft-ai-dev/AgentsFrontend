@@ -24,8 +24,9 @@ const SECTIONS = [
 ];
 
 /* Every editable figure: alert thresholds + the CPQL/CAC targets. Money unless
-   marked pct (shown as %, stored as a fraction). */
-const THRESHOLD_FIELDS: { key: string; label: string; pct?: boolean }[] = [
+   marked pct (shown as %, stored as a fraction) or unit ("pct100" = stored as a
+   whole percent, "count" = plain number). */
+const THRESHOLD_FIELDS: { key: string; label: string; pct?: boolean; unit?: "pct100" | "count" }[] = [
   { key: "cost_per_qualified_lead_target_low", label: "CPQL target — low" },
   { key: "cost_per_qualified_lead_target_high", label: "CPQL target — high" },
   { key: "cost_per_qualified_lead_red", label: "CPQL red flag" },
@@ -35,6 +36,12 @@ const THRESHOLD_FIELDS: { key: string; label: string; pct?: boolean }[] = [
   { key: "spend_no_demo_limit", label: "Spend with no demo" },
   { key: "mgmt_fee_limit", label: "Management fee limit" },
   { key: "conversion_drop_pct", label: "Conversion-drop flag", pct: true },
+  { key: "bad_lead_rate_red", label: "Bad-lead rate flag", unit: "pct100" },
+  { key: "no_show_rate_red", label: "No-show rate flag", unit: "pct100" },
+  { key: "canceled_rate_red", label: "Cancellation rate flag", unit: "pct100" },
+  { key: "zero_completed_min_demos", label: "0-completed flag — min resolved demos", unit: "count" },
+  { key: "ql_ratio_great", label: "Great-leads QL ratio line", unit: "pct100" },
+  { key: "booking_rate_broken", label: "Broken-booking rate line", unit: "pct100" },
 ];
 
 const GOAL_FIELDS: { key: string; label: string; pct?: boolean }[] = [
@@ -114,7 +121,11 @@ function TargetsCard({ onToast }: { onToast: (m: string) => void }) {
     );
   }
 
-  const fmtVal = (f: { pct?: boolean }, v: number) => (f.pct ? `${Math.round(v * 1000) / 10}%` : `$${v.toLocaleString()}`);
+  const fmtVal = (f: { pct?: boolean; unit?: string }, v: number) =>
+    f.pct ? `${Math.round(v * 1000) / 10}%`
+    : f.unit === "pct100" ? `${v}%`
+    : f.unit === "count" ? String(v)
+    : `$${v.toLocaleString()}`;
 
   return (
     <div className="mr-cfg__card mr-tgt">
@@ -140,12 +151,12 @@ function TargetsCard({ onToast }: { onToast: (m: string) => void }) {
           <span className="mr-cfg__key">{f.label}</span>
           {edit ? (
             <span className="mr-tgt__input">
-              {!f.pct && <small>$</small>}
+              {!f.pct && !f.unit && <small>$</small>}
               <input
                 type="number" min={0} step="any" value={thr[f.key] ?? ""}
                 onChange={(e) => setThr((s) => ({ ...s, [f.key]: e.target.value }))}
               />
-              {f.pct && <small>%</small>}
+              {(f.pct || f.unit === "pct100") && <small>%</small>}
             </span>
           ) : (
             <span className="mr-cfg__val">{fmtVal(f, targets.thresholds[f.key] ?? 0)}</span>

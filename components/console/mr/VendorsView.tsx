@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { mrPortfolio, mrVendorDetail, mrVendorPdfUrl, type MrPortfolio, type MrSnapshotMeta, type MrVendorDetail } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
+import { LeadQuality } from "./LeadQuality";
 import { fmtMoney, fmtNum, fmtTime } from "./shared";
 
 const pct = (n: number | null) => (n === null || n === undefined ? "—" : `${n.toFixed(1)}%`);
@@ -335,6 +336,8 @@ export function VendorsView({ snapshots, onToast }: {
               month={detail.snapshot.month}
               benchmarks={portfolioData?.benchmarks ?? null}
             />
+
+            <LeadQuality slug={detail.vendor_slug} />
 
             {d && t && (
               <div className="mr-vend__move">
