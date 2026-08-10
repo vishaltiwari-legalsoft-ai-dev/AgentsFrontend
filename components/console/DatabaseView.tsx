@@ -64,7 +64,7 @@ type Sort = { col: string; dir: "asc" | "desc" } | null;
 
 export function DatabaseView({ onBack }: { onBack: () => void }) {
   const [collections, setCollections] = useState<DbCollection[] | null>(null);
-  const [conn, setConn] = useState<{ connected: boolean; database: string; project: string } | null>(null);
+  const [conn, setConn] = useState<{ connected: boolean; database: string; project: string; consoleUrl?: string } | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const [data, setData] = useState<DbCollectionData | null>(null);
   const [limit, setLimit] = useState(50);
@@ -83,7 +83,7 @@ export function DatabaseView({ onBack }: { onBack: () => void }) {
     return getDbCollections()
       .then((res) => {
         setCollections(res.collections);
-        setConn({ connected: res.connected, database: res.database, project: res.project });
+        setConn({ connected: res.connected, database: res.database, project: res.project, consoleUrl: res.console_url });
         setActive((cur) => cur ?? (res.collections[0]?.name ?? null));
       })
       .catch((err: unknown) => {
@@ -244,8 +244,18 @@ export function DatabaseView({ onBack }: { onBack: () => void }) {
         </div>
       )}
       {conn?.connected && (
-        <div style={{ fontSize: 12, color: "var(--text-tertiary)", display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ fontSize: 12, color: "var(--text-tertiary)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <Icon name="check" size={13} /> Connected to <code>{conn.database}</code> (project <code>{conn.project}</code>).
+          {conn.consoleUrl && (
+            <a
+              href={conn.consoleUrl}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "var(--brand)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}
+            >
+              Open in Firebase console <Icon name="external-link" size={12} />
+            </a>
+          )}
         </div>
       )}
 
@@ -349,6 +359,16 @@ export function DatabaseView({ onBack }: { onBack: () => void }) {
           >
             <Icon name="download" size={14} /> CSV
           </Button>
+          {activeMeta?.console_url && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => window.open(activeMeta.console_url, "_blank", "noopener")}
+              title="Open this exact collection in the Firebase console"
+            >
+              <Icon name="external-link" size={14} /> Firebase
+            </Button>
+          )}
         </div>
       )}
 

@@ -9,7 +9,7 @@
 /** Curated default columns for the known collections. Only those that actually
  *  exist in the loaded data are shown — missing ones are silently skipped. */
 const CURATED: Record<string, string[]> = {
-  runs: ["id", "status", "agent_name", "brand", "category", "title", "created_at", "updated_at"],
+  runs: ["id", "user", "action", "run_status", "agent_name", "brand", "run_summary", "created_at"],
   users: ["name", "email", "created_at", "last_login"],
   brands: ["id", "name", "category", "created_at", "updated_at"],
   creatives: ["id", "title", "file_name", "file_type", "brand", "created_at"],
@@ -21,7 +21,7 @@ const CURATED: Record<string, string[]> = {
 // Per-agent run tables are created on demand as `agent_runs__<id>`; they all
 // share one shape, so match them by prefix rather than exact name.
 const AGENT_RUNS_PREFIX = "agent_runs__";
-const AGENT_RUNS_DEFAULT = ["id", "action", "status", "stage", "agent_name", "created_at"];
+const AGENT_RUNS_DEFAULT = ["id", "user", "action", "task", "status", "brand", "created_at"];
 
 // Fallback when a collection has no curated list: lean on the backend's
 // preferred-first ordering and just take the leading columns.

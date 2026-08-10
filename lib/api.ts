@@ -220,6 +220,8 @@ export interface DbCollection {
   description: string;
   // null = the count couldn't be read (database unreachable), not "empty".
   count: number | null;
+  // Deep link to this collection in the Firebase console.
+  console_url?: string;
 }
 
 export interface DbCollectionsResponse {
@@ -227,6 +229,8 @@ export interface DbCollectionsResponse {
   connected: boolean;
   database: string;
   project: string;
+  // Deep link to the database root in the Firebase console.
+  console_url?: string;
 }
 
 export interface DbCollectionData {
