@@ -2364,9 +2364,21 @@ export interface BrowserStatus {
   step_cap: number;
   allowed: string[];
   blocked: string[];
+  can_download: boolean;
+  extension_version: string;
 }
 
 export const browserStatus = () => getJson<BrowserStatus>("/api/browser/status");
+
+/**
+ * Fetch the extension bundle as a blob — the endpoint needs the Bearer token,
+ * so a plain <a href> would just get a 401.
+ */
+export async function browserExtensionBlob(): Promise<Blob> {
+  const response = await request("/api/browser/extension");
+  if (!response.ok) throw new Error(await parseError(response));
+  return await response.blob();
+}
 
 export const browserRuns = () => getJson<{ runs: BrowserRunRow[] }>("/api/browser/runs");
 

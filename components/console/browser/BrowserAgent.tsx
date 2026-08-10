@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  browserConfig, browserDigest, browserDigests, browserPairingCode, browserRun,
-  browserRuns, browserSaveConfig, browserStatus, browserStopRun,
+  browserConfig, browserDigest, browserDigests, browserExtensionBlob, browserPairingCode,
+  browserRun, browserRuns, browserSaveConfig, browserStatus, browserStopRun,
   type BrowserDigest, type BrowserDigestRow, type BrowserRun, type BrowserRunRow,
   type BrowserStatus, type BrowserWatchRule,
 } from "@/lib/api";
@@ -18,9 +18,6 @@ import { useReportWork } from "@/lib/work";
 
 const AUTH_KEY = "agentos.auth";
 const LIVE_POLL_MS = 3000;
-/** Ready-built extension, so installing needs no terminal and no npm. */
-const RELEASE_URL =
-  "https://github.com/vishaltiwari-legalsoft-ai-dev/AgentsBrowserExtension/releases/latest";
 
 const STATUS_WORDS: Record<string, string> = {
   running: "Working",
@@ -142,6 +139,25 @@ export function BrowserAgent({
     };
   }, [openRun, refresh]);
 
+  const downloadExtension = async () => {
+    setBusy(true);
+    try {
+      const blob = await browserExtensionBlob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "agentos-browser-agent.zip";
+      link.click();
+      URL.revokeObjectURL(url);
+      setShowInstall(true);
+      onToast("Downloaded. Unzip it, then follow the steps below.");
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : "Couldn't download the extension.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const copyPairingCode = async () => {
     const token = storedToken();
     if (!token) {
@@ -205,22 +221,32 @@ export function BrowserAgent({
           time, and anything consequential waits for your approval.
         </p>
         <div className="ba-actions">
-          <button className="ba-btn ba-btn-primary" onClick={copyPairingCode} type="button">
+          <button
+            className="ba-btn ba-btn-primary"
+            onClick={() => void downloadExtension()}
+            type="button"
+            disabled={busy || (status ? !status.can_download : false)}
+          >
+            Download the extension
+          </button>
+          <button className="ba-btn" onClick={copyPairingCode} type="button">
             Copy pairing code
           </button>
           <button className="ba-btn" onClick={() => setShowInstall((v) => !v)} type="button">
             {showInstall ? "Hide setup" : "How to install"}
           </button>
-          <button className="ba-btn" onClick={() => void refresh()} type="button" disabled={busy}>
-            Refresh runs
-          </button>
         </div>
         {statusError ? (
           <p className="ba-note ba-note-warn">{statusError}</p>
         ) : status ? (
-          <p className="ba-note">
-            Signed in as {status.email}. Runs stop after {status.step_cap} steps
-            {status.blocked.length ? `; ${status.blocked.length} domains are off-limits` : ""}.
+          <p className={`ba-note${status.can_download ? "" : " ba-note-warn"}`}>
+            {status.can_download
+              ? `Signed in as ${status.email}. Runs stop after ${status.step_cap} steps` +
+                (status.blocked.length
+                  ? `; ${status.blocked.length} domains are off-limits.`
+                  : ".")
+              : `The extension is limited to company accounts, and ${status.email} isn't one — ` +
+                "sign in with your work address to download it."}
           </p>
         ) : null}
       </div>
@@ -234,11 +260,8 @@ export function BrowserAgent({
           </p>
           <ol>
             <li>
-              <b>Download the extension.</b>{" "}
-              <a href={RELEASE_URL} target="_blank" rel="noreferrer">
-                Get the latest release
-              </a>{" "}
-              and save <code>agentos-browser-agent.zip</code>.
+              <b>Download the extension</b> using the button above. It saves
+              <code> agentos-browser-agent.zip</code>.
             </li>
             <li>
               <b>Unzip it.</b> Right-click the file → <i>Extract All</i>. You&apos;ll get a folder
