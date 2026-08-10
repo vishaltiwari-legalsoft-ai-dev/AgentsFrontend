@@ -2149,6 +2149,17 @@ export interface GeoMetricBlock {
   n_errors: number;
 }
 
+export interface GeoPromptRollup {
+  prompt_id: string;
+  text: string;
+  intent: string;
+  n: number;
+  self_rate: number;
+  cited_rate: number;
+  rivals: { key: string; count: number }[];
+  engines_hit: string[];
+}
+
 export interface GeoReport {
   brand_id: string;
   days: number;
@@ -2157,6 +2168,7 @@ export interface GeoReport {
   source_gap: { domain: string; count: number; example_prompt_ids: string[] }[];
   competitors: Record<string, GeoMentionStats>;
   competitor_names: Record<string, string>;
+  prompt_rollup?: GeoPromptRollup[];
 }
 
 export interface GeoAnswer {
