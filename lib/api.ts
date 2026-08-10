@@ -2186,3 +2186,61 @@ export const geoAnswers = (brandId: string, opts: { prompt_id?: string; engine?:
   );
 };
 
+/* ---------------------- Browser Agent (a11) ------------------------------ */
+
+export interface BrowserRunRow {
+  id: string;
+  goal: string;
+  mode: "act" | "monitor";
+  status: string;
+  steps_used: number;
+  step_cap: number;
+  user: string;
+  created_at: string;
+  updated_at: string;
+  summary?: string;
+}
+
+export interface BrowserStep {
+  seq: number;
+  at: string;
+  sensitive: boolean;
+  action: { kind: string; why?: string; url?: string; summary?: string; reason?: string };
+  result: { ok: boolean; error?: string | null } | null;
+}
+
+export interface BrowserRun extends BrowserRunRow {
+  steps: BrowserStep[];
+  findings: string[];
+  fail_reason?: string;
+  extracted?: unknown;
+}
+
+export interface BrowserStatus {
+  ok: boolean;
+  email: string;
+  protocol: number;
+  step_cap: number;
+  allowed: string[];
+  blocked: string[];
+}
+
+export const browserStatus = () => getJson<BrowserStatus>("/api/browser/status");
+
+export const browserRuns = () => getJson<{ runs: BrowserRunRow[] }>("/api/browser/runs");
+
+export const browserRun = (runId: string) =>
+  getJson<BrowserRun>(`/api/browser/runs/${runId}`);
+
+export const browserStopRun = (runId: string) =>
+  postJson<{ status: string }>(`/api/browser/runs/${runId}/stop`, {});
+
+/**
+ * Pairing code for the Chrome extension: base64 of the backend URL + the JWT
+ * already held by this session. The extension stores it locally; nothing is
+ * baked into the extension build.
+ */
+export function browserPairingCode(token: string, email?: string): string {
+  return btoa(JSON.stringify({ backend_url: API_URL, token, email }));
+}
+

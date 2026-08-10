@@ -7,6 +7,7 @@
 @import url("./seo.css");
 @import url("./blogwriter.css");
 @import url("./geo.css");
+@import url("./browser.css");
 
 @keyframes spin {
   to {
