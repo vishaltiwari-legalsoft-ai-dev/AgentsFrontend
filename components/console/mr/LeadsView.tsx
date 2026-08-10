@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { mrLeadAnalysis, type MrLeadAnalysis, type MrLeadVendor } from "@/lib/api";
-import { Button } from "@/lib/kit-ui";
+import { mrLeadAnalysis, mrLeadsPdfUrl, type MrLeadAnalysis, type MrLeadVendor } from "@/lib/api";
+import { Button, Icon } from "@/lib/kit-ui";
 import { fmtMoney, fmtMonth, fmtNum, fmtTime } from "./shared";
 
 const cellTxt = (n: number, rate: number | null) =>
@@ -80,9 +80,38 @@ function VendorRows({ v, open, onToggle }: { v: MrLeadVendor; open: boolean; onT
   );
 }
 
+/* Downloads the panel as a server-rendered, same-format PDF (like the report
+   and vendor-dossier downloads). */
+function DownloadLeads({ month, onToast }: { month: string; onToast: (m: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  async function download() {
+    setBusy(true);
+    try {
+      const url = await mrLeadsPdfUrl(month);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mr-leads-${month}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "PDF download failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Button size="sm" variant="secondary" disabled={busy} onClick={() => void download()}
+      iconLeft={<Icon name="download" size={13} />}>
+      {busy ? "Preparing…" : "Download PDF"}
+    </Button>
+  );
+}
+
 /* The Leads panel: the lead sheet's whole per-vendor Meeting Outcome / Deal
    Stage picture in one place. Story first, red only where a rule tripped. */
-export function LeadsView({ onGotoData }: { onGotoData: () => void }) {
+export function LeadsView({ onGotoData, onToast }: { onGotoData: () => void; onToast: (m: string) => void }) {
   const [data, setData] = useState<MrLeadAnalysis | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [month, setMonth] = useState<string | null>(null);
@@ -142,6 +171,9 @@ export function LeadsView({ onGotoData }: { onGotoData: () => void }) {
               ))}
             </span>
           )}
+          <span className="mr-leads__actions">
+            <DownloadLeads month={active} onToast={onToast} />
+          </span>
         </div>
         <span className="mr-panel__sub">
           From &ldquo;{data.tab}&rdquo;{data.source_label ? ` in ${data.source_label}` : ""}

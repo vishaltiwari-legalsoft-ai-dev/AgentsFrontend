@@ -1230,3 +1230,4 @@
 .mr-leads__detail td { text-align: left; white-space: normal; background: color-mix(in srgb, var(--text-primary) 2.5%, transparent); }
 .mr-leads__detail .mr-leads__story { font-size: 13px; margin-bottom: 6px; }
 .mr-leads__detail .mr-leads__chiprows { margin-top: 6px; }
+.mr-leads__actions { margin-left: auto; }

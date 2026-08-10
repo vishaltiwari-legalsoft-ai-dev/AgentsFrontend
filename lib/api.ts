@@ -1524,6 +1524,8 @@ async function mrPdfBlobUrl(path: string): Promise<string> {
 export const mrReportPdfUrl = (id: string) => mrPdfBlobUrl(`/api/mr/runs/${id}/pdf`);
 export const mrVendorPdfUrl = (slug: string, date?: string) =>
   mrPdfBlobUrl(`/api/mr/snapshots/vendor/${slug}/pdf${date ? `?date_iso=${date}` : ""}`);
+export const mrLeadsPdfUrl = (month?: string) =>
+  mrPdfBlobUrl(`/api/mr/lead-analysis/pdf${month ? `?month=${month}` : ""}`);
 
 /* ------------------------------ SEO agent (a2) ---------------------------- */
 

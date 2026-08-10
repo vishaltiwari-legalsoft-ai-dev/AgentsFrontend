@@ -207,7 +207,7 @@ export function MarketingResearch({ onToast, onBack }: { onToast: (m: string) =>
             onToast={onToast}
           />
         )}
-        {view === "leads" && <LeadsView onGotoData={() => setView("data")} />}
+        {view === "leads" && <LeadsView onGotoData={() => setView("data")} onToast={onToast} />}
         {view === "ask" && <AskView seed={seed} onSeedConsumed={() => setSeed(null)} onToast={onToast} />}
         {view === "reports" && <ReportsView runs={runs} onRunsChanged={refresh} onToast={onToast} />}
         {view === "vendors" && <VendorsView snapshots={snapshots} onToast={onToast} />}
