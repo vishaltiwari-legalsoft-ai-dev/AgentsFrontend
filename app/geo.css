@@ -157,3 +157,13 @@
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .opt-src a:hover{ text-decoration:underline; }
 .opt-history{ cursor:pointer; }
+
+/* Rendered engine answers (AnswerText) */
+.geo-md p{ margin:0 0 10px; font-size:13.5px; line-height:1.65; color:var(--text-secondary); overflow-wrap:anywhere; }
+.geo-md h4{ margin:14px 0 6px; font:600 13.5px var(--font-sans); color:var(--text-primary); }
+.geo-md ul, .geo-md ol{ margin:0 0 10px; padding-left:22px; }
+.geo-md li{ margin:4px 0; font-size:13.5px; line-height:1.6; color:var(--text-secondary); }
+.geo-md strong{ font-weight:650; color:var(--text-primary); }
+.geo-md a{ color:var(--brand); text-decoration:none; }
+.geo-md a:hover{ text-decoration:underline; }
+.geo-md__cite{ font-size:10px; color:var(--text-tertiary); letter-spacing:0.02em; margin-left:1px; }

@@ -10,6 +10,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { Icon } from "@/lib/kit-ui";
 import { useReportWork } from "@/lib/work";
+import { AnswerText } from "./AnswerText";
 import { ContentOptimizer } from "./ContentOptimizer";
 
 /** GEO agent (a10) — how often AI answer engines name and cite each brand.
@@ -437,7 +438,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                     </button>
                     {openAnswer === i && (
                       <div className="geo-answer__body">
-                        {a.error ? <p className="geo-answer__error">{a.error}</p> : <p>{a.text}</p>}
+                        {a.error ? <p className="geo-answer__error">{a.error}</p> : <AnswerText text={a.text} />}
                         {a.citations.length > 0 && (
                           <div className="geo-answer__cites">
                             {a.citations.map((c, j) => (
