@@ -2346,6 +2346,8 @@ export interface BrowserStep {
   seq: number;
   at: string;
   sensitive: boolean;
+  /** The model was shown a screenshot for this step. */
+  saw_page?: boolean;
   action: { kind: string; why?: string; url?: string; summary?: string; reason?: string };
   result: { ok: boolean; error?: string | null } | null;
 }

@@ -323,6 +323,7 @@ export function BrowserAgent({
                 <span className="ba-step-text">
                   {stepLine(step)}
                   {step.sensitive && <b className="ba-flag">needed your OK</b>}
+                  {step.saw_page && <b className="ba-flag">looked at the page</b>}
                   {step.result && !step.result.ok && (
                     <em className="ba-step-err">{step.result.error}</em>
                   )}
