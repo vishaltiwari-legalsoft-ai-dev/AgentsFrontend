@@ -1193,3 +1193,40 @@
 .mr-lead__flags { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 3px; }
 .mr-lead__flags li { font: 500 12px/1.45 var(--font-sans); color: var(--red-600); }
 .mr-lead__note { margin: 4px 0 0; font: 400 11.5px/1.4 var(--font-sans); color: var(--text-secondary); }
+
+/* Leads panel ---------------------------------------------------------------- */
+.mr-leads { align-content: start; }
+.mr-leads__head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.mr-leads__months { display: flex; gap: 6px; flex-wrap: wrap; }
+.mr-leads__story { margin: 0; font: 400 14px/1.55 var(--font-sans); color: var(--text-primary); max-width: 78ch; }
+.mr-leads__ok { margin: 0; font: 500 13px/1.5 var(--font-sans); color: var(--green-600); }
+.mr-leads__flagcard {
+  border: 1px solid color-mix(in srgb, var(--red-500) 28%, transparent);
+  background: var(--red-50); border-radius: var(--radius-lg);
+  padding: 12px 14px; display: grid; gap: 8px;
+}
+.mr-leads__flagcard > b { font: 600 13px/1.4 var(--font-sans); color: var(--red-600); }
+.mr-leads__flagvendor > span { font: 600 12px/1.5 var(--font-sans); color: var(--text-primary); }
+.mr-leads__chiprows { display: grid; gap: 6px; }
+.mr-leads__chips { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.mr-leads__chiplabel { font: 700 10px/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); }
+.mr-leads__tablewrap { overflow-x: auto; }
+.mr-leads__table { width: 100%; border-collapse: collapse; }
+.mr-leads__table th {
+  font: 700 10.5px/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-secondary); text-align: right; padding: 6px 10px;
+  border-bottom: 1px solid var(--border-subtle); white-space: nowrap;
+}
+.mr-leads__table th:first-child { text-align: left; }
+.mr-leads__table td {
+  font: 500 12.5px/1.4 var(--font-mono); font-variant-numeric: tabular-nums;
+  text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap;
+}
+.mr-leads__table td:first-child { text-align: left; }
+.mr-leads__row { cursor: pointer; }
+.mr-leads__row:hover td { background: color-mix(in srgb, var(--text-primary) 4%, transparent); }
+.mr-leads__vendor { font: 600 12.5px/1.4 var(--font-sans); display: flex; align-items: center; gap: 6px; }
+.mr-leads__bad { color: var(--red-600); font-weight: 650; }
+.mr-leads__detail td { text-align: left; white-space: normal; background: color-mix(in srgb, var(--text-primary) 2.5%, transparent); }
+.mr-leads__detail .mr-leads__story { font-size: 13px; margin-bottom: 6px; }
+.mr-leads__detail .mr-leads__chiprows { margin-top: 6px; }

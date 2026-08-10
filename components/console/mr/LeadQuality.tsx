@@ -2,15 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { mrLeadAnalysis, type MrLeadAnalysis } from "@/lib/api";
-import { fmtMoney, fmtNum } from "./shared";
-
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July",
-  "August", "September", "October", "November", "December"];
-
-function monthLabel(ym: string): string {
-  const [y, m] = ym.split("-").map(Number);
-  return m >= 1 && m <= 12 ? `${MONTHS[m - 1]} ${y}` : ym;
-}
+import { fmtMoney, fmtMonth, fmtNum } from "./shared";
 
 const withPct = (n: number, rate: number | null) =>
   rate === null || rate === undefined ? fmtNum(n) : `${fmtNum(n)} (${rate.toFixed(0)}%)`;
@@ -45,7 +37,7 @@ export function LeadQuality({ slug }: { slug: string }) {
   return (
     <div className="mr-port mr-port--vendor">
       <h4 className="mr-section__title">
-        Lead quality · {monthLabel(data.latest_month)}
+        Lead quality · {fmtMonth(data.latest_month)}
         {data.tab && <span className="mr-lead__src"> · from &ldquo;{data.tab}&rdquo;</span>}
       </h4>
       <p className="mr-lead__story">{v.story}</p>

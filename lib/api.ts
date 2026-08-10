@@ -1242,6 +1242,8 @@ export interface MrOverview {
   totals: MrChannelAgg | null;
   channels: Record<string, MrChannelAgg>;
   flag_summary: MrFlagGroup[];
+  /** The lead sheet's month block for the overview month (null until connected). */
+  lead_quality?: MrLeadMonth | null;
   sources: MrSource[];
 }
 
@@ -1347,9 +1349,17 @@ export interface MrLeadVendor {
   flags: MrLeadFlag[];
   story: string;
 }
+export interface MrLeadTotals {
+  booked: number; completed: number; no_show: number; canceled: number;
+  bad_lead: number; pending: number; other: number; resolved: number;
+  completed_rate_pct: number | null; no_show_rate_pct: number | null;
+  canceled_rate_pct: number | null; bad_lead_rate_pct: number | null;
+  services_sold: number; amount: number; mrr: number;
+  brands: Record<string, number>; sources: Record<string, number>;
+}
 export interface MrLeadMonth {
   vendors: MrLeadVendor[];
-  totals: Record<string, number | null | Record<string, number>>;
+  totals: MrLeadTotals;
   flag_count: number;
 }
 export interface MrLeadAnalysis {
