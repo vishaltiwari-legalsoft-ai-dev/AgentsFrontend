@@ -241,7 +241,9 @@ export function BrowserAgent({
         ) : status ? (
           <p className={`ba-note${status.can_download ? "" : " ba-note-warn"}`}>
             {status.can_download
-              ? `Signed in as ${status.email}. Runs stop after ${status.step_cap} steps` +
+              ? `Signed in as ${status.email}. Extension v${status.extension_version} — ` +
+                "the side panel shows the version you have installed, and warns you when it's " +
+                `older than this. Runs stop after ${status.step_cap} steps` +
                 (status.blocked.length
                   ? `; ${status.blocked.length} domains are off-limits.`
                   : ".")
