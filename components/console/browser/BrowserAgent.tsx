@@ -18,6 +18,9 @@ import { useReportWork } from "@/lib/work";
 
 const AUTH_KEY = "agentos.auth";
 const LIVE_POLL_MS = 3000;
+/** Ready-built extension, so installing needs no terminal and no npm. */
+const RELEASE_URL =
+  "https://github.com/vishaltiwari-legalsoft-ai-dev/AgentsBrowserExtension/releases/latest";
 
 const STATUS_WORDS: Record<string, string> = {
   running: "Working",
@@ -223,17 +226,49 @@ export function BrowserAgent({
       </div>
 
       {showInstall && (
-        <ol className="ba-install">
-          <li>
-            In <code>browser-extension/</code>, run <code>npm install &amp;&amp; npm run build</code>.
-          </li>
-          <li>
-            Open <code>chrome://extensions</code>, turn on Developer mode, choose
-            <b> Load unpacked</b>, and select the <code>dist/</code> folder.
-          </li>
-          <li>Click the extension icon to open its side panel.</li>
-          <li>Press <b>Copy pairing code</b> above, paste it in, and press Connect.</li>
-        </ol>
+        <div className="ba-install">
+          <p className="ba-install-lead">
+            Takes about two minutes, and you don&apos;t need to write any code. Chrome will warn
+            you that the extension is in &quot;developer mode&quot; — that is normal for an
+            in-house tool that isn&apos;t published on the Chrome Web Store.
+          </p>
+          <ol>
+            <li>
+              <b>Download the extension.</b>{" "}
+              <a href={RELEASE_URL} target="_blank" rel="noreferrer">
+                Get the latest release
+              </a>{" "}
+              and save <code>agentos-browser-agent.zip</code>.
+            </li>
+            <li>
+              <b>Unzip it.</b> Right-click the file → <i>Extract All</i>. You&apos;ll get a folder
+              — remember where it is, and don&apos;t delete it later. Chrome reads the extension
+              from this folder every time it starts.
+            </li>
+            <li>
+              <b>Open Chrome&apos;s extensions page.</b> Type <code>chrome://extensions</code> in
+              the address bar and press Enter.
+            </li>
+            <li>
+              <b>Turn on Developer mode</b> using the switch in the top-right corner. This is what
+              lets Chrome load an extension from a folder instead of the Web Store.
+            </li>
+            <li>
+              <b>Click &quot;Load unpacked&quot;</b> (top-left) and select the folder you unzipped.
+              The AgentOS Browser Agent should now appear in your list.
+            </li>
+            <li>
+              <b>Connect it.</b> Click the extension&apos;s icon in the toolbar to open its side
+              panel, press <b>Copy pairing code</b> at the top of this page, paste it into the
+              panel, and press <i>Connect</i>. It should then say &quot;Connected as&quot; with
+              your email.
+            </li>
+          </ol>
+          <p className="ba-install-note">
+            Stuck on the last step? The code expires after a week — press <b>Copy pairing code</b>
+            again to get a fresh one.
+          </p>
+        </div>
       )}
 
       {openRun ? (
