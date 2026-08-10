@@ -316,6 +316,47 @@ export function BrowserAgent({
           {openRun.summary && <p className="ba-summary">{openRun.summary}</p>}
           {openRun.fail_reason && <p className="ba-note ba-note-warn">{openRun.fail_reason}</p>}
 
+          {openRun.plan && (
+            <div className="ba-plan">
+              <h4 className="ba-subhead">
+                {openRun.plan.planned ? "The plan" : "No plan — worked straight from the task"}
+              </h4>
+              {openRun.plan.plan_error && (
+                <p className="ba-note ba-note-warn">
+                  Planning didn&apos;t run: {openRun.plan.plan_error}
+                </p>
+              )}
+              {openRun.plan.subtasks.map((sub, i) => (
+                <details key={sub.id} className="ba-sub" open={sub.status !== "done"}>
+                  <summary>
+                    <span className={`ba-sub-n${sub.status === "done" ? " ba-sub-n--done" : ""}`}>
+                      {sub.status === "done" ? "✓" : i + 1}
+                    </span>
+                    {sub.title}
+                  </summary>
+                  <p className="ba-sub-goal">{sub.goal}</p>
+                  {sub.steps.length > 0 && (
+                    <ol className="ba-sub-steps">
+                      {sub.steps.map((step) => (
+                        <li key={step}>{step}</li>
+                      ))}
+                    </ol>
+                  )}
+                  {sub.edge_cases.length > 0 && (
+                    <ul className="ba-sub-edges">
+                      {sub.edge_cases.map((edge) => (
+                        <li key={edge.risk}>
+                          <b>If {edge.risk}</b> — {edge.handle}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="ba-sub-done">Finished when: {sub.done_when}</p>
+                </details>
+              ))}
+            </div>
+          )}
+
           <ol className="ba-steps">
             {openRun.steps.map((step) => (
               <li key={step.seq} className={step.result && !step.result.ok ? "ba-step-bad" : ""}>

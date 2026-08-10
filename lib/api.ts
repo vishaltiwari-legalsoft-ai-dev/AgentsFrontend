@@ -2342,12 +2342,31 @@ export interface BrowserRunRow {
   summary?: string;
 }
 
+export interface BrowserSubtask {
+  id: string;
+  title: string;
+  goal: string;
+  steps: string[];
+  edge_cases: { risk: string; handle: string }[];
+  done_when: string;
+  status: "pending" | "done";
+}
+
+export interface BrowserPlan {
+  subtasks: BrowserSubtask[];
+  notes: string;
+  planned: boolean;
+  plan_error?: string;
+}
+
 export interface BrowserStep {
   seq: number;
   at: string;
   sensitive: boolean;
   /** The model was shown a screenshot for this step. */
   saw_page?: boolean;
+  /** Which sub-task of the plan this step belongs to. */
+  subtask?: string;
   action: { kind: string; why?: string; url?: string; summary?: string; reason?: string };
   result: { ok: boolean; error?: string | null } | null;
 }
@@ -2357,6 +2376,7 @@ export interface BrowserRun extends BrowserRunRow {
   findings: string[];
   fail_reason?: string;
   extracted?: unknown;
+  plan?: BrowserPlan;
 }
 
 export interface BrowserStatus {
