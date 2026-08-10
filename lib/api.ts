@@ -2235,6 +2235,98 @@ export const geoAnswers = (brandId: string, opts: { prompt_id?: string; engine?:
   );
 };
 
+/* ------------- GEO Content Optimizer (a10, Layers 1-6) ------------------- */
+
+export interface OptimizerGap { kind: string; priority: number; message: string }
+
+export interface OptimizerTermEntry {
+  term: string;
+  display: string;
+  importance: number;
+  prevalence: number;
+  range: [number, number];
+  confidence: string;
+  brand?: boolean;
+}
+
+export interface OptimizerSubtopicCoverage {
+  label: string;
+  covered: boolean;
+  best_sim: number;
+  evidence: string;
+}
+
+export interface OptimizerBand {
+  feature: string;
+  n: number;
+  kind: string;
+  lo?: number | null;
+  hi?: number | null;
+  median?: number | null;
+  modes?: number[] | null;
+  confidence: string;
+  note: string;
+}
+
+export interface OptimizerReport {
+  total: number;
+  term_coverage: number;
+  semantic_coverage: number | null;
+  structure_fit: number;
+  stuffing_penalty: number;
+  winners_median: number | null;
+  degraded: string[];
+  gaps: OptimizerGap[];
+  draft_features: Record<string, number>;
+  subtopic_coverage: OptimizerSubtopicCoverage[];
+  draft_term_counts: Record<string, number>;
+}
+
+export interface OptimizerAnalysis {
+  meta: {
+    analysis_id: string;
+    keyword: string;
+    locale: string;
+    created_at: string;
+    n_docs: number;
+    article_share: number;
+    warnings: string[];
+    degraded: string[];
+    volatility: string;
+    aio_present: boolean;
+    paa: string[];
+  };
+  results: { rank: number; url: string; title: string; page_type: string; excluded: string; flags: string[] }[];
+  term_profile: OptimizerTermEntry[];
+  subtopics: { label: string; suggested_heading: string; doc_idxs: number[] }[];
+  structure_bands: Record<string, OptimizerBand>;
+  winners_median_score: number | null;
+  last_report?: OptimizerReport;
+  disclaimer: string;
+}
+
+export interface OptimizerIndexRow {
+  id: string;
+  keyword: string;
+  locale: string;
+  created_at: string;
+  n_docs: number;
+  score: number | null;
+}
+
+export const geoOptimizerAnalyze = (body: {
+  keyword: string; locale?: string; draft?: string; own_domain?: string; vertical?: string;
+}) => postJson<OptimizerAnalysis>("/api/geo/optimizer/analyze", body);
+
+export const geoOptimizerRescore = (analysisId: string, draft: string) =>
+  postJson<OptimizerReport>("/api/geo/optimizer/rescore", { analysis_id: analysisId, draft });
+
+export const geoOptimizerAnalyses = () =>
+  getJson<{ analyses: OptimizerIndexRow[] }>("/api/geo/optimizer/analyses");
+
+export const geoOptimizerAnalysis = (id: string) =>
+  getJson<OptimizerAnalysis>(`/api/geo/optimizer/analyses/${id}`);
+
 /* ---------------------- Browser Agent (a11) ------------------------------ */
 
 export interface BrowserRunRow {

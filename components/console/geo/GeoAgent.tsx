@@ -10,12 +10,13 @@ import {
 import { useAuth } from "@/lib/auth";
 import { Icon } from "@/lib/kit-ui";
 import { useReportWork } from "@/lib/work";
+import { ContentOptimizer } from "./ContentOptimizer";
 
 /** GEO agent (a10) — how often AI answer engines name and cite each brand.
  *  Honesty rules baked in: every rate shows its n and variance; a missing
  *  engine key reads as "not connected", never as a zero. */
 
-type GeoTab = "overview" | "prompts" | "answers" | "sources";
+type GeoTab = "overview" | "prompts" | "answers" | "sources" | "optimizer";
 
 const ENGINE_LABELS: Record<string, string> = {
   perplexity: "Perplexity",
@@ -305,10 +306,10 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
             </section>
 
             <nav className="geo-tabs">
-              {(["overview", "prompts", "answers", "sources"] as GeoTab[]).map((t) => (
+              {(["overview", "prompts", "answers", "sources", "optimizer"] as GeoTab[]).map((t) => (
                 <button key={t} className={`geo-tab${tab === t ? " geo-tab--on" : ""}`}
                         onClick={() => { setTab(t); if (t === "answers" && !answers.length) void loadAnswers(""); }}>
-                  {t === "overview" ? "Overview" : t === "prompts" ? `Prompts (${prompts.length})` : t === "answers" ? "Answers" : "Sources"}
+                  {t === "overview" ? "Overview" : t === "prompts" ? `Prompts (${prompts.length})` : t === "answers" ? "Answers" : t === "sources" ? "Sources" : "Content Optimizer"}
                 </button>
               ))}
             </nav>
@@ -492,6 +493,10 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                   </div>
                 )}
               </div>
+            )}
+
+            {tab === "optimizer" && (
+              <ContentOptimizer ownDomain={brand.domain} onToast={onToast} />
             )}
           </>
         )}

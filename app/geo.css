@@ -126,3 +126,34 @@
   color:var(--text-primary); vertical-align:top; }
 .geo-table td:first-child{ font-weight:600; }
 .geo-table__examples{ color:var(--text-tertiary); font-size:12px; line-height:1.5; }
+
+/* Content Optimizer (Layers 1-6) */
+.opt-form{ display:flex; gap:10px; margin-bottom:10px; }
+.opt-form__kw{ flex:1; height:38px; border:1px solid var(--border); background:var(--surface);
+  border-radius:var(--radius-md); padding:0 12px; font:500 14px var(--font-sans);
+  color:var(--text-primary); }
+.opt-form__kw:focus-visible{ border-color:var(--brand); outline:none; }
+.opt-draftbox{ margin-bottom:14px; }
+.opt-draftbox summary{ cursor:pointer; font:500 13px var(--font-sans);
+  color:var(--text-secondary); padding:4px 0; }
+.opt-draftbox textarea{ width:100%; min-height:160px; margin:8px 0; resize:vertical;
+  border:1px solid var(--border); background:var(--surface); border-radius:var(--radius-md);
+  padding:10px 12px; font:400 13.5px/1.6 var(--font-mono, monospace); color:var(--text-primary); }
+.opt-subscores{ display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 14px; }
+.opt-action{ display:flex; align-items:flex-start; gap:8px; padding:7px 0;
+  font-size:13.5px; line-height:1.55; color:var(--text-primary); }
+.opt-action svg{ flex:none; margin-top:2px; color:var(--brand); }
+.opt-details{ margin:10px 0; border-top:1px solid var(--border-subtle); padding-top:8px; }
+.opt-details summary{ cursor:pointer; font:600 13px var(--font-sans);
+  color:var(--text-secondary); padding:4px 0 8px; }
+.opt-sub{ display:flex; align-items:center; gap:8px; padding:5px 2px;
+  font-size:13.5px; color:var(--text-primary); }
+.opt-sub svg{ color:var(--text-tertiary); }
+.opt-sub--ok svg{ color:var(--success, #2e9e5b); }
+.opt-sub em{ font-style:normal; font-size:12px; color:var(--text-tertiary); }
+.opt-src{ display:flex; align-items:center; gap:8px; padding:6px 2px; font-size:13px; }
+.opt-src__rank{ flex:none; width:30px; color:var(--text-tertiary); font-weight:600; }
+.opt-src a{ color:var(--text-primary); text-decoration:none; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.opt-src a:hover{ text-decoration:underline; }
+.opt-history{ cursor:pointer; }
