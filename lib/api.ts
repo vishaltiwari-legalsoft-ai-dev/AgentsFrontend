@@ -2281,3 +2281,49 @@ export function browserPairingCode(token: string, email?: string): string {
   return btoa(JSON.stringify({ backend_url: API_URL, token, email }));
 }
 
+export interface BrowserWatchRule {
+  id?: string;
+  text: string;
+  enabled: boolean;
+}
+
+export interface BrowserDigestRow {
+  id: string;
+  at: string;
+  headline: string;
+  pages_seen: number;
+  alerts: number;
+}
+
+export interface BrowserDigest {
+  id: string;
+  at: string;
+  headline: string;
+  themes: { title: string; detail: string }[];
+  open_loops: string[];
+  alerts: { rule: string; count: number; pages: { title: string; url: string }[] }[];
+  pages_seen: number;
+  tabs_open: number;
+}
+
+export const browserDigests = () =>
+  getJson<{ digests: BrowserDigestRow[] }>("/api/browser/digests");
+
+export const browserDigest = (id: string) =>
+  getJson<BrowserDigest>(`/api/browser/digests/${id}`);
+
+export const browserConfig = () =>
+  getJson<{ watch_rules: BrowserWatchRule[] }>("/api/browser/config");
+
+export async function browserSaveConfig(
+  watchRules: BrowserWatchRule[],
+): Promise<{ watch_rules: BrowserWatchRule[] }> {
+  const response = await request("/api/browser/config", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ watch_rules: watchRules }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as { watch_rules: BrowserWatchRule[] };
+}
+

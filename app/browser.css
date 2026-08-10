@@ -77,3 +77,51 @@
 .ba-step-err{ display:block; font-style:normal; font-size:12.5px; color:var(--warning); }
 .ba-flag{ margin-left:8px; font-size:11.5px; font-weight:600; color:var(--text-tertiary);
   background:var(--surface-active); border-radius:var(--radius-pill); padding:1px 8px; }
+
+/* Tabs — Runs vs Tab digests */
+.ba-tabs{ display:flex; gap:4px; margin-bottom:14px;
+  background:var(--surface-active); border:1px solid var(--border-subtle);
+  border-radius:var(--radius-pill); padding:3px; width:fit-content; }
+.ba-tab{ border:0; background:transparent; cursor:pointer;
+  font-family:var(--font-sans); font-size:12.5px; font-weight:600;
+  color:var(--text-secondary); padding:7px 15px; border-radius:var(--radius-pill);
+  transition:background var(--dur-fast), color var(--dur-fast); }
+.ba-tab:hover{ color:var(--text-primary); }
+.ba-tab--on{ background:var(--surface); color:var(--brand); box-shadow:var(--shadow-xs); }
+
+.ba-subhead{ margin:16px 0 8px; font-family:var(--font-sans); font-size:12px;
+  font-weight:700; text-transform:uppercase; letter-spacing:0.05em;
+  color:var(--text-tertiary); }
+
+/* Digest detail */
+.ba-theme{ display:flex; flex-direction:column; gap:2px; padding:10px 0;
+  border-bottom:1px solid var(--border-subtle); }
+.ba-theme b{ font-size:13.5px; font-weight:600; color:var(--text-primary); }
+.ba-theme span{ font-size:13.5px; line-height:1.55; color:var(--text-secondary); }
+.ba-loops{ margin:0; padding-left:20px; font-size:13.5px; line-height:1.7;
+  color:var(--text-secondary); }
+.ba-alert{ margin-top:12px; padding:12px 14px; background:var(--surface-warm);
+  border:1px solid var(--border-subtle); border-left:3px solid var(--warning);
+  border-radius:var(--radius-lg); display:flex; flex-direction:column; gap:2px; }
+.ba-alert b{ font-size:13.5px; color:var(--text-primary); }
+.ba-alert > span{ font-size:12.5px; color:var(--text-tertiary); }
+.ba-alert ul{ margin:6px 0 0; padding-left:20px; font-size:13px; line-height:1.6; }
+.ba-alert a{ color:var(--brand); text-decoration:none; }
+.ba-alert a:hover{ text-decoration:underline; }
+
+/* Watch rules */
+.ba-rules{ margin-bottom:16px; }
+.ba-rules ul{ list-style:none; margin:0 0 10px; padding:0; display:flex;
+  flex-wrap:wrap; gap:8px; }
+.ba-rules li{ display:inline-flex; align-items:center; gap:8px;
+  background:var(--surface-warm); border:1px solid var(--border-subtle);
+  border-radius:var(--radius-pill); padding:5px 8px 5px 14px; font-size:13px;
+  color:var(--text-primary); }
+.ba-rule-x{ border:0; background:transparent; cursor:pointer; padding:2px;
+  display:inline-flex; color:var(--text-tertiary); transition:color var(--dur-fast); }
+.ba-rule-x:hover{ color:var(--warning); }
+.ba-rule-add{ display:flex; gap:8px; }
+.ba-rule-add input{ flex:1; max-width:320px; border:1px solid var(--border-subtle);
+  background:var(--surface); border-radius:var(--radius-lg); padding:9px 14px;
+  font-family:var(--font-sans); font-size:13.5px; color:var(--text-primary); }
+.ba-rule-add input:focus{ outline:none; border-color:var(--brand); }

@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  browserPairingCode, browserRun, browserRuns, browserStatus, browserStopRun,
-  type BrowserRun, type BrowserRunRow, type BrowserStatus,
+  browserConfig, browserDigest, browserDigests, browserPairingCode, browserRun,
+  browserRuns, browserSaveConfig, browserStatus, browserStopRun,
+  type BrowserDigest, type BrowserDigestRow, type BrowserRun, type BrowserRunRow,
+  type BrowserStatus, type BrowserWatchRule,
 } from "@/lib/api";
 import { Icon } from "@/lib/kit-ui";
 import { useReportWork } from "@/lib/work";
@@ -70,6 +72,11 @@ export function BrowserAgent({
   const [openRun, setOpenRun] = useState<BrowserRun | null>(null);
   const [showInstall, setShowInstall] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState<"runs" | "digests">("runs");
+  const [digestRows, setDigestRows] = useState<BrowserDigestRow[]>([]);
+  const [openDigest, setOpenDigest] = useState<BrowserDigest | null>(null);
+  const [rules, setRules] = useState<BrowserWatchRule[]>([]);
+  const [newRule, setNewRule] = useState("");
   const liveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useReportWork(busy);
@@ -77,16 +84,39 @@ export function BrowserAgent({
   const refresh = useCallback(async () => {
     setBusy(true);
     try {
-      const [info, list] = await Promise.all([browserStatus(), browserRuns()]);
+      const [info, list, digests, cfg] = await Promise.all([
+        browserStatus(), browserRuns(), browserDigests(), browserConfig(),
+      ]);
       setStatus(info);
       setStatusError("");
       setRows(list.runs);
+      setDigestRows(digests.digests);
+      setRules(cfg.watch_rules);
     } catch (err) {
       setStatusError(err instanceof Error ? err.message : "Couldn't reach the backend.");
     } finally {
       setBusy(false);
     }
   }, []);
+
+  const saveRules = async (next: BrowserWatchRule[]) => {
+    const previous = rules;
+    setRules(next);
+    try {
+      const saved = await browserSaveConfig(next);
+      setRules(saved.watch_rules);
+    } catch (err) {
+      setRules(previous);
+      onToast(err instanceof Error ? err.message : "Couldn't save that.");
+    }
+  };
+
+  const addRule = async () => {
+    const text = newRule.trim();
+    if (!text) return;
+    setNewRule("");
+    await saveRules([...rules, { text, enabled: true }]);
+  };
 
   useEffect(() => {
     void refresh();
@@ -129,6 +159,17 @@ export function BrowserAgent({
       setOpenRun(await browserRun(id));
     } catch (err) {
       onToast(err instanceof Error ? err.message : "Couldn't load that run.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openDigestDetail = async (id: string) => {
+    setBusy(true);
+    try {
+      setOpenDigest(await browserDigest(id));
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : "Couldn't load that digest.");
     } finally {
       setBusy(false);
     }
@@ -233,27 +274,161 @@ export function BrowserAgent({
             {openRun.steps.length === 0 && <li className="ba-empty">No steps yet.</li>}
           </ol>
         </div>
+      ) : openDigest ? (
+        <div className="ba-detail">
+          <button className="ba-back" onClick={() => setOpenDigest(null)} type="button">
+            <Icon name="arrow-left" size={16} /> All digests
+          </button>
+          <h3>{openDigest.headline}</h3>
+          <p className="ba-note">
+            {openDigest.pages_seen} pages visited · {openDigest.tabs_open} tabs open ·{" "}
+            {when(openDigest.at)}
+          </p>
+
+          {openDigest.themes.map((theme) => (
+            <div key={theme.title} className="ba-theme">
+              <b>{theme.title}</b>
+              <span>{theme.detail}</span>
+            </div>
+          ))}
+
+          {openDigest.open_loops.length > 0 && (
+            <>
+              <h4 className="ba-subhead">Loose ends</h4>
+              <ul className="ba-loops">
+                {openDigest.open_loops.map((loop) => (
+                  <li key={loop}>{loop}</li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {openDigest.alerts.map((alert) => (
+            <div key={alert.rule} className="ba-alert">
+              <b>{alert.rule}</b>
+              <span>
+                {alert.count} matching page{alert.count === 1 ? "" : "s"}
+              </span>
+              <ul>
+                {alert.pages.map((page) => (
+                  <li key={page.url}>
+                    <a href={page.url} target="_blank" rel="noreferrer">
+                      {page.title || page.url}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="ba-runs">
-          <h3>Recent runs</h3>
-          {rows.length === 0 ? (
-            <p className="ba-empty">
-              Nothing yet. Start a task from the extension's side panel and it will appear here.
-            </p>
+          <div className="ba-tabs">
+            <button
+              className={`ba-tab${tab === "runs" ? " ba-tab--on" : ""}`}
+              onClick={() => setTab("runs")}
+              type="button"
+            >
+              Runs
+            </button>
+            <button
+              className={`ba-tab${tab === "digests" ? " ba-tab--on" : ""}`}
+              onClick={() => setTab("digests")}
+              type="button"
+            >
+              Tab digests
+            </button>
+          </div>
+
+          {tab === "runs" ? (
+            rows.length === 0 ? (
+              <p className="ba-empty">
+                Nothing yet. Start a task from the extension&apos;s side panel and it will appear here.
+              </p>
+            ) : (
+              <ul>
+                {rows.map((run) => (
+                  <li key={run.id}>
+                    <button className="ba-run" onClick={() => void openDetail(run.id)} type="button">
+                      <span className="ba-run-goal">{run.goal}</span>
+                      <span className="ba-run-meta">
+                        {STATUS_WORDS[run.status] ?? run.status} · {run.steps_used} steps ·{" "}
+                        {when(run.updated_at)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )
           ) : (
-            <ul>
-              {rows.map((run) => (
-                <li key={run.id}>
-                  <button className="ba-run" onClick={() => void openDetail(run.id)} type="button">
-                    <span className="ba-run-goal">{run.goal}</span>
-                    <span className="ba-run-meta">
-                      {STATUS_WORDS[run.status] ?? run.status} · {run.steps_used} steps ·{" "}
-                      {when(run.updated_at)}
-                    </span>
+            <>
+              <p className="ba-note">
+                The extension notes which pages you visit, entirely on your machine, and sends
+                nothing until you ask it for a digest from the side panel.
+              </p>
+
+              <div className="ba-rules">
+                <h4 className="ba-subhead">Tell me when you see…</h4>
+                {rules.length === 0 && (
+                  <p className="ba-empty">
+                    No watch topics yet. Add one and it will be flagged in every digest.
+                  </p>
+                )}
+                <ul>
+                  {rules.map((rule, i) => (
+                    <li key={`${rule.text}-${i}`}>
+                      <span>{rule.text}</span>
+                      <button
+                        className="ba-rule-x"
+                        type="button"
+                        aria-label={`Remove ${rule.text}`}
+                        onClick={() => void saveRules(rules.filter((_, j) => j !== i))}
+                      >
+                        <Icon name="trash-2" size={14} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="ba-rule-add">
+                  <input
+                    value={newRule}
+                    onChange={(e) => setNewRule(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void addRule();
+                    }}
+                    placeholder="e.g. billing, or a client's name"
+                  />
+                  <button className="ba-btn" onClick={() => void addRule()} type="button">
+                    Add
                   </button>
-                </li>
-              ))}
-            </ul>
+                </div>
+              </div>
+
+              {digestRows.length === 0 ? (
+                <p className="ba-empty">
+                  No digests yet. Press &quot;What&apos;s happening in my tabs?&quot; in the
+                  extension to make one.
+                </p>
+              ) : (
+                <ul>
+                  {digestRows.map((row) => (
+                    <li key={row.id}>
+                      <button
+                        className="ba-run"
+                        type="button"
+                        onClick={() => void openDigestDetail(row.id)}
+                      >
+                        <span className="ba-run-goal">{row.headline}</span>
+                        <span className="ba-run-meta">
+                          {row.pages_seen} pages
+                          {row.alerts > 0 ? ` · ${row.alerts} flagged` : ""} · {when(row.at)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
           )}
         </div>
       )}
