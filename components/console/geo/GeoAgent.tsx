@@ -12,12 +12,13 @@ import { Icon } from "@/lib/kit-ui";
 import { useReportWork } from "@/lib/work";
 import { AnswerText } from "./AnswerText";
 import { ContentOptimizer } from "./ContentOptimizer";
+import { GeoInsights } from "./GeoInsights";
 
 /** GEO agent (a10) — how often AI answer engines name and cite each brand.
  *  Honesty rules baked in: every rate shows its n and variance; a missing
  *  engine key reads as "not connected", never as a zero. */
 
-type GeoTab = "overview" | "prompts" | "answers" | "sources" | "optimizer";
+type GeoTab = "insights" | "overview" | "prompts" | "answers" | "sources" | "optimizer";
 
 const ENGINE_LABELS: Record<string, string> = {
   perplexity: "Perplexity",
@@ -46,7 +47,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
   const [answers, setAnswers] = useState<GeoAnswer[]>([]);
   const [answerEngine, setAnswerEngine] = useState<string>("");
   const [openAnswer, setOpenAnswer] = useState<number | null>(null);
-  const [tab, setTab] = useState<GeoTab>("overview");
+  const [tab, setTab] = useState<GeoTab>("insights");
   const [busy, setBusy] = useState(false);
   const [polling, setPolling] = useState(false);
   const [progress, setProgress] = useState<GeoPollProgress | null>(null);
@@ -70,7 +71,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
 
   async function openBrand(row: GeoBrandRow) {
     setBrand(row);
-    setTab("overview");
+    setTab("insights");
     setReport(null);
     setProgress(null);
     setAnswers([]);
@@ -234,6 +235,29 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       <div className="mr-body">
         {!brand && (
           <div className="mr-panel">
+            <details className="geo-about">
+              <summary><Icon name="info" size={15} /> What this agent does · How to use it</summary>
+              <div className="geo-about__cols">
+                <div>
+                  <h4>What it does</h4>
+                  <p>
+                    When potential clients ask ChatGPT, Gemini or Perplexity things like
+                    &ldquo;best intake service for law firms&rdquo;, the AI names a few brands and cites a few
+                    links. This agent asks those engines the real buyer questions every week and measures —
+                    not guesses — how often <strong>your</strong> brand is named, linked, and how you compare
+                    to competitors.
+                  </p>
+                </div>
+                <div>
+                  <h4>How to use it</h4>
+                  <ol>
+                    <li>Open your brand and check <strong>Insights</strong> — it reads the data for you and lists what to fix, in order.</li>
+                    <li>Once a week hit <strong>Poll now</strong> — trends over weeks are the signal; day-to-day change is AI randomness.</li>
+                    <li>Work the list: earn the source-gap placements, make key pages citable with the <strong>Content Optimizer</strong>.</li>
+                  </ol>
+                </div>
+              </div>
+            </details>
             <div className="mr-panel__head">
               <h2 className="mr-panel__title">Brands</h2>
               <span className="mr-panel__sub">Open a brand to see its AI visibility and the gaps to fix.</span>
@@ -307,10 +331,10 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
             </section>
 
             <nav className="geo-tabs">
-              {(["overview", "prompts", "answers", "sources", "optimizer"] as GeoTab[]).map((t) => (
+              {(["insights", "overview", "prompts", "answers", "sources", "optimizer"] as GeoTab[]).map((t) => (
                 <button key={t} className={`geo-tab${tab === t ? " geo-tab--on" : ""}`}
                         onClick={() => { setTab(t); if (t === "answers" && !answers.length) void loadAnswers(""); }}>
-                  {t === "overview" ? "Overview" : t === "prompts" ? `Prompts (${prompts.length})` : t === "answers" ? "Answers" : t === "sources" ? "Sources" : "Content Optimizer"}
+                  {t === "insights" ? "Insights" : t === "overview" ? "Overview" : t === "prompts" ? `Prompts (${prompts.length})` : t === "answers" ? "Answers" : t === "sources" ? "Sources" : "Content Optimizer"}
                 </button>
               ))}
             </nav>
@@ -494,6 +518,19 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                   </div>
                 )}
               </div>
+            )}
+
+            {tab === "insights" && (
+              <GeoInsights
+                brand={brand}
+                report={report}
+                promptCount={prompts.length}
+                connected={connected}
+                isCreator={!!user?.is_creator}
+                onGenerate={() => void generate()}
+                onPoll={() => void runPoll()}
+                goTab={(t) => { setTab(t); if (t === "answers" && !answers.length) void loadAnswers(""); }}
+              />
             )}
 
             {tab === "optimizer" && (

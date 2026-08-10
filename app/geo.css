@@ -167,3 +167,34 @@
 .geo-md a{ color:var(--brand); text-decoration:none; }
 .geo-md a:hover{ text-decoration:underline; }
 .geo-md__cite{ font-size:10px; color:var(--text-tertiary); letter-spacing:0.02em; margin-left:1px; }
+
+/* About explainer (brand-list screen) */
+.geo-about{ margin-bottom:16px; border:1px solid var(--border-subtle); border-radius:var(--radius-md);
+  background:var(--surface); padding:10px 14px; }
+.geo-about summary{ display:flex; align-items:center; gap:8px; cursor:pointer;
+  font:600 13px var(--font-sans); color:var(--text-secondary); }
+.geo-about__cols{ display:grid; grid-template-columns:1fr 1fr; gap:20px; padding:12px 2px 6px; }
+.geo-about__cols h4{ margin:0 0 6px; font:600 12.5px var(--font-sans); text-transform:uppercase;
+  letter-spacing:0.05em; color:var(--text-tertiary); }
+.geo-about__cols p, .geo-about__cols li{ margin:0; font-size:13px; line-height:1.6; color:var(--text-secondary); }
+.geo-about__cols ol{ margin:0; padding-left:18px; }
+.geo-about__cols li{ margin-bottom:6px; }
+@media (max-width: 900px){ .geo-about__cols{ grid-template-columns:1fr; } }
+
+/* Insights tab */
+.geo-inscards{ display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin:14px 0; }
+.geo-inscard{ border:1px solid var(--border-subtle); border-radius:var(--radius-md);
+  background:var(--surface); padding:12px 14px; display:flex; flex-direction:column; gap:2px; }
+.geo-inscard__num{ font:700 22px var(--font-sans); color:var(--text-primary); }
+.geo-inscard__label{ font-size:12px; color:var(--text-tertiary); }
+.geo-steps{ list-style:none; margin:0; padding:0; counter-reset:geo-step; }
+.geo-step{ display:flex; gap:12px; padding:12px 2px; border-bottom:1px solid var(--border-subtle); }
+.geo-step:last-child{ border-bottom:0; }
+.geo-step__icon{ flex:none; width:30px; height:30px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--surface-hover); color:var(--brand); }
+.geo-step__body{ display:flex; flex-direction:column; gap:4px; min-width:0; }
+.geo-step__body strong{ font-size:13.5px; color:var(--text-primary); }
+.geo-step__body span{ font-size:13px; line-height:1.6; color:var(--text-secondary); }
+.geo-step__cta{ align-self:flex-start; margin-top:4px; }
+@media (max-width: 700px){ .geo-inscards{ grid-template-columns:1fr; } }
