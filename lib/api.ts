@@ -2252,6 +2252,76 @@ export const geoAnswers = (brandId: string, opts: { prompt_id?: string; engine?:
   );
 };
 
+/* --------------------- GEO Action Plan (a10 strategy) -------------------- */
+
+export interface GeoStrategyAction {
+  id: string;
+  title: string;
+  detail: string;
+  owner_role: string;
+  effort: "low" | "medium" | "high";
+  impact: "low" | "medium" | "high";
+  timeframe_weeks: number;
+  kpi: string;
+  target: string;
+  status: "todo" | "in_progress" | "done" | "skipped";
+  status_at?: string;
+}
+
+export interface GeoStrategyPillar {
+  title: string;
+  objective: string;
+  why_evidence: string;
+  actions: GeoStrategyAction[];
+}
+
+export interface GeoStrategyBaseline {
+  measured_at: string;
+  n_answers: number;
+  mention_rate: number;
+  citation_rate: number;
+  sov_self: number;
+  aio_named_rate: number;
+  aio_cited_rate: number;
+  source_gap_top_count: number;
+  missing_questions_count: number;
+  winning_questions_count: number;
+  [key: string]: unknown;
+}
+
+export interface GeoStrategy {
+  summary: string;
+  pillars: GeoStrategyPillar[];
+  monitoring: { cadence: string; review_ritual: string; leading_indicators: string[] };
+  expectations: string;
+  baseline: GeoStrategyBaseline;
+  generated_at: string;
+}
+
+export interface GeoStrategyDoc {
+  brand_id: string;
+  current: GeoStrategy | null;
+  history?: { generated_at: string; summary: string }[];
+}
+
+export const geoStrategyGet = (brandId: string) =>
+  getJson<GeoStrategyDoc>(`/api/geo/brands/${brandId}/strategy`);
+
+export const geoStrategyGenerate = (brandId: string) =>
+  postJson<GeoStrategyDoc>(`/api/geo/brands/${brandId}/strategy/generate`, {});
+
+export async function geoStrategyActionStatus(
+  brandId: string, actionId: string, status: GeoStrategyAction["status"],
+): Promise<GeoStrategyDoc> {
+  const response = await request(`/api/geo/brands/${brandId}/strategy/actions/${actionId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as GeoStrategyDoc;
+}
+
 /* ------------- GEO Content Optimizer (a10, Layers 1-6) ------------------- */
 
 export interface OptimizerGap { kind: string; priority: number; message: string }

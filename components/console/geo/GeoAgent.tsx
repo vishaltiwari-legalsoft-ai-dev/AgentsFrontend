@@ -12,13 +12,14 @@ import { Icon } from "@/lib/kit-ui";
 import { useReportWork } from "@/lib/work";
 import { AnswerText } from "./AnswerText";
 import { ContentOptimizer } from "./ContentOptimizer";
+import { GeoActionPlan } from "./GeoActionPlan";
 import { GeoInsights } from "./GeoInsights";
 
 /** GEO agent (a10) — how often AI answer engines name and cite each brand.
  *  Honesty rules baked in: every rate shows its n and variance; a missing
  *  engine key reads as "not connected", never as a zero. */
 
-type GeoTab = "insights" | "overview" | "prompts" | "answers" | "sources" | "optimizer";
+type GeoTab = "insights" | "plan" | "overview" | "prompts" | "answers" | "sources" | "optimizer";
 
 const ENGINE_LABELS: Record<string, string> = {
   perplexity: "Perplexity",
@@ -348,10 +349,10 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
             </section>
 
             <nav className="geo-tabs">
-              {(["insights", "overview", "prompts", "answers", "sources", "optimizer"] as GeoTab[]).map((t) => (
+              {(["insights", "plan", "overview", "prompts", "answers", "sources", "optimizer"] as GeoTab[]).map((t) => (
                 <button key={t} className={`geo-tab${tab === t ? " geo-tab--on" : ""}`}
                         onClick={() => { setTab(t); if (t === "answers" && !answers.length) void loadAnswers(""); }}>
-                  {t === "insights" ? "Insights" : t === "overview" ? "Overview" : t === "prompts" ? `Prompts (${prompts.length})` : t === "answers" ? "Answers" : t === "sources" ? "Sources" : "Content Optimizer"}
+                  {t === "insights" ? "Insights" : t === "plan" ? "Action Plan" : t === "overview" ? "Overview" : t === "prompts" ? `Prompts (${prompts.length})` : t === "answers" ? "Answers" : t === "sources" ? "Sources" : "Content Optimizer"}
                 </button>
               ))}
             </nav>
@@ -567,6 +568,10 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                 onPoll={() => void runPoll()}
                 goTab={(t) => { setTab(t); if (t === "answers" && !answers.length) void loadAnswers(""); }}
               />
+            )}
+
+            {tab === "plan" && (
+              <GeoActionPlan brand={brand} report={report} isCreator={!!user?.is_creator} onToast={onToast} />
             )}
 
             {tab === "optimizer" && (
