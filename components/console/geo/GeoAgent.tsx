@@ -24,6 +24,7 @@ const ENGINE_LABELS: Record<string, string> = {
   perplexity: "Perplexity",
   gemini: "Gemini",
   chatgpt: "ChatGPT",
+  aio: "Google AIO",
 };
 
 const pct = (x: number | null | undefined) =>
@@ -495,7 +496,9 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                     </button>
                     {openAnswer === i && (
                       <div className="geo-answer__body">
-                        {a.error ? <p className="geo-answer__error">{a.error}</p> : <AnswerText text={a.text} />}
+                        {a.error ? <p className="geo-answer__error">{a.error}</p>
+                          : a.no_aio ? <p className="geo-note">Google showed no AI Overview for this query — the AIO slot is open here, nobody wins it yet. Not counted in any rate.</p>
+                          : <AnswerText text={a.text} />}
                         {a.citations.length > 0 && (
                           <div className="geo-answer__cites">
                             {a.citations.map((c, j) => (

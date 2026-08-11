@@ -2192,6 +2192,7 @@ export interface GeoAnswer {
   brand_position?: number | null;
   brand_cited?: boolean;
   sentiment?: "positive" | "neutral" | "negative" | null;
+  no_aio?: boolean;   // Google showed no AI Overview for this query (excluded from rates)
 }
 
 export const geoConfig = () => getJson<GeoGlobalConfig>("/api/geo/config");

@@ -20,7 +20,7 @@ type Props = {
 };
 
 const ENGINE_LABELS: Record<string, string> = {
-  perplexity: "Perplexity", gemini: "Gemini", chatgpt: "ChatGPT",
+  perplexity: "Perplexity", gemini: "Gemini", chatgpt: "ChatGPT", aio: "Google AIO",
 };
 
 const pct = (x: number | null | undefined) =>
@@ -141,7 +141,7 @@ export function GeoInsights({ brand, report, promptCount, connected, isCreator, 
             <div className="geo-hero__big">{pct(mentionRate)}</div>
             <p className="geo-hero__story">
               <strong>{visibilityLabel(mentionRate)}.</strong>{" "}
-              We asked {ENGINE_LABELS[bestEngine?.engine ?? ""] ? "ChatGPT, Gemini and Perplexity" : "the AI engines"} your {promptCount} buyer
+              We asked {engineRows.length ? engineRows.map((e) => ENGINE_LABELS[e.engine]).join(", ") : "the AI engines"} your {promptCount} buyer
               questions, {n} answers in total. {brand.name} was named in {pct(mentionRate)} of them
               {bestEngine && worstEngine && bestEngine.engine !== worstEngine.engine
                 ? ` — strongest on ${ENGINE_LABELS[bestEngine.engine]} (${pct(bestEngine.rate)}), weakest on ${ENGINE_LABELS[worstEngine.engine]} (${pct(worstEngine.rate)})`
