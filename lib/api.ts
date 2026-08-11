@@ -2363,6 +2363,7 @@ export interface BrowserSubtask {
   id: string;
   title: string;
   goal: string;
+  rail?: "data" | "browser" | "think";
   steps: string[];
   edge_cases: { risk: string; handle: string }[];
   done_when: string;
@@ -2384,6 +2385,9 @@ export interface BrowserStep {
   saw_page?: boolean;
   /** Which sub-task of the plan this step belongs to. */
   subtask?: string;
+  /** How the work was done: an API, the browser, or plain reasoning. */
+  rail?: "data" | "browser" | "think";
+  tools?: { tool: string; ok: boolean; error?: string | null }[];
   action: { kind: string; why?: string; url?: string; summary?: string; reason?: string };
   result: { ok: boolean; error?: string | null } | null;
 }

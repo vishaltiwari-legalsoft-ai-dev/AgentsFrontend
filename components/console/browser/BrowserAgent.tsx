@@ -19,6 +19,13 @@ import { useReportWork } from "@/lib/work";
 const AUTH_KEY = "agentos.auth";
 const LIVE_POLL_MS = 3000;
 
+/** How a step got done. "browser" is the default and needs no badge. */
+const RAIL_WORDS: Record<string, string> = {
+  data: "used an API",
+  think: "worked it out",
+  browser: "in the browser",
+};
+
 const STATUS_WORDS: Record<string, string> = {
   running: "Working",
   awaiting_confirmation: "Waiting for your OK",
@@ -364,7 +371,15 @@ export function BrowserAgent({
               <li key={step.seq} className={step.result && !step.result.ok ? "ba-step-bad" : ""}>
                 <span className="ba-step-n">{step.seq}</span>
                 <span className="ba-step-text">
+                  {step.rail && step.rail !== "browser" && (
+                    <b className={`ba-rail ba-rail--${step.rail}`}>{RAIL_WORDS[step.rail]}</b>
+                  )}
                   {stepLine(step)}
+                  {step.tools?.map((t) => (
+                    <b key={t.tool} className={`ba-flag${t.ok ? "" : " ba-flag--bad"}`}>
+                      {t.ok ? t.tool : `${t.tool} failed`}
+                    </b>
+                  ))}
                   {step.sensitive && <b className="ba-flag">needed your OK</b>}
                   {step.saw_page && <b className="ba-flag">looked at the page</b>}
                   {step.result && !step.result.ok && (
