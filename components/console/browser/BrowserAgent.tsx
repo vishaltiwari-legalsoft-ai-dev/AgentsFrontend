@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  browserConfig, browserDigest, browserDigests, browserExtensionBlob, browserPairingCode,
-  browserRun, browserRuns, browserSaveConfig, browserStatus, browserStopRun,
+  browserConfig, browserDeleteSkill, browserDigest, browserDigests, browserExtensionBlob,
+  browserPairingCode, browserRun, browserRuns, browserSaveConfig, browserSkills,
+  browserStatus, browserStopRun,
   type BrowserDigest, type BrowserDigestRow, type BrowserRun, type BrowserRunRow,
-  type BrowserStatus, type BrowserWatchRule,
+  type BrowserSkill, type BrowserStatus, type BrowserWatchRule,
 } from "@/lib/api";
 import { Icon } from "@/lib/kit-ui";
 import { useReportWork } from "@/lib/work";
@@ -79,7 +80,8 @@ export function BrowserAgent({
   const [openRun, setOpenRun] = useState<BrowserRun | null>(null);
   const [showInstall, setShowInstall] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<"runs" | "digests">("runs");
+  const [tab, setTab] = useState<"runs" | "digests" | "skills">("runs");
+  const [skills, setSkills] = useState<BrowserSkill[]>([]);
   const [digestRows, setDigestRows] = useState<BrowserDigestRow[]>([]);
   const [openDigest, setOpenDigest] = useState<BrowserDigest | null>(null);
   const [rules, setRules] = useState<BrowserWatchRule[]>([]);
@@ -91,14 +93,15 @@ export function BrowserAgent({
   const refresh = useCallback(async () => {
     setBusy(true);
     try {
-      const [info, list, digests, cfg] = await Promise.all([
-        browserStatus(), browserRuns(), browserDigests(), browserConfig(),
+      const [info, list, digests, cfg, learned] = await Promise.all([
+        browserStatus(), browserRuns(), browserDigests(), browserConfig(), browserSkills(),
       ]);
       setStatus(info);
       setStatusError("");
       setRows(list.runs);
       setDigestRows(digests.digests);
       setRules(cfg.watch_rules);
+      setSkills(learned.skills);
     } catch (err) {
       setStatusError(err instanceof Error ? err.message : "Couldn't reach the backend.");
     } finally {
@@ -115,6 +118,17 @@ export function BrowserAgent({
     } catch (err) {
       setRules(previous);
       onToast(err instanceof Error ? err.message : "Couldn't save that.");
+    }
+  };
+
+  const forgetSkill = async (id: string) => {
+    const previous = skills;
+    setSkills(skills.filter((s) => s.id !== id));
+    try {
+      await browserDeleteSkill(id);
+    } catch (err) {
+      setSkills(previous);
+      onToast(err instanceof Error ? err.message : "Couldn't forget that one.");
     }
   };
 
@@ -455,9 +469,55 @@ export function BrowserAgent({
             >
               Tab digests
             </button>
+            <button
+              className={`ba-tab${tab === "skills" ? " ba-tab--on" : ""}`}
+              onClick={() => setTab("skills")}
+              type="button"
+            >
+              Learned{skills.length > 0 ? ` (${skills.length})` : ""}
+            </button>
           </div>
 
-          {tab === "runs" ? (
+          {tab === "skills" ? (
+            <>
+              <p className="ba-note">
+                Routes the agent has learned. When a new task matches one, it follows the saved
+                steps instead of working them out again — no thinking time, and a remembered step
+                can&apos;t wander off. If a step stops fitting the page, it drops the whole route
+                and reasons from there.
+              </p>
+              {skills.length === 0 ? (
+                <p className="ba-empty">
+                  Nothing learned yet. Finish a task and the extension will offer to keep it — or
+                  press <b>Show me how</b> in the side panel and do it once yourself.
+                </p>
+              ) : (
+                <ul>
+                  {skills.map((skill) => (
+                    <li key={skill.id}>
+                      <div className="ba-skill">
+                        <span className="ba-run-goal">{skill.name}</span>
+                        <span className="ba-run-meta">
+                          {skill.host || "any site"} · {skill.steps} steps ·{" "}
+                          {skill.source === "recording" ? "you showed it" : "learned from a run"}
+                          {skill.uses > 0 ? ` · used ${skill.uses}×` : " · never used yet"}
+                          {skill.last_ok === false ? " · didn't fit last time" : ""}
+                        </span>
+                      </div>
+                      <button
+                        className="ba-rule-x"
+                        type="button"
+                        aria-label={`Forget ${skill.name}`}
+                        onClick={() => void forgetSkill(skill.id)}
+                      >
+                        <Icon name="trash-2" size={14} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          ) : tab === "runs" ? (
             rows.length === 0 ? (
               <p className="ba-empty">
                 Nothing yet. Start a task from the extension&apos;s side panel and it will appear here.

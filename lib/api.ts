@@ -2535,6 +2535,25 @@ export interface BrowserDigest {
   tabs_open: number;
 }
 
+export interface BrowserSkill {
+  id: string;
+  name: string;
+  goal: string;
+  host: string;
+  steps: number;
+  source: "run" | "recording";
+  created_at: string;
+  uses: number;
+  last_ok: boolean | null;
+}
+
+export const browserSkills = () => getJson<{ skills: BrowserSkill[] }>("/api/browser/skills");
+
+export async function browserDeleteSkill(id: string): Promise<void> {
+  const response = await request(`/api/browser/skills/${id}`, { method: "DELETE" });
+  if (!response.ok) throw new Error(await parseError(response));
+}
+
 export const browserDigests = () =>
   getJson<{ digests: BrowserDigestRow[] }>("/api/browser/digests");
 
