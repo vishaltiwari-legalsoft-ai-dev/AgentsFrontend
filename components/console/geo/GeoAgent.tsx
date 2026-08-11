@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  geoAnswers, geoBrandConfig, geoBrands, geoConfig, geoGeneratePrompts, geoPollStep,
+  geoAddCustomPrompt, geoAnswers, geoBrandConfig, geoBrands, geoConfig, geoGeneratePrompts, geoPollStep,
   geoPrompts, geoReport, geoSaveBrandConfig, geoSavePrompts,
   type GeoAnswer, type GeoBrandConfig, type GeoBrandRow, type GeoGlobalConfig,
   type GeoPollProgress, type GeoPrompt, type GeoReport,
@@ -52,6 +52,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
   const [polling, setPolling] = useState(false);
   const [progress, setProgress] = useState<GeoPollProgress | null>(null);
   const [newCompetitor, setNewCompetitor] = useState("");
+  const [newPrompt, setNewPrompt] = useState("");
   const stopPoll = useRef(false);
 
   useReportWork(busy || polling);
@@ -161,6 +162,21 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       setAnswers(res.answers);
     } catch (e) {
       onToast(e instanceof Error ? e.message : "Could not load answers");
+    }
+  }
+
+  async function addCustomPrompt() {
+    if (!brand || newPrompt.trim().length < 5 || busy) return;
+    setBusy(true);
+    try {
+      const universe = await geoAddCustomPrompt(brand.id, newPrompt.trim());
+      setPrompts(universe.prompts ?? []);
+      setNewPrompt("");
+      onToast("Added — your question survives every regeneration.");
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "Could not add the question");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -414,6 +430,22 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                     </div>
                   )}
                 </div>
+                {user?.is_creator && (
+                  <div className="geo-addcomp geo-addprompt">
+                    <input value={newPrompt} placeholder="Add your own buyer question — e.g. “which intake service handles Spanish-speaking clients?”"
+                           onChange={(e) => setNewPrompt(e.target.value)}
+                           onKeyDown={(e) => e.key === "Enter" && void addCustomPrompt()} />
+                    <button className="seo-btn" disabled={busy || newPrompt.trim().length < 5}
+                            onClick={() => void addCustomPrompt()}>Add</button>
+                  </div>
+                )}
+                <p className="geo-note">
+                  Team-written questions are the most valuable — real objections from sales calls beat
+                  anything AI drafts, and they survive regeneration. One rule: phrase them the way a
+                  buyer would (&ldquo;best intake service for law firms&rdquo;), never in your own favour
+                  (&ldquo;why is {brand.name} the best&rdquo;) — leading questions inflate the score and
+                  teach you nothing.
+                </p>
                 {prompts.length === 0 && (
                   <div className="seo-empty">No prompts yet — these are the buyer questions we poll engines with.</div>
                 )}
@@ -423,6 +455,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                            onChange={(e) => setPrompts(prompts.map((q, j) => (j === i ? { ...q, enabled: e.target.checked } : q)))} />
                     <input className="geo-prompt__text" value={p.text} disabled={!user?.is_creator}
                            onChange={(e) => setPrompts(prompts.map((q, j) => (j === i ? { ...q, text: e.target.value } : q)))} />
+                    {p.source === "custom" && <span className="seo-chip seo-chip--on">yours</span>}
                     <span className={`seo-chip geo-prompt__intent geo-prompt__intent--${p.intent}`}>{p.intent}</span>
                   </div>
                 ))}

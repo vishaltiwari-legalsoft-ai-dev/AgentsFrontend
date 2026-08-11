@@ -2103,7 +2103,11 @@ export interface GeoPrompt {
   intent: "brand" | "category" | "problem";
   stage: "awareness" | "consideration" | "purchase";
   enabled: boolean;
+  source?: "ai" | "custom";   // custom = team-written, survives regeneration
 }
+
+export const geoAddCustomPrompt = (brandId: string, text: string) =>
+  postJson<{ prompts: GeoPrompt[] }>(`/api/geo/brands/${brandId}/prompts/custom`, { text });
 
 export interface GeoCompetitor {
   key: string;
