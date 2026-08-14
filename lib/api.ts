@@ -6,6 +6,14 @@
  * unauthorized handler (so the app can log the user out cleanly).
  */
 
+import {
+  createDeadline, deadlineFor, RequestTimeoutError,
+  type Deadline, type RequestOptions,
+} from "./requestPolicy";
+
+export { isAbortError, isTimeoutError, NO_TIMEOUT, RequestSequence, RequestTimeoutError } from "./requestPolicy";
+export type { RequestOptions, RequestTicket } from "./requestPolicy";
+
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:8080";
 
@@ -31,21 +39,82 @@ async function parseError(response: Response): Promise<string> {
   }
 }
 
-async function request(path: string, init: RequestInit = {}): Promise<Response> {
+/** The single choke point for every call in this file, so the deadline and the
+ *  cancellation signal only have to be got right once.
+ *
+ *  Without a signal, a backend that never answers (blocked on an untimed
+ *  upstream call) left this promise pending for the life of the tab: every
+ *  `finally { setBusy(false) }` in the app is unreachable in that state and the
+ *  UI reads "Working…" for ever. The deadline comes from `requestPolicy`, which
+ *  gives model/crawl/render endpoints minutes and everything else 90 seconds;
+ *  pass `timeoutMs` in `opts` to override it for one call.
+ *
+ *  The two ways a call can be cut short are kept distinct on purpose: our own
+ *  deadline throws `RequestTimeoutError` (a real failure, show it), while a
+ *  caller's `signal` rejects with the plain `AbortError` that `isAbortError()`
+ *  recognises (a supersession or an unmount — say nothing). */
+async function send(
+  path: string,
+  init: RequestInit,
+  opts: RequestOptions,
+): Promise<{ response: Response; deadline: Deadline; timedOut: () => RequestTimeoutError }> {
   const headers = new Headers(init.headers ?? {});
   if (authToken) headers.set("Authorization", `Bearer ${authToken}`);
-  const response = await fetch(`${API_URL}${path}`, { ...init, headers });
+  const deadline = createDeadline(path, init.method, opts);
+  const timedOut = () => new RequestTimeoutError(deadlineFor(path, init.method, opts.timeoutMs));
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { ...init, headers, signal: deadline.signal });
+  } catch (e) {
+    deadline.clear();
+    // `expired` is the only way to tell our timer's abort from the caller's:
+    // both surface as the same AbortError out of fetch.
+    if (deadline.expired) throw timedOut();
+    throw e;
+  }
   if (response.status === 401) {
+    deadline.clear();
     onUnauthorized?.();
     throw new Error("Your session expired — please sign in again.");
   }
+  return { response, deadline, timedOut };
+}
+
+/** Returns the raw `Response` — used by the blob, file-upload and export calls
+ *  that read the body themselves. The deadline covers up to the response
+ *  headers only; callers that stream a large body own that part. */
+async function request(
+  path: string,
+  init: RequestInit = {},
+  opts: RequestOptions = {},
+): Promise<Response> {
+  const { response, deadline } = await send(path, init, opts);
+  deadline.clear();
   return response;
 }
 
-async function getJson<T>(path: string): Promise<T> {
-  const response = await request(path);
-  if (!response.ok) throw new Error(await parseError(response));
-  return (await response.json()) as T;
+/** The JSON path — the shape ~150 of the functions below use. Here the deadline
+ *  stays armed until the body has been read, so a reply that stalls halfway
+ *  through fails like any other timeout instead of hanging. */
+async function requestJson<T>(
+  path: string,
+  init: RequestInit,
+  opts?: RequestOptions,
+): Promise<T> {
+  const { response, deadline, timedOut } = await send(path, init, opts ?? {});
+  try {
+    if (!response.ok) throw new Error(await parseError(response));
+    return (await response.json()) as T;
+  } catch (e) {
+    if (deadline.expired) throw timedOut();
+    throw e;
+  } finally {
+    deadline.clear();
+  }
+}
+
+async function getJson<T>(path: string, opts?: RequestOptions): Promise<T> {
+  return requestJson<T>(path, {}, opts);
 }
 
 /* --------------------------------- Types --------------------------------- */
@@ -244,12 +313,16 @@ export interface DbCollectionData {
   rows: Record<string, unknown>[];
 }
 
-export function getDbCollections(): Promise<DbCollectionsResponse> {
-  return getJson("/api/admin/db/collections");
+export function getDbCollections(opts?: RequestOptions): Promise<DbCollectionsResponse> {
+  return getJson("/api/admin/db/collections", opts);
 }
 
-export function getDbCollection(name: string, limit = 50): Promise<DbCollectionData> {
-  return getJson(`/api/admin/db/collections/${encodeURIComponent(name)}?limit=${limit}`);
+export function getDbCollection(
+  name: string,
+  limit = 50,
+  opts?: RequestOptions,
+): Promise<DbCollectionData> {
+  return getJson(`/api/admin/db/collections/${encodeURIComponent(name)}?limit=${limit}`, opts);
 }
 
 // Delete the superseded telemetry collections (creative_events, sessions,
@@ -338,14 +411,12 @@ export function updateAgentConfig(
 /* ----------------------- Graphic Designer pipeline ----------------------- */
 /* The 4-stage ad-creative pipeline (backend: graphics_designer_agent).      */
 
-async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const response = await request(path, {
+async function postJson<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T> {
+  return requestJson<T>(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-  });
-  if (!response.ok) throw new Error(await parseError(response));
-  return (await response.json()) as T;
+  }, opts);
 }
 
 export interface GdDiff {
@@ -1289,8 +1360,8 @@ export interface MrVendorDetail {
   snapshot: MrSnapshotDoc;
   delta: MrVendorDelta;
 }
-export const mrVendorDetail = (slug: string, date?: string) =>
-  getJson<MrVendorDetail>(`/api/mr/snapshots/vendor/${slug}${date ? `?date_iso=${date}` : ""}`);
+export const mrVendorDetail = (slug: string, date?: string, opts?: RequestOptions) =>
+  getJson<MrVendorDetail>(`/api/mr/snapshots/vendor/${slug}${date ? `?date_iso=${date}` : ""}`, opts);
 
 export interface MrMonthRow {
   month: string; spend: number; leads: number; qualified_leads: number;
@@ -1328,7 +1399,8 @@ export interface MrPortfolio {
   pacing: { day: number; days_in_month: number; expected_pct: number };
   benchmarks: { cpqdb_max: number; ql_ratio_min: number; show_rate_min: number; cac_target: number; cpql_red: number };
 }
-export const mrPortfolio = () => getJson<MrPortfolio>("/api/mr/snapshots/portfolio");
+export const mrPortfolio = (opts?: RequestOptions) =>
+  getJson<MrPortfolio>("/api/mr/snapshots/portfolio", opts);
 
 /* Lead-analysis sheet: per-vendor Meeting Outcome / Deal Stage picture + the
    five lead-quality flags. Auto-detected from any connected workbook. */
@@ -1396,6 +1468,13 @@ export interface MrSheetIngestResult {
   spreadsheet_id: string;
   year: number;
   tabs: MrSheetTabResult[];
+  /** "ok" | "partial" — "partial" means some component kept its PREVIOUS data. */
+  status?: string;
+  /** Why, in plain words. The backend has always sent these; the console used
+   *  to drop them, which is how a pull that ingested zero tracker tabs still
+   *  reported success and left weeks-old figures on screen. */
+  degraded?: string[];
+  ingested?: number;
 }
 
 /** Pull Legal Soft's live Google-Sheets performance tracker (brand tabs). */
@@ -1674,14 +1753,14 @@ export interface SeoPlanItem {
   detail: string;
 }
 
-export const seoBrandDetail = (id: string) =>
+export const seoBrandDetail = (id: string, opts?: RequestOptions) =>
   getJson<{
     brand: SeoBrand;
     run: SeoRun | null;
     gsc?: SeoGscStatus;
     plan?: SeoPlanItem[];
     site_review?: SeoSiteReview | null;
-  }>(`/api/seo-geo/brands/${id}`);
+  }>(`/api/seo-geo/brands/${id}`, opts);
 
 export const seoAnalyzeSite = (brandId: string) =>
   postJson<SeoSiteReview>(`/api/seo-geo/site-review/${brandId}`, {});
@@ -1817,14 +1896,14 @@ export interface SeoUpdatePlan {
   suggestions: string[];
 }
 
-export const seoKeywordLab = (brandId: string) =>
-  getJson<{ lab: SeoKeywordLab | null }>(`/api/seo-geo/keywords/${brandId}`);
+export const seoKeywordLab = (brandId: string, opts?: RequestOptions) =>
+  getJson<{ lab: SeoKeywordLab | null }>(`/api/seo-geo/keywords/${brandId}`, opts);
 
 export const seoRunKeywordLab = (brandId: string) =>
   postJson<SeoKeywordLab>(`/api/seo-geo/keywords/${brandId}/run`, {});
 
-export const seoCompetitors = (brandId: string) =>
-  getJson<SeoCompetitors>(`/api/seo-geo/competitors/${brandId}`);
+export const seoCompetitors = (brandId: string, opts?: RequestOptions) =>
+  getJson<SeoCompetitors>(`/api/seo-geo/competitors/${brandId}`, opts);
 
 export async function seoSetCompetitors(brandId: string, domains: string[]): Promise<{ tracked: string[] }> {
   const response = await request(`/api/seo-geo/competitors/${brandId}`, {
@@ -1869,20 +1948,20 @@ export interface SeoCompetitorProfilesDoc {
   profiles: SeoCompetitorProfile[];
 }
 
-export const seoCompetitorProfiles = (brandId: string) =>
-  getJson<{ profiles: SeoCompetitorProfilesDoc | null }>(`/api/seo-geo/competitors/${brandId}/profiles`);
+export const seoCompetitorProfiles = (brandId: string, opts?: RequestOptions) =>
+  getJson<{ profiles: SeoCompetitorProfilesDoc | null }>(`/api/seo-geo/competitors/${brandId}/profiles`, opts);
 
 export const seoCompetitorProfilesRefresh = (brandId: string) =>
   postJson<SeoCompetitorProfilesDoc>(`/api/seo-geo/competitors/${brandId}/profiles/refresh`, {});
 
-export const seoBriefs = (brandId: string) =>
-  getJson<{ briefs: SeoBrief[] }>(`/api/seo-geo/briefs/${brandId}`);
+export const seoBriefs = (brandId: string, opts?: RequestOptions) =>
+  getJson<{ briefs: SeoBrief[] }>(`/api/seo-geo/briefs/${brandId}`, opts);
 
 export const seoBuildBrief = (brandId: string, keyword: string) =>
   postJson<SeoBrief>(`/api/seo-geo/briefs/${brandId}`, { keyword });
 
-export const seoAuditReport = (brandId: string) =>
-  getJson<{ report: SeoAuditReport | null }>(`/api/seo-geo/audit/${brandId}`);
+export const seoAuditReport = (brandId: string, opts?: RequestOptions) =>
+  getJson<{ report: SeoAuditReport | null }>(`/api/seo-geo/audit/${brandId}`, opts);
 
 export const seoRunAudit = (brandId: string) =>
   postJson<SeoAuditReport>(`/api/seo-geo/audit/${brandId}/run`, {});
@@ -2071,8 +2150,8 @@ export interface SeoPagesDoc {
   pages: SeoPageIntel[];
 }
 
-export const seoPages = (id: string) =>
-  getJson<{ pages: SeoPagesDoc | null }>(`/api/seo-geo/pages/${id}`);
+export const seoPages = (id: string, opts?: RequestOptions) =>
+  getJson<{ pages: SeoPagesDoc | null }>(`/api/seo-geo/pages/${id}`, opts);
 
 export const seoPagesRefresh = (id: string) =>
   postJson<SeoPagesDoc>(`/api/seo-geo/pages/${id}/refresh`, {});
@@ -2130,6 +2209,11 @@ export interface GeoPollProgress {
   capped: boolean;
   engines: string[];
   date: string;
+  /** The backend's own stop signal: set when a whole batch errors or several
+   *  consecutive batches fail. `done` counts only non-errored answers, so
+   *  without this a dead provider key would never satisfy `done >= total`. */
+  terminal: boolean;
+  terminal_reason: string | null;
 }
 
 export interface GeoMentionStats {

@@ -81,6 +81,30 @@ function PaceSpine({ p }: { p: MrPortfolio | null }) {
   );
 }
 
+/* A pull that brings back no tracker tabs keeps the previous datasets — by
+   design, so a Sheets blip costs a stale figure rather than a blank board. The
+   cost of that design is that stale and fresh look identical, which is how a
+   month of old vendor figures sat under a fresh headline unnoticed. The board
+   is a monthly grid refreshed daily, so anything past two days is not "recent". */
+const STALE_AFTER_DAYS = 2;
+
+function StaleBanner({ pulledAt }: { pulledAt: string | null }) {
+  if (!pulledAt) return null;
+  const ms = Date.now() - new Date(pulledAt).getTime();
+  const days = Math.floor(ms / 86_400_000);
+  if (!(days >= STALE_AFTER_DAYS)) return null;
+  return (
+    <div className="mr-stale" role="status">
+      <Icon name="alert-triangle" size={14} />
+      <span>
+        <b>These vendor figures are {days} days old.</b> The last successful tracker
+        pull was {fmtTime(pulledAt)} — pulls since then brought back no tabs, so the
+        sheet and this board can have drifted. Hit “Pull now” and read the message it returns.
+      </span>
+    </div>
+  );
+}
+
 const KPIS = [
   { key: "spend", label: "Spend", money: true },
   { key: "leads", label: "Leads", money: false },
@@ -181,6 +205,8 @@ export function OverviewView({ overview, busy, onPull, onGotoData, onToast }: {
         </div>
       )}
 
+      <StaleBanner pulledAt={latestPull} />
+
       <div className="mr-mast">
         <span className="mr-mast__eyebrow">Marketing desk · 2026 plan</span>
         <h2 className="mr-mast__month">{fmtMonth(overview.month)}</h2>
@@ -195,7 +221,10 @@ export function OverviewView({ overview, busy, onPull, onGotoData, onToast }: {
               : k.key === "leads" ? m.leads
               : k.key === "qualified_leads" ? m.qualified_leads
               : k.key === "demos_completed" ? m.demos_completed
-              : m.cpql ?? 0);
+              // Was `m.cpql` — the cost-per-COMPLETED-demo tile was drawing the
+              // cost-per-qualified-LEAD trend under it. The trends row carries
+              // both inputs, so the right series is one division away.
+              : m.demos_completed ? m.spend / m.demos_completed : 0);
             return (
               <div className="mr-kpi" key={k.key}>
                 <span className="mr-kpi__label">{k.label}{t.status?.[k.key] && <Dot s={t.status[k.key]} />}</span>

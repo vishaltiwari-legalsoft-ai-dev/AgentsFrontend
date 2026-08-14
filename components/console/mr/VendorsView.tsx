@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { mrPortfolio, mrVendorDetail, mrVendorPdfUrl, type MrPortfolio, type MrSnapshotMeta, type MrVendorDetail } from "@/lib/api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { isAbortError, mrPortfolio, mrVendorDetail, mrVendorPdfUrl, type MrPortfolio, type MrSnapshotMeta, type MrVendorDetail } from "@/lib/api";
+import type { ToastFn } from "@/components/console/ConsoleApp";
 import { Button, Icon } from "@/lib/kit-ui";
 import { LeadQuality } from "./LeadQuality";
 import { fmtMoney, fmtNum, fmtTime } from "./shared";
@@ -52,10 +53,14 @@ function vendorStats(team: Record<string, unknown>) {
   };
 }
 
-function VendorSummary({ team, month, benchmarks }: {
+function VendorSummary({ team, month, benchmarks, benchmarksError }: {
   team: Record<string, unknown>;
   month: string;
   benchmarks: MrPortfolio["benchmarks"] | null;
+  /** Set when the benchmarks are missing because their load failed — without
+   *  it, a cost above the red line simply renders in neutral and the alarm
+   *  disappears silently. */
+  benchmarksError: string | null;
 }) {
   const s = vendorStats(team);
   const tone = {
@@ -78,6 +83,12 @@ function VendorSummary({ team, month, benchmarks }: {
   return (
     <div className="mr-port mr-port--vendor">
       <h4 className="mr-section__title">Official summary · {month} MTD</h4>
+      {!benchmarks && benchmarksError && (
+        <span className="mr-mast__line">
+          Benchmark flags are off — the portfolio totals didn&apos;t load ({benchmarksError}), so nothing
+          below is marked red or green.
+        </span>
+      )}
       <div className="mr-port__grid">
         {CELLS.map((c) => (
           <div className="mr-port__cell" key={c.label}>
@@ -92,17 +103,28 @@ function VendorSummary({ team, month, benchmarks }: {
 
 /* Compact replacement for the removed portfolio board: one button that copies
    the official cross-vendor totals as chat-ready text. */
-function CopyPortfolio({ p, onToast }: { p: MrPortfolio | null; onToast: (m: string) => void }) {
+function CopyPortfolio({ p, error, onToast }: {
+  p: MrPortfolio | null;
+  /** Why the totals are missing, when they are missing because a load failed. */
+  error: string | null;
+  onToast: ToastFn;
+}) {
   async function copy() {
+    if (error) {
+      // "Run a snapshot first" would be a lie here — the totals exist, we just
+      // could not read them, and the snapshot the user would run is not the fix.
+      onToast(`Portfolio totals didn't load — ${error}`, "error");
+      return;
+    }
     if (!p) {
-      onToast("Portfolio totals aren't available yet — run a snapshot first");
+      onToast("Portfolio totals aren't available yet — run a snapshot first", "warn");
       return;
     }
     try {
       await navigator.clipboard.writeText(copyText(p));
       onToast("Copied portfolio summary");
     } catch {
-      onToast("Copy failed — clipboard unavailable");
+      onToast("Copy failed — clipboard unavailable", "error");
     }
   }
   return (
@@ -115,7 +137,7 @@ function CopyPortfolio({ p, onToast }: { p: MrPortfolio | null; onToast: (m: str
 
 /* Downloads the dossier as a server-rendered, same-format PDF. */
 function DownloadDossier({ slug, date, vendor, onToast }: {
-  slug: string; date: string; vendor: string; onToast: (m: string) => void;
+  slug: string; date: string; vendor: string; onToast: ToastFn;
 }) {
   const [busy, setBusy] = useState(false);
   async function download() {
@@ -130,7 +152,7 @@ function DownloadDossier({ slug, date, vendor, onToast }: {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : `PDF download failed for ${vendor}`);
+      onToast(e instanceof Error ? e.message : `PDF download failed for ${vendor}`, "error");
     } finally {
       setBusy(false);
     }
@@ -241,7 +263,7 @@ const MOVE: { path: string; label: string; money: boolean }[] = [
 
 export function VendorsView({ snapshots, onToast }: {
   snapshots: MrSnapshotMeta[];
-  onToast: (m: string) => void;
+  onToast: ToastFn;
 }) {
   const vendors = useMemo(() => {
     const by: Record<string, { vendor: string; days: number }> = {};
@@ -258,21 +280,57 @@ export function VendorsView({ snapshots, onToast }: {
   const [slug, setSlug] = useState<string | null>(null);
   const [date, setDate] = useState<string | null>(null);
   const [detail, setDetail] = useState<MrVendorDetail | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [portfolioData, setPortfolioData] = useState<MrPortfolio | null>(null);
+  const [portfolioError, setPortfolioError] = useState<string | null>(null);
+  /** Bumped by "Try again" to re-run the dossier load for the same vendor. */
+  const [retry, setRetry] = useState(0);
+  /** The load effect below cancels on re-run, so it must depend on data only —
+   *  a toast prop that changed identity between renders would abort each
+   *  request as it starts and the dossier would never arrive. */
+  const toast = useRef(onToast);
+  useEffect(() => { toast.current = onToast; }, [onToast]);
 
   useEffect(() => {
-    mrPortfolio().then(setPortfolioData).catch(() => setPortfolioData(null));
+    const ctrl = new AbortController();
+    mrPortfolio({ signal: ctrl.signal })
+      .then((p) => {
+        setPortfolioData(p);
+        setPortfolioError(null);
+      })
+      .catch((e: unknown) => {
+        if (isAbortError(e)) return;
+        // Was swallowed into `null`, which the UI then read as "no snapshot
+        // yet". Keep the reason so the benchmarks row and the copy button can
+        // say what actually happened.
+        setPortfolioData(null);
+        setPortfolioError(e instanceof Error ? e.message : "Portfolio totals failed to load");
+      });
+    return () => ctrl.abort();
   }, []);
 
   const active = slug ?? vendors[0]?.slug ?? null;
 
   useEffect(() => {
     if (!active) return;
+    // Money is displayed under a vendor's name here. Without this guard a
+    // slower request for vendor A lands after the user has moved to vendor B
+    // and renders A's spend and lead figures under B's heading — silent
+    // misattribution, no error, nothing to report. Aborting on switch stops
+    // the stale response arriving at all.
+    const ctrl = new AbortController();
     setDetail(null);
-    mrVendorDetail(active, date ?? undefined)
+    setDetailError(null);
+    mrVendorDetail(active, date ?? undefined, { signal: ctrl.signal })
       .then(setDetail)
-      .catch((e) => onToast(e instanceof Error ? e.message : "Failed to load vendor"));
-  }, [active, date, onToast]);
+      .catch((e: unknown) => {
+        if (isAbortError(e)) return; // superseded by a newer vendor
+        const msg = e instanceof Error ? e.message : "Failed to load vendor";
+        setDetailError(msg);
+        toast.current(msg, "error");
+      });
+    return () => ctrl.abort();
+  }, [active, date, retry]);
 
   if (vendors.length === 0) {
     return (
@@ -305,7 +363,18 @@ export function VendorsView({ snapshots, onToast }: {
       </aside>
 
       <div className="mr-vend__main">
-        {!detail ? (
+        {detailError ? (
+          <div className="mr-empty">
+            <strong>Couldn&apos;t load this vendor&apos;s dossier.</strong>
+            <div>{detailError}</div>
+            <div style={{ marginTop: 10 }}>
+              <Button size="sm" variant="secondary" onClick={() => setRetry((n) => n + 1)}
+                iconLeft={<Icon name="refresh-cw" size={13} />}>
+                Try again
+              </Button>
+            </div>
+          </div>
+        ) : !detail ? (
           <div className="mr-empty">Loading dossier…</div>
         ) : (
           <>
@@ -320,7 +389,7 @@ export function VendorsView({ snapshots, onToast }: {
               <div style={{ display: "flex", gap: 8 }}>
                 <DownloadDossier slug={detail.vendor_slug} date={detail.snapshot.date}
                   vendor={detail.vendor} onToast={onToast} />
-                <CopyPortfolio p={portfolioData} onToast={onToast} />
+                <CopyPortfolio p={portfolioData} error={portfolioError} onToast={onToast} />
               </div>
             </header>
 
@@ -335,6 +404,7 @@ export function VendorsView({ snapshots, onToast }: {
               team={detail.snapshot.canonical.team_overall}
               month={detail.snapshot.month}
               benchmarks={portfolioData?.benchmarks ?? null}
+              benchmarksError={portfolioError}
             />
 
             <LeadQuality slug={detail.vendor_slug} />

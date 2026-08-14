@@ -99,6 +99,20 @@
 .mr-fresh__item { display: inline-flex; align-items: center; gap: 6px; }
 .mr-fresh > .ens-btn, .mr-fresh > button:last-child { margin-left: auto; }
 
+/* Stale-data banner: the board keeps the previous figures when a pull comes
+   back empty, so it must say when what you are reading is not today's. */
+.mr-stale {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin: 12px 0 4px;
+  padding: 11px 14px;
+  border: 1px solid color-mix(in srgb, var(--amber-500) 45%, transparent);
+  border-radius: var(--radius-lg);
+  background: var(--amber-50);
+  color: var(--amber-600);
+  font: 500 12.5px/1.5 var(--font-sans);
+}
+.mr-stale b { font-weight: 650; }
+
 /* Hero KPI strip ----------------------------------------------------------- */
 .mr-kpis {
   display: grid;
