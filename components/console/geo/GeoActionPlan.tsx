@@ -150,7 +150,34 @@ export function GeoActionPlan({ brand, report, isCreator, onToast }: Props) {
     );
   }
 
-  const allActions = plan.waves.flatMap((w) => w.actions);
+  // A stored plan from before waves, or any payload this build does not
+  // understand, must degrade to a message. Indexing it took the whole console
+  // down with a client-side exception -- losing Insights, Prompts and Answers
+  // too -- to render one tab.
+  const waves = (plan.waves ?? []).filter((w) => Array.isArray(w?.actions));
+  if (waves.length === 0) {
+    return (
+      <div className="mr-panel">
+        <div className="geo-hero">
+          <div className="geo-hero__big">Plan needs regenerating</div>
+          <p className="geo-hero__story">
+            This plan was saved in an older format that this version cannot lay out as waves.
+            Everything else about the brand still works — regenerate to get the plan back, with
+            named venues and a week-by-week order.
+          </p>
+          {isCreator ? (
+            <button className="seo-btn seo-btn--primary" disabled={busy} onClick={() => void generate()}>
+              {busy ? "Drafting from your data (about a minute)…" : "Regenerate the plan"}
+            </button>
+          ) : (
+            <p className="geo-note">Ask a creator to regenerate it.</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const allActions = waves.flatMap((w) => w.actions);
   const done = allActions.filter((a) => a.status === "done").length;
   const kpis = [...new Set(allActions.map((a) => a.kpi))].filter((k) => KPI_LABELS[k]);
   const targetFor = (kpi: string) => allActions.find((a) => a.kpi === kpi)?.target ?? "";
@@ -189,7 +216,7 @@ export function GeoActionPlan({ brand, report, isCreator, onToast }: Props) {
         </p>
       </div>
 
-      {plan.waves.map((wave, i) => {
+      {waves.map((wave, i) => {
         const waveDone = wave.actions.filter((a) => a.status === "done").length;
         return (
           <div key={`${wave.weeks}-${wave.title}`} className="mr-section geo-wave">
@@ -202,7 +229,7 @@ export function GeoActionPlan({ brand, report, isCreator, onToast }: Props) {
             {wave.why_evidence && <p className="geo-note">Why now: {wave.why_evidence}</p>}
             {i > 0 && (
               <p className="geo-note geo-wave__gate">
-                Start this after Week {plan.waves[i - 1].weeks} — earlier waves are the cheap wins
+                Start this after Week {waves[i - 1].weeks} — earlier waves are the cheap wins
                 that make these worth doing.
               </p>
             )}
