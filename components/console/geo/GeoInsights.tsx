@@ -2,7 +2,8 @@
 
 import type { GeoBrandRow, GeoEngineStatus, GeoPromptRollup, GeoReport } from "@/lib/api";
 import { Icon } from "@/lib/kit-ui";
-import { comparableEngines, modeSuffix, proxyEngines, statusOf } from "./provenance";
+import { comparableEngines, engineCards, modeSuffix, proxyEngines, statusOf } from "./provenance";
+import { shortDate } from "./schedule";
 
 /** Insights — the plain-language story of the brand's GEO condition.
  *  Built around the most concrete artifact we have: the actual buyer
@@ -67,6 +68,10 @@ export function GeoInsights({ brand, report, promptCount, connected, engineStatu
     : [];
   // rules live in ./provenance.ts so they are pinned by tests, not by eyeballing
   const comparable = comparableEngines(engineRows);
+  const cards = engineCards(
+    report?.engines ?? {}, report?.engine_last_seen ?? {}, engineStatus,
+    Object.keys(ENGINE_LABELS),
+  );
   const bestEngine = comparable[0];
   const worstEngine = comparable[comparable.length - 1];
   const proxyRows = proxyEngines(engineRows);
@@ -255,21 +260,48 @@ export function GeoInsights({ brand, report, promptCount, connected, engineStatu
           <div className="mr-section">
             <h3 className="mr-section__title">Engine by engine</h3>
             <div className="geo-inscards">
-              {engineRows.map((e) => (
-                <div key={e.engine} className="geo-inscard">
-                  <span className="geo-inscard__num">{pct(e.rate)}</span>
+              {cards.map((c) => (
+                <div key={c.engine} className={`geo-inscard geo-inscard--${c.state}`}>
+                  <span className="geo-inscard__num">
+                    {c.state === "measured" ? pct(c.rate) : "—"}
+                  </span>
                   <span className="geo-inscard__label">
-                    {ENGINE_LABELS[e.engine]}{modeSuffix(e.mode)}
+                    {ENGINE_LABELS[c.engine]}{modeSuffix(c.mode)}
                   </span>
                   <span className="geo-inscard__hint">
-                    named in {e.n} answers sampled
-                    {e.mode === "proxy"
-                      ? ` — via ${e.model || "OpenRouter"}, not the real product`
-                      : e.model ? ` — ${e.model}` : ""}
+                    {c.state === "stale" ? (
+                      <>
+                        last measured {shortDate(c.lastSeen!, new Date())} — outside this{" "}
+                        {report.days}-day window, so no rate is claimed. The next scheduled
+                        poll brings it back.
+                      </>
+                    ) : c.state === "off" ? (
+                      <>not connected — add its key in Settings → Secrets</>
+                    ) : c.state === "never" ? (
+                      <>connected, but no answer collected yet</>
+                    ) : c.rate === null ? (
+                      <>
+                        nothing to appear in: {c.emptySlots} of {c.emptySlots} queries returned
+                        no AI Overview
+                      </>
+                    ) : (
+                      <>
+                        named in {c.measured} answers
+                        {c.emptySlots > 0 && <> · {c.emptySlots} queries had no AI Overview</>}
+                        {c.mode === "proxy" && <> · via {c.model || "OpenRouter"}, not the real product</>}
+                      </>
+                    )}
                   </span>
                 </div>
               ))}
             </div>
+            {cards.some((c) => c.emptySlots > 0) && (
+              <p className="geo-note">
+                A query with no AI Overview is an <strong>open slot</strong> — Google published
+                no AI answer there at all, so no competitor holds it either. Those are the
+                easiest positions to take when Google does start showing one.
+              </p>
+            )}
           </div>
         </>
       )}

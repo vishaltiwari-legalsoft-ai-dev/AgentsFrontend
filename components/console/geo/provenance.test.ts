@@ -11,7 +11,7 @@
 import { describe, expect, it } from "vitest";
 import type { GeoEngineStatus } from "../../../lib/api";
 import {
-  comparableEngines, modeSuffix, proxyEngines, statusOf, type EngineRow,
+  comparableEngines, engineCards, modeSuffix, proxyEngines, statusOf, type EngineRow,
 } from "./provenance";
 
 const row = (engine: string, mode: EngineRow["mode"], rate = 0.2): EngineRow =>
@@ -80,5 +80,70 @@ describe("modeSuffix", () => {
     expect(modeSuffix("unknown")).toBe(" (surface unknown)");
     expect(modeSuffix("native")).toBe("");
     expect(modeSuffix("serpapi")).toBe("");
+  });
+});
+
+describe("engineCards", () => {
+  const KNOWN = ["perplexity", "gemini", "chatgpt", "aio"];
+  const STATUS: Record<string, GeoEngineStatus> = {
+    perplexity: { connected: true, mode: "proxy", model: "perplexity/sonar", means: "" },
+    gemini: { connected: true, mode: "native", model: "gemini-flash-latest", means: "" },
+    chatgpt: { connected: true, mode: "proxy", model: "openai/gpt-5-mini", means: "" },
+    aio: { connected: true, mode: "serpapi", model: "google_ai_overview", means: "" },
+  };
+  const block = (over = {}) =>
+    ({ mention: { rate: 0.3 }, n_answers: 40, n_measured: 40, n_no_aio: 0, ...over });
+
+  it("keeps an engine visible when its data aged out of the window", () => {
+    // the real case: 40 AIO answers exist, all from 11 Aug, and the report only
+    // looks back 7 days. The engine used to vanish, which reads as "broken".
+    const cards = engineCards(
+      { gemini: block() }, { aio: "2026-08-11T04:00:00Z" }, STATUS, KNOWN);
+
+    const aio = cards.find((c) => c.engine === "aio")!;
+    expect(aio.state).toBe("stale");
+    expect(aio.lastSeen).toBe("2026-08-11T04:00:00Z");
+    expect(aio.rate).toBeNull();          // no rate is claimed for an empty window
+  });
+
+  it("separates an engine never measured from one merely out of window", () => {
+    const cards = engineCards({}, {}, STATUS, KNOWN);
+
+    expect(cards.every((c) => c.state === "never")).toBe(true);
+    expect(cards.every((c) => c.lastSeen === null)).toBe(true);
+  });
+
+  it("reports an unconfigured engine as off, not as never measured", () => {
+    const cards = engineCards({}, {}, { ...STATUS, chatgpt: {
+      connected: false, mode: "off", model: "", means: "" } }, KNOWN);
+
+    expect(cards.find((c) => c.engine === "chatgpt")!.state).toBe("off");
+  });
+
+  it("counts what could carry a mention, not every row stored", () => {
+    const cards = engineCards(
+      { aio: block({ mention: { rate: null }, n_answers: 40, n_measured: 2, n_no_aio: 38 }) },
+      {}, STATUS, KNOWN);
+
+    const aio = cards.find((c) => c.engine === "aio")!;
+    // 38 queries had no AI Overview at all — "absent from 40" would be a lie
+    expect(aio.measured).toBe(2);
+    expect(aio.emptySlots).toBe(38);
+    expect(aio.rate).toBeNull();
+  });
+
+  it("puts the cards that carry a number above the ones that do not", () => {
+    const cards = engineCards(
+      { gemini: block({ mention: { rate: 0.1 } }), perplexity: block({ mention: { rate: 0.5 } }) },
+      { aio: "2026-08-11T04:00:00Z" }, STATUS, KNOWN);
+
+    expect(cards.map((c) => c.engine)).toEqual(["perplexity", "gemini", "aio", "chatgpt"]);
+  });
+
+  it("falls back to n_answers when a backend predates n_measured", () => {
+    const cards = engineCards(
+      { gemini: { mention: { rate: 0.3 }, n_answers: 12 } }, {}, STATUS, KNOWN);
+
+    expect(cards.find((c) => c.engine === "gemini")!.measured).toBe(12);
   });
 });

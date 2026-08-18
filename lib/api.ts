@@ -2251,7 +2251,13 @@ export interface GeoMetricBlock {
   citation: { rate: number | null; n_answers_with_citations: number; cited_answers: number };
   source_mix: { domain: string; count: number; share: number }[];
   n_answers: number;
+  /** rows a brand could actually have been named in — the denominator every
+   *  rate above uses. Printing `n_answers` beside a rate describes two
+   *  different populations. */
+  n_measured?: number;
   n_errors: number;
+  /** answers where Google published no AI Overview at all (AIO only) */
+  n_no_aio?: number;
   /** answers counted per measurement surface ("native" | "openrouter" |
    *  "serpapi" | "unknown") — every rate above is only as good as this */
   via_mix?: Record<string, number>;
@@ -2276,6 +2282,9 @@ export interface GeoReport {
   source_gap: { domain: string; count: number; example_prompt_ids: string[] }[];
   competitors: Record<string, GeoMentionStats>;
   competitor_names: Record<string, string>;
+  /** engine -> ISO time it last produced a usable answer, even if that fell
+   *  outside this report's window */
+  engine_last_seen?: Record<string, string>;
   prompt_rollup?: GeoPromptRollup[];
 }
 

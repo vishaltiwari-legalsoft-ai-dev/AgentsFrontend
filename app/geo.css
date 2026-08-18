@@ -298,6 +298,13 @@
 .geo-plan__evidence{ margin:0; font-size:12px; line-height:1.6; color:var(--text-tertiary); }
 .geo-plan__dropped{ border-left:2px solid var(--amber-500); padding-left:10px; }
 
+/* An engine with no data in this window still gets a card — it just does not
+   get a number. Muted, so it never competes with a measured rate. */
+.geo-inscard--stale, .geo-inscard--never, .geo-inscard--off{ opacity:0.72; }
+.geo-inscard--stale .geo-inscard__num,
+.geo-inscard--never .geo-inscard__num,
+.geo-inscard--off .geo-inscard__num{ color:var(--text-tertiary); }
+
 .geo-plan__leading{ margin:6px 0 0; padding-left:20px; }
 .geo-plan__leading li{ font-size:13px; line-height:1.6; color:var(--text-secondary); margin-bottom:4px; }
 .geo-plan__foot{ display:flex; align-items:center; justify-content:space-between; gap:12px;

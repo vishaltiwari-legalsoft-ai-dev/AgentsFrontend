@@ -57,3 +57,75 @@ export function comparableEngines(rows: EngineRow[]): EngineRow[] {
 export function modeSuffix(mode: GeoEngineMode): string {
   return mode === "proxy" ? " (proxy)" : mode === "unknown" ? " (surface unknown)" : "";
 }
+
+// ---------------------------------------------------------------- engine cards
+
+export type EngineCardState =
+  /** measured inside this report's window */
+  | "measured"
+  /** measured before, but not inside this window — data exists, it is just old */
+  | "stale"
+  /** connected, never produced an answer */
+  | "never"
+  /** no key configured */
+  | "off";
+
+export type EngineCard = {
+  engine: string;
+  mode: GeoEngineMode;
+  state: EngineCardState;
+  /** null when nothing in this window could carry a mention */
+  rate: number | null;
+  /** answers a mention could have appeared in */
+  measured: number;
+  /** answers where the engine published nothing to appear in (AIO) */
+  emptySlots: number;
+  lastSeen: string | null;
+  model: string;
+};
+
+type BlockLike = {
+  mention: { rate: number | null };
+  n_answers: number;
+  n_measured?: number;
+  n_no_aio?: number;
+};
+
+/** One card per engine we know about — including the ones with nothing in this
+ *  window.
+ *
+ *  An engine used to be rendered only if the window contained its answers, so
+ *  Google AIO disappeared from the panel entirely once its data aged past seven
+ *  days. AIO runs once per prompt where chat engines run three times, so it is
+ *  always the first to age out, and vanishing reads as "this engine is broken"
+ *  rather than "this engine was last measured on the 11th".
+ */
+export function engineCards(
+  engines: Record<string, BlockLike | undefined>,
+  lastSeen: Record<string, string>,
+  status: Record<string, GeoEngineStatus>,
+  known: string[],
+): EngineCard[] {
+  const cards = known.map((engine): EngineCard => {
+    const block = engines[engine];
+    const st = statusOf(status, engine, Boolean(block));
+    const seen = lastSeen[engine] || null;
+    const measured = block ? block.n_measured ?? block.n_answers : 0;
+    const inWindow = Boolean(block && block.n_answers > 0);
+    return {
+      engine,
+      mode: st.mode,
+      state: inWindow ? "measured" : seen ? "stale" : st.mode === "off" ? "off" : "never",
+      rate: inWindow ? block!.mention.rate : null,
+      measured,
+      emptySlots: block?.n_no_aio ?? 0,
+      lastSeen: seen,
+      model: st.model,
+    };
+  });
+  // measured first (best rate leading), then stale, then never/off — the cards
+  // that carry a number should not sit below the ones that do not
+  const rank: Record<EngineCardState, number> = { measured: 0, stale: 1, never: 2, off: 3 };
+  return cards.sort((a, b) =>
+    rank[a.state] - rank[b.state] || (b.rate ?? -1) - (a.rate ?? -1) || a.engine.localeCompare(b.engine));
+}
