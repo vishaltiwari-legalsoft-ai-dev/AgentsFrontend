@@ -58,20 +58,16 @@ function VenueLine({ venue }: { venue: GeoStrategyVenue | null }) {
     <span className="geo-plan__venue">
       <Icon name="map-pin" size={13} />
       <a href={venue.url} target="_blank" rel="noreferrer">{venue.name}</a>
-      <span className="seo-chip">{VENUE_KIND_LABEL[venue.kind] ?? venue.kind}</span>
+      <span className="geo-plan__kind">{VENUE_KIND_LABEL[venue.kind] ?? venue.kind}</span>
       {venue.cited_where_absent > 0 && (
-        <span className="geo-plan__cited">
-          engines cited it {venue.cited_where_absent}× in answers that skipped you
+        <span className="geo-plan__cited" title="Times the engines cited this source on your tracked questions in answers that never named you">
+          cited {venue.cited_where_absent}×
         </span>
       )}
-      {venue.examples.slice(0, 2).map((ex) => (
-        <a key={ex.url} className="geo-plan__example" href={ex.url} target="_blank" rel="noreferrer">
-          {ex.title || ex.url}
-        </a>
-      ))}
     </span>
   );
 }
+
 
 export function GeoActionPlan({ brand, report, isCreator, onToast }: Props) {
   const [doc, setDoc] = useState<GeoStrategyDoc | null>(null);
@@ -216,7 +212,7 @@ export function GeoActionPlan({ brand, report, isCreator, onToast }: Props) {
         </p>
       </div>
 
-      {waves.map((wave, i) => {
+      {waves.map((wave) => {
         const waveDone = wave.actions.filter((a) => a.status === "done").length;
         return (
           <div key={`${wave.weeks}-${wave.title}`} className="mr-section geo-wave">
@@ -226,13 +222,7 @@ export function GeoActionPlan({ brand, report, isCreator, onToast }: Props) {
               <span className="geo-wave__count">{waveDone}/{wave.actions.length} done</span>
             </div>
             <p className="geo-plan__objective">{wave.objective}</p>
-            {wave.why_evidence && <p className="geo-note">Why now: {wave.why_evidence}</p>}
-            {i > 0 && (
-              <p className="geo-note geo-wave__gate">
-                Start this after Week {waves[i - 1].weeks} — earlier waves are the cheap wins
-                that make these worth doing.
-              </p>
-            )}
+
             {wave.actions.map((action) => (
               <div key={action.id} className={`geo-plan__action${action.status === "done" ? " geo-plan__action--done" : ""}${action.status === "skipped" ? " geo-plan__action--skipped" : ""}`}>
                 <button className={`seo-chip opt-history geo-plan__status geo-plan__status--${action.status}`}
@@ -241,43 +231,53 @@ export function GeoActionPlan({ brand, report, isCreator, onToast }: Props) {
                   {STATUS_LABELS[action.status]}
                 </button>
                 <div className="geo-plan__body">
-                  <strong>{action.title}</strong>
-                  <VenueLine venue={action.venue} />
+                  {/* Three lines by default — what, where, and what you end up
+                      with. Everything a person needs only once they have decided
+                      to start sits behind the disclosure below. */}
+                  <strong className="geo-plan__title">{action.title}</strong>
+                  <span className="geo-plan__where">
+                    <VenueLine venue={action.venue} />
+                    <span className="geo-plan__owner">{action.owner_role}</span>
+                  </span>
                   {action.deliverable && (
                     <span className="geo-plan__deliverable">
-                      <Icon name="package" size={13} /> You&apos;ll produce: <strong>{action.deliverable}</strong>
+                      <Icon name="package" size={13} />
+                      <span>You&apos;ll produce <strong>{action.deliverable}</strong></span>
                     </span>
                   )}
-                  <span>{action.detail}</span>
-                  {action.why_evidence && (
-                    <span className="geo-plan__evidence">Evidence: {action.why_evidence}</span>
-                  )}
-                  <div className="geo-plan__meta">
-                    <span className="seo-chip">{action.owner_role}</span>
-                    <span className="seo-chip">effort: {action.effort}</span>
-                    <span className="seo-chip">impact: {action.impact}</span>
-                    <span className="seo-chip">moves: {KPI_LABELS[action.kpi] ?? action.kpi} → {action.target}</span>
-                    {action.status !== "skipped" && (
-                      <button className="geo-plan__skip" onClick={() => void skip(action)}>skip</button>
-                    )}
-                  </div>
+
+                  <details className="geo-plan__more">
+                    <summary>
+                      {action.steps?.length
+                        ? `How to do it — ${action.steps.length} steps`
+                        : "Detail and evidence"}
+                    </summary>
+                    <div className="geo-plan__moreBody">
+                      {!!action.steps?.length && (
+                        <ol className="geo-plan__steps">
+                          {action.steps.map((step) => <li key={step}>{step}</li>)}
+                        </ol>
+                      )}
+                      {action.detail && <p className="geo-plan__detail">{action.detail}</p>}
+                      {action.why_evidence && (
+                        <p className="geo-plan__evidence">Why this is worth doing: {action.why_evidence}</p>
+                      )}
+                      <div className="geo-plan__meta">
+                        <span className="seo-chip">effort: {action.effort}</span>
+                        <span className="seo-chip">impact: {action.impact}</span>
+                        <span className="seo-chip">moves: {KPI_LABELS[action.kpi] ?? action.kpi} → {action.target}</span>
+                        {action.status !== "skipped" && (
+                          <button className="geo-plan__skip" onClick={() => void skip(action)}>skip this</button>
+                        )}
+                      </div>
+                    </div>
+                  </details>
                 </div>
               </div>
             ))}
           </div>
         );
       })}
-
-      <div className="mr-section">
-        <h3 className="mr-section__title">How we monitor this</h3>
-        <p className="geo-plan__objective">{plan.monitoring.cadence}</p>
-        <p className="geo-plan__objective"><strong>Weekly ritual:</strong> {plan.monitoring.review_ritual}</p>
-        {plan.monitoring.leading_indicators.length > 0 && (
-          <ul className="geo-plan__leading">
-            {plan.monitoring.leading_indicators.map((x) => <li key={x}>{x}</li>)}
-          </ul>
-        )}
-      </div>
 
       {plan.venues && (
         <p className="geo-note">

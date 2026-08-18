@@ -2396,6 +2396,8 @@ export interface GeoStrategyAction {
   title: string;
   venue: GeoStrategyVenue | null;
   deliverable: string;
+  /** 2-4 short imperative steps; empty on plans saved before steps existed */
+  steps?: string[];
   detail: string;
   owner_role: string;
   effort: "low" | "medium" | "high";
