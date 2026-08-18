@@ -20,6 +20,11 @@
 .geo-hero__story p{ margin:0; max-width:640px; font-size:14.5px; line-height:1.6;
   color:var(--text-secondary); }
 .geo-hero__empty{ margin:0; font-size:14.5px; color:var(--text-tertiary); }
+/* Provenance line: how the headline number was actually obtained. Quiet by
+   default; the proxy caveat inside it carries the emphasis. */
+.geo-hero__how{ margin:0; font-size:12.5px; line-height:1.6; color:var(--text-tertiary);
+  border-top:1px solid var(--border-subtle); padding-top:10px; }
+.geo-hero__how strong{ color:var(--amber-500); font-weight:600; }
 .geo-hero__ops{ display:flex; align-items:center; gap:12px; }
 .geo-progress{ font-size:12.5px; color:var(--text-tertiary);
   font-variant-numeric:var(--fvn-tabular); }
@@ -233,6 +238,32 @@
 .geo-plan__meta{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:4px; }
 .geo-plan__skip{ border:0; background:transparent; font-size:12px; color:var(--text-tertiary);
   cursor:pointer; text-decoration:underline; padding:0; }
+/* Waves — the plan reads as a calendar, so a team knows what THIS fortnight is.
+   The number is the anchor; the title explains it. */
+.geo-wave__head{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+.geo-wave__num{ font-family:var(--font-display); font-size:12px; font-weight:700;
+  letter-spacing:0.04em; text-transform:uppercase; color:var(--brand);
+  border:1px solid color-mix(in srgb, var(--brand) 40%, transparent);
+  border-radius:var(--radius-sm); padding:2px 8px; flex:none; }
+.geo-wave__title{ margin:0; }
+.geo-wave__count{ margin-left:auto; font-size:12.5px; color:var(--text-tertiary);
+  font-variant-numeric:var(--fvn-tabular); }
+.geo-wave__gate{ font-style:italic; }
+
+/* Venue — the addressable place, and why it earned a slot. */
+.geo-plan__venue{ display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  font-size:12.5px; color:var(--text-secondary); }
+.geo-plan__venue a{ color:var(--brand); font-weight:600; text-decoration:none; }
+.geo-plan__venue a:hover{ text-decoration:underline; }
+.geo-plan__venue--own{ color:var(--text-tertiary); font-style:italic; }
+.geo-plan__cited{ color:var(--text-tertiary); }
+.geo-plan__example{ font-size:12px; color:var(--text-tertiary) !important; font-weight:400 !important;
+  max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.geo-plan__deliverable{ display:flex; align-items:center; gap:6px; }
+.geo-plan__deliverable strong{ font-weight:600; }
+.geo-plan__evidence{ font-size:12px !important; color:var(--text-tertiary) !important; }
+.geo-plan__dropped{ border-left:2px solid var(--amber-500); padding-left:10px; }
+
 .geo-plan__leading{ margin:6px 0 0; padding-left:20px; }
 .geo-plan__leading li{ font-size:13px; line-height:1.6; color:var(--text-secondary); margin-bottom:4px; }
 .geo-plan__foot{ display:flex; align-items:center; justify-content:space-between; gap:12px;

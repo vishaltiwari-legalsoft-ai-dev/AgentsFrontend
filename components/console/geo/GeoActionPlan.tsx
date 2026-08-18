@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   geoStrategyActionStatus, geoStrategyGenerate, geoStrategyGet,
   type GeoBrandRow, type GeoReport, type GeoStrategyAction, type GeoStrategyDoc,
+  type GeoStrategyVenue,
 } from "@/lib/api";
 import { Icon } from "@/lib/kit-ui";
 import { useReportWork } from "@/lib/work";
@@ -38,8 +39,39 @@ const STATUS_LABELS: Record<GeoStrategyAction["status"], string> = {
   todo: "To do", in_progress: "In progress", done: "Done", skipped: "Skipped",
 };
 
+const VENUE_KIND_LABEL: Record<string, string> = {
+  community: "community", listicle: "round-up", review: "review platform",
+  forum: "forum", video: "video",
+};
+
 const pct = (x: number | null | undefined) =>
   x === null || x === undefined ? "—" : `${Math.round(x * 100)}%`;
+
+/** The place, as a link you can actually open. Every venue here survived
+ *  verification against the discovered list, so the URL resolves — which is
+ *  the whole difference between a plan and a paragraph of advice. */
+function VenueLine({ venue }: { venue: GeoStrategyVenue | null }) {
+  if (!venue) {
+    return <span className="geo-plan__venue geo-plan__venue--own">On our own site</span>;
+  }
+  return (
+    <span className="geo-plan__venue">
+      <Icon name="map-pin" size={13} />
+      <a href={venue.url} target="_blank" rel="noreferrer">{venue.name}</a>
+      <span className="seo-chip">{VENUE_KIND_LABEL[venue.kind] ?? venue.kind}</span>
+      {venue.cited_where_absent > 0 && (
+        <span className="geo-plan__cited">
+          engines cited it {venue.cited_where_absent}× in answers that skipped you
+        </span>
+      )}
+      {venue.examples.slice(0, 2).map((ex) => (
+        <a key={ex.url} className="geo-plan__example" href={ex.url} target="_blank" rel="noreferrer">
+          {ex.title || ex.url}
+        </a>
+      ))}
+    </span>
+  );
+}
 
 export function GeoActionPlan({ brand, report, isCreator, onToast }: Props) {
   const [doc, setDoc] = useState<GeoStrategyDoc | null>(null);
@@ -118,7 +150,7 @@ export function GeoActionPlan({ brand, report, isCreator, onToast }: Props) {
     );
   }
 
-  const allActions = plan.pillars.flatMap((p) => p.actions);
+  const allActions = plan.waves.flatMap((w) => w.actions);
   const done = allActions.filter((a) => a.status === "done").length;
   const kpis = [...new Set(allActions.map((a) => a.kpi))].filter((k) => KPI_LABELS[k]);
   const targetFor = (kpi: string) => allActions.find((a) => a.kpi === kpi)?.target ?? "";
@@ -157,36 +189,57 @@ export function GeoActionPlan({ brand, report, isCreator, onToast }: Props) {
         </p>
       </div>
 
-      {plan.pillars.map((pillar) => (
-        <div key={pillar.title} className="mr-section">
-          <h3 className="mr-section__title">{pillar.title}</h3>
-          <p className="geo-plan__objective">{pillar.objective}</p>
-          <p className="geo-note">Why: {pillar.why_evidence}</p>
-          {pillar.actions.map((action) => (
-            <div key={action.id} className={`geo-plan__action${action.status === "done" ? " geo-plan__action--done" : ""}${action.status === "skipped" ? " geo-plan__action--skipped" : ""}`}>
-              <button className={`seo-chip opt-history geo-plan__status geo-plan__status--${action.status}`}
-                      onClick={() => void cycleStatus(action)}
-                      title="Click to move: To do → In progress → Done">
-                {STATUS_LABELS[action.status]}
-              </button>
-              <div className="geo-plan__body">
-                <strong>{action.title}</strong>
-                <span>{action.detail}</span>
-                <div className="geo-plan__meta">
-                  <span className="seo-chip">{action.owner_role}</span>
-                  <span className="seo-chip">effort: {action.effort}</span>
-                  <span className="seo-chip">impact: {action.impact}</span>
-                  <span className="seo-chip">{action.timeframe_weeks} wk</span>
-                  <span className="seo-chip">moves: {KPI_LABELS[action.kpi] ?? action.kpi} → {action.target}</span>
-                  {action.status !== "skipped" && (
-                    <button className="geo-plan__skip" onClick={() => void skip(action)}>skip</button>
+      {plan.waves.map((wave, i) => {
+        const waveDone = wave.actions.filter((a) => a.status === "done").length;
+        return (
+          <div key={`${wave.weeks}-${wave.title}`} className="mr-section geo-wave">
+            <div className="geo-wave__head">
+              <span className="geo-wave__num">Week {wave.weeks}</span>
+              <h3 className="mr-section__title geo-wave__title">{wave.title}</h3>
+              <span className="geo-wave__count">{waveDone}/{wave.actions.length} done</span>
+            </div>
+            <p className="geo-plan__objective">{wave.objective}</p>
+            {wave.why_evidence && <p className="geo-note">Why now: {wave.why_evidence}</p>}
+            {i > 0 && (
+              <p className="geo-note geo-wave__gate">
+                Start this after Week {plan.waves[i - 1].weeks} — earlier waves are the cheap wins
+                that make these worth doing.
+              </p>
+            )}
+            {wave.actions.map((action) => (
+              <div key={action.id} className={`geo-plan__action${action.status === "done" ? " geo-plan__action--done" : ""}${action.status === "skipped" ? " geo-plan__action--skipped" : ""}`}>
+                <button className={`seo-chip opt-history geo-plan__status geo-plan__status--${action.status}`}
+                        onClick={() => void cycleStatus(action)}
+                        title="Click to move: To do → In progress → Done">
+                  {STATUS_LABELS[action.status]}
+                </button>
+                <div className="geo-plan__body">
+                  <strong>{action.title}</strong>
+                  <VenueLine venue={action.venue} />
+                  {action.deliverable && (
+                    <span className="geo-plan__deliverable">
+                      <Icon name="package" size={13} /> You&apos;ll produce: <strong>{action.deliverable}</strong>
+                    </span>
                   )}
+                  <span>{action.detail}</span>
+                  {action.why_evidence && (
+                    <span className="geo-plan__evidence">Evidence: {action.why_evidence}</span>
+                  )}
+                  <div className="geo-plan__meta">
+                    <span className="seo-chip">{action.owner_role}</span>
+                    <span className="seo-chip">effort: {action.effort}</span>
+                    <span className="seo-chip">impact: {action.impact}</span>
+                    <span className="seo-chip">moves: {KPI_LABELS[action.kpi] ?? action.kpi} → {action.target}</span>
+                    {action.status !== "skipped" && (
+                      <button className="geo-plan__skip" onClick={() => void skip(action)}>skip</button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      ))}
+            ))}
+          </div>
+        );
+      })}
 
       <div className="mr-section">
         <h3 className="mr-section__title">How we monitor this</h3>
@@ -198,6 +251,28 @@ export function GeoActionPlan({ brand, report, isCreator, onToast }: Props) {
           </ul>
         )}
       </div>
+
+      {plan.venues && (
+        <p className="geo-note">
+          Venues were found by live search for &ldquo;{plan.venues.category}&rdquo; plus the domains
+          your own polls show engines citing.
+          {!plan.venues.complete && (
+            <> <strong>This list is partial</strong> — {plan.venues.errors.length
+              ? plan.venues.errors.join("; ")
+              : "some discovery searches did not run"}. Regenerate once search is available
+              to widen it.</>
+          )}
+        </p>
+      )}
+
+      {!!plan.dropped_actions?.length && (
+        <p className="geo-note geo-plan__dropped">
+          {plan.dropped_actions.length} suggested {plan.dropped_actions.length === 1 ? "action was" : "actions were"} dropped
+          because {plan.dropped_actions.length === 1 ? "it named a place" : "they named places"} we
+          could not verify ({plan.dropped_actions.map((d) => d.venue).join(", ")}). We&apos;d rather
+          show you a shorter plan than send you to a dead link.
+        </p>
+      )}
 
       <p className="geo-note">{plan.expectations}</p>
       <div className="geo-plan__foot">

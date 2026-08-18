@@ -2160,8 +2160,21 @@ export const seoPagesRefresh = (id: string) =>
 
 export type GeoEngineId = "perplexity" | "gemini" | "chatgpt";
 
+/** How an engine's answers are actually obtained. `proxy` means an OpenRouter
+ *  stand-in model answered — NOT the consumer product whose name is on the
+ *  chip. The panel must never render proxy and native identically. */
+export type GeoEngineMode = "native" | "proxy" | "serpapi" | "off" | "unknown";
+
+export interface GeoEngineStatus {
+  connected: boolean;
+  mode: GeoEngineMode;
+  model: string;
+  means: string;   // plain-language sentence, rendered verbatim as the tooltip
+}
+
 export interface GeoGlobalConfig {
   engines: Record<GeoEngineId, boolean>;
+  engine_status?: Record<string, GeoEngineStatus>;
   default_runs: number;
   default_daily_cap: number;
 }
@@ -2235,6 +2248,9 @@ export interface GeoMetricBlock {
   source_mix: { domain: string; count: number; share: number }[];
   n_answers: number;
   n_errors: number;
+  /** answers counted per measurement surface ("native" | "openrouter" |
+   *  "serpapi" | "unknown") — every rate above is only as good as this */
+  via_mix?: Record<string, number>;
 }
 
 export interface GeoPromptRollup {
@@ -2276,6 +2292,7 @@ export interface GeoAnswer {
   brand_position?: number | null;
   brand_cited?: boolean;
   sentiment?: "positive" | "neutral" | "negative" | null;
+  via?: string;       // "native" | "openrouter" | "serpapi" — the surface measured
   no_aio?: boolean;   // Google showed no AI Overview for this query (excluded from rates)
 }
 
@@ -2338,21 +2355,37 @@ export const geoAnswers = (brandId: string, opts: { prompt_id?: string; engine?:
 
 /* --------------------- GEO Action Plan (a10 strategy) -------------------- */
 
+/** The place an action happens, resolved from the discovered venue list rather
+ *  than from whatever the strategist model typed. `null` = work on our own
+ *  site. Never a name the backend could not verify — those actions are dropped
+ *  before they reach here. */
+export interface GeoStrategyVenue {
+  name: string;
+  url: string;
+  kind: "community" | "listicle" | "review" | "forum" | "video";
+  cited_where_absent: number;
+  examples: { title: string; url: string }[];
+}
+
 export interface GeoStrategyAction {
   id: string;
   title: string;
+  venue: GeoStrategyVenue | null;
+  deliverable: string;
   detail: string;
   owner_role: string;
   effort: "low" | "medium" | "high";
   impact: "low" | "medium" | "high";
-  timeframe_weeks: number;
   kpi: string;
   target: string;
+  why_evidence: string;
   status: "todo" | "in_progress" | "done" | "skipped";
   status_at?: string;
 }
 
-export interface GeoStrategyPillar {
+/** A fortnight of work. Waves arrive calendar-ordered from the backend. */
+export interface GeoStrategyWave {
+  weeks: string;
   title: string;
   objective: string;
   why_evidence: string;
@@ -2375,10 +2408,21 @@ export interface GeoStrategyBaseline {
 
 export interface GeoStrategy {
   summary: string;
-  pillars: GeoStrategyPillar[];
+  waves: GeoStrategyWave[];
   monitoring: { cadence: string; review_ritual: string; leading_indicators: string[] };
   expectations: string;
   baseline: GeoStrategyBaseline;
+  /** provenance of the venue list this plan was built from */
+  venues?: {
+    category: string;
+    counts: Record<string, number>;
+    searched: number;
+    complete: boolean;
+    errors: string[];
+  };
+  /** actions refused because they named a venue we could not verify — shown,
+   *  not swallowed: a plan that silently shrank is worth investigating */
+  dropped_actions?: { title: string; venue: string; reason: string }[];
   generated_at: string;
 }
 

@@ -14,6 +14,9 @@
 }
 .seo-chip--on { color: var(--green-500); border-color: color-mix(in srgb, var(--green-500) 45%, transparent); }
 .seo-chip--off { color: var(--text-tertiary); text-decoration: line-through; }
+/* proxy: connected and usable, but NOT the product named on the chip — amber
+   because it is a caveat on the number, not an alarm */
+.seo-chip--warn { color: var(--amber-500); border-color: color-mix(in srgb, var(--amber-500) 45%, transparent); }
 .seo-chip--trend-rising { color: var(--green-500); }
 .seo-chip--trend-falling { color: var(--red-500); }
 .seo-chip--trend-new { color: var(--text-primary); }
