@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getDbCollections,
   getDbCollection,
+  isAbortError,
   purgeTelemetry,
+  RequestSequence,
   type DbCollection,
   type DbCollectionData,
 } from "@/lib/api";
@@ -72,6 +74,15 @@ export function DatabaseView({ onBack }: { onBack: () => void }) {
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Row-load failures are shown in the grid, where the reader is looking —
+  // `error` above stays the banner for collection-list and cleanup messages.
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // One in-flight slot for the rows. Clicking through collections used to let a
+  // slower earlier response overwrite a faster later one, so collection A's
+  // rows rendered under collection B's header — and A's `finally` cleared the
+  // spinner while B was still loading.
+  const rowsSeq = useRef<RequestSequence | null>(null);
 
   // Column visibility / sort.
   const [visible, setVisible] = useState<string[]>([]);
@@ -121,20 +132,34 @@ export function DatabaseView({ onBack }: { onBack: () => void }) {
   }, [loadCollections]);
 
   const load = useCallback((name: string, lim: number) => {
+    const seq = (rowsSeq.current ??= new RequestSequence());
+    const ticket = seq.start();
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     setSelected(null);
-    getDbCollection(name, lim)
-      .then((d) => setData(d))
-      .catch((err: unknown) =>
-        setError(err instanceof Error ? err.message : "Failed to load"),
-      )
-      .finally(() => setLoading(false));
+    getDbCollection(name, lim, { signal: ticket.signal })
+      .then((d) => {
+        if (seq.isCurrent(ticket)) setData(d);
+      })
+      .catch((err: unknown) => {
+        // Superseded by a newer collection — its load owns the UI now.
+        if (isAbortError(err) || !seq.isCurrent(ticket)) return;
+        // Drop the previous collection's rows: leaving them up would show one
+        // collection's data under another's name.
+        setData(null);
+        setLoadError(err instanceof Error ? err.message : "Failed to load");
+      })
+      .finally(() => {
+        if (seq.isCurrent(ticket)) setLoading(false);
+      });
   }, []);
 
   useEffect(() => {
     if (active) load(active, limit);
   }, [active, limit, load]);
+
+  // Leaving the view must not leave a request writing into dead state.
+  useEffect(() => () => rowsSeq.current?.cancel(), []);
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
   const allColumns = useMemo(() => data?.columns ?? [], [data]);
@@ -266,7 +291,9 @@ export function DatabaseView({ onBack }: { onBack: () => void }) {
           return (
             <button
               key={c.name}
-              onClick={() => { setActive(c.name); setFilter(""); }}
+              // Clearing the banner here, not in `load`, keeps a real
+              // connection error on screen while a row load is retried.
+              onClick={() => { setActive(c.name); setFilter(""); setError(null); }}
               title={c.description}
               style={{
                 display: "flex",
@@ -392,6 +419,21 @@ export function DatabaseView({ onBack }: { onBack: () => void }) {
         {loading && !data ? (
           <div style={{ padding: 40, textAlign: "center", color: "var(--text-tertiary)", fontSize: 13 }}>
             Loading…
+          </div>
+        ) : loadError ? (
+          // Never fall through to "This collection is empty" on a failed load —
+          // that reads as "there is no data" and sends the reader off to create
+          // some.
+          <div style={{ padding: 40, textAlign: "center", fontSize: 13, display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+            <strong style={{ color: "var(--danger, #dc2626)" }}>
+              Couldn&apos;t load {activeMeta?.label ?? active}.
+            </strong>
+            <span style={{ color: "var(--text-tertiary)", maxWidth: 520, lineHeight: 1.5 }}>
+              {loadError} — this is a load failure, not proof the collection is empty.
+            </span>
+            <Button variant="secondary" size="sm" onClick={() => active && load(active, limit)} disabled={loading}>
+              <Icon name="refresh-cw" size={14} /> Try again
+            </Button>
           </div>
         ) : !visibleRows.length ? (
           <div style={{ padding: 40, textAlign: "center", color: "var(--text-tertiary)", fontSize: 13 }}>

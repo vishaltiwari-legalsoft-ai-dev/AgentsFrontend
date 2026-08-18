@@ -69,14 +69,59 @@ function readNavFromHash(): NavView | null {
   return isNavView(raw) ? raw : null;
 }
 
-function Toast({ toast }: { toast: { msg: string; k: number } | null }) {
-  if (!toast) return null;
+/* ---------------------------------------------------------------- Toasts --
+   A toast is the only notification this app gives. Rendering a failed 90s run
+   as a purple ✓ that vanishes in 2.6s means the user never learns it died, so
+   tone is part of the API: `ok` reassures and clears itself, `warn` lingers,
+   `error` stays on screen until it is dismissed and stacks instead of being
+   overwritten by the next thing that happens. */
+
+export type ToastTone = "ok" | "warn" | "error";
+/** Stable signature for every `onToast` prop in the console. */
+export type ToastFn = (msg: string, tone?: ToastTone) => void;
+
+interface ToastItem {
+  id: number;
+  msg: string;
+  tone: ToastTone;
+}
+
+// `alert-circle` is not registered in lib/icons.tsx, so the error badge is an
+// ✕ carrying the danger colour — unmistakably not a success check.
+const TOAST_ICON: Record<ToastTone, string> = {
+  ok: "check",
+  warn: "alert-triangle",
+  error: "x",
+};
+
+/** 0 = never auto-dismiss. An error the user did not see is an error they act on. */
+const TOAST_TTL_MS: Record<ToastTone, number> = { ok: 2600, warn: 6000, error: 0 };
+
+/** Errors stack, but not without limit — a failing loop must not paper the screen. */
+const MAX_TOASTS = 4;
+
+function ToastStack({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: number) => void }) {
+  if (!toasts.length) return null;
   return (
-    <div className="ctoast" key={toast.k}>
-      <span className="ctoast__ic">
-        <Icon name="check" />
-      </span>
-      <span>{toast.msg}</span>
+    <div className="ctoasts">
+      {toasts.map((t) => (
+        <div
+          key={t.id}
+          className={`ctoast ctoast--${t.tone}`}
+          role={t.tone === "error" ? "alert" : "status"}
+          aria-live={t.tone === "error" ? "assertive" : "polite"}
+        >
+          <span className="ctoast__ic">
+            <Icon name={TOAST_ICON[t.tone]} />
+          </span>
+          <span className="ctoast__msg">{t.msg}</span>
+          {t.tone === "error" && (
+            <button type="button" className="ctoast__dismiss" onClick={() => onDismiss(t.id)}>
+              Dismiss
+            </button>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -85,9 +130,13 @@ export default function ConsoleApp() {
   const { user, logout } = useAuth();
   const [nav, setNav] = useState("home");
   const [added, setAdded] = useState<Record<string, boolean>>({});
-  const [toast, setToast] = useState<{ msg: string; k: number } | null>(null);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
 
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  const toastSeq = useRef(0);
+  // ok/warn are transient status: the newest replaces the previous one. Errors
+  // are not status, so they are tracked separately and only leave on dismiss.
+  const transientToast = useRef<number | null>(null);
 
   // Restore the view from the URL hash on first load (so a reload keeps you in
   // place instead of bouncing to home), and follow browser back/forward.
@@ -115,14 +164,41 @@ export default function ConsoleApp() {
     }
   }, [nav, user]);
 
-  const fire = useCallback((msg: string) => {
-    setToast({ msg, k: Date.now() });
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 2600);
+  const dismissToast = useCallback((id: number) => {
+    const timer = toastTimers.current.get(id);
+    if (timer) clearTimeout(timer);
+    toastTimers.current.delete(id);
+    if (transientToast.current === id) transientToast.current = null;
+    setToasts((list) => list.filter((t) => t.id !== id));
   }, []);
 
-  useEffect(() => () => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
+  const fire = useCallback<ToastFn>((msg, tone = "ok") => {
+    const id = (toastSeq.current += 1);
+    if (tone !== "error") {
+      const prev = transientToast.current;
+      if (prev !== null) {
+        const timer = toastTimers.current.get(prev);
+        if (timer) clearTimeout(timer);
+        toastTimers.current.delete(prev);
+      }
+      transientToast.current = id;
+    }
+    setToasts((list) => {
+      const kept = tone === "error" ? list : list.filter((t) => t.tone === "error");
+      return [...kept, { id, msg, tone }].slice(-MAX_TOASTS);
+    });
+    const ttl = TOAST_TTL_MS[tone];
+    if (ttl > 0) {
+      toastTimers.current.set(id, setTimeout(() => dismissToast(id), ttl));
+    }
+  }, [dismissToast]);
+
+  useEffect(() => {
+    const timers = toastTimers.current;
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer);
+      timers.clear();
+    };
   }, []);
 
   if (!user) return null;
@@ -134,7 +210,7 @@ export default function ConsoleApp() {
 
   const onOpenAgent = (id: string) => {
     if (!isAgentLive(id)) {
-      fire("This agent is coming soon.");
+      fire("This agent is coming soon.", "warn");
       return;
     }
     setNav(LIVE_AGENTS[id]);
@@ -174,7 +250,7 @@ export default function ConsoleApp() {
           {nav === "integrations" && <IntegrationsView onToast={fire} />}
         </div>
       </div>
-      <Toast toast={toast} />
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
     </WorkProvider>
   );

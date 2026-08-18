@@ -25,7 +25,17 @@
 .geo-hero__how{ margin:0; font-size:12.5px; line-height:1.6; color:var(--text-tertiary);
   border-top:1px solid var(--border-subtle); padding-top:10px; }
 .geo-hero__how strong{ color:var(--amber-500); font-weight:600; }
-.geo-hero__ops{ display:flex; align-items:center; gap:12px; }
+.geo-hero__ops{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+/* Schedule line — the panel's answer to "is my data current", now that a cron
+   collects it instead of a browser tab held open for half an hour. */
+.geo-hero__sched{ display:flex; flex-direction:column; gap:4px; }
+.geo-sched{ display:inline-flex; align-items:center; gap:6px;
+  font-size:12.5px; color:var(--text-tertiary); }
+.geo-sched--attn{ color:var(--amber-500); }
+.geo-sched--hint{ max-width:420px; line-height:1.5; }
+.geo-sched__ctl{ display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin-top:8px; }
+.geo-sched__label{ display:inline-flex; align-items:center; gap:8px;
+  font-size:13px; color:var(--text-secondary); }
 .geo-progress{ font-size:12.5px; color:var(--text-tertiary);
   font-variant-numeric:var(--fvn-tabular); }
 .geo-progress--warn{ color:var(--warning); }

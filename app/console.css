@@ -228,13 +228,30 @@
   .cintg__manage{ border:0; background:none; cursor:pointer; font-family:var(--font-sans); font-size:13px; font-weight:600; color:var(--text-secondary); padding:0; transition:color var(--dur-fast); }
   .cintg__manage:hover{ color:var(--brand); }
 
-  /* Toast */
-  .ctoast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:10px;
-    background:var(--ink); color:#fff; padding:11px 16px; border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); font-size:13.5px; font-weight:500; z-index:50;
+  /* Toast — tone carries the meaning: brand check = ok, amber triangle = warn,
+     danger ✕ = error. Errors stack (newest last) and stay until dismissed.
+     The surface is --ink and the badge is --surface, so both flip together
+     with the theme; the tone glyphs use the brightened-for-dark status tokens. */
+  .ctoasts{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:50;
+    display:flex; flex-direction:column; align-items:center; gap:8px;
+    max-width:min(560px, calc(100vw - 32px)); pointer-events:none; }
+  .ctoast{ display:flex; align-items:center; gap:10px; pointer-events:auto;
+    background:var(--ink); color:var(--text-inverse); padding:11px 16px; border-radius:var(--radius-lg);
+    box-shadow:var(--shadow-lg); font-size:13.5px; font-weight:500; line-height:1.45;
     animation:ctoast-in var(--dur-slow) var(--ease-spring); }
-  .ctoast__ic{ display:flex; width:18px; height:18px; align-items:center; justify-content:center; background:var(--brand); border-radius:99px; }
+  .ctoast__ic{ flex:none; display:flex; width:18px; height:18px; align-items:center; justify-content:center; background:var(--brand); color:var(--on-brand); border-radius:99px; }
   .ctoast__ic svg{ width:12px; height:12px; }
-  @keyframes ctoast-in{ from{ opacity:0; transform:translate(-50%,12px); } to{ opacity:1; transform:translate(-50%,0); } }
+  .ctoast__msg{ min-width:0; }
+  .ctoast--warn{ box-shadow:var(--shadow-lg), inset 3px 0 0 var(--warning); }
+  .ctoast--warn .ctoast__ic{ background:var(--surface); color:var(--amber-600); }
+  .ctoast--error{ box-shadow:var(--shadow-lg), inset 3px 0 0 var(--danger); }
+  .ctoast--error .ctoast__ic{ background:var(--surface); color:var(--red-600); }
+  .ctoast__dismiss{ flex:none; margin-left:4px; border:0; padding:0; background:none; cursor:pointer;
+    font-family:var(--font-sans); font-size:12.5px; font-weight:600; color:inherit; opacity:0.75;
+    text-decoration:underline; text-underline-offset:3px; transition:opacity var(--dur-fast); }
+  .ctoast__dismiss:hover{ opacity:1; }
+  .ctoast__dismiss:focus-visible{ opacity:1; outline:2px solid currentColor; outline-offset:3px; border-radius:4px; }
+  @keyframes ctoast-in{ from{ opacity:0; transform:translateY(12px); } to{ opacity:1; transform:translateY(0); } }
 
   @media (max-width:1080px){ .cstatrow{ grid-template-columns:repeat(2,1fr); } .cgrid--3{ grid-template-columns:repeat(2,1fr); } }
 

@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  isAbortError, RequestSequence,
   seoAnalyzeSite, seoBrandDetail, seoDeleteBrand, seoOauthDisconnect, seoOauthStart, seoOverview,
   seoPages, seoPagesRefresh, seoRunBrand, seoSaveBrand, seoSetTodoStatus,
   type SeoBrand, type SeoGa, type SeoGscStatus, type SeoOverview, type SeoPagesDoc, type SeoPlanItem,
   type SeoRun, type SeoSiteReview, type SeoTodoStatus, type SeoTopic,
 } from "@/lib/api";
+import type { ToastFn } from "@/components/console/ConsoleApp";
 import { useAuth } from "@/lib/auth";
 import { Icon } from "@/lib/kit-ui";
 import { AskView, AuditView, BriefsView, CompetitorsView, KeywordsView, UpdatePlanButton } from "./labs";
@@ -75,15 +77,28 @@ function DegradedNotes({ notes, domain }: { notes: string[]; domain: string }) {
   );
 }
 
-function PagesView({ doc, busy, onRefresh }: {
-  doc: SeoPagesDoc | null; busy: boolean; onRefresh: () => void;
+function PagesView({ doc, busy, error, onRefresh }: {
+  doc: SeoPagesDoc | null; busy: boolean; error: string | null; onRefresh: () => void;
 }) {
   if (!doc) {
     return (
       <div className="mr-section">
-        <div className="seo-empty">Run the site analysis first — then refresh this tab.</div>
+        {error ? (
+          // A failed load used to render as "run the site analysis first",
+          // which reads as "there is nothing here" and sends the user into an
+          // action that was never the problem.
+          <div className="seo-degraded">
+            <Icon name="alert-triangle" size={14} />
+            <div>
+              <div><strong>Couldn&apos;t load the pages for this brand.</strong></div>
+              <div>{error}</div>
+            </div>
+          </div>
+        ) : (
+          <div className="seo-empty">Run the site analysis first — then refresh this tab.</div>
+        )}
         <button className="seo-btn seo-btn--primary" disabled={busy} onClick={onRefresh}>
-          <Icon name="refresh-cw" size={13} /> Refresh
+          <Icon name="refresh-cw" size={13} /> {error ? "Try again" : "Refresh"}
         </button>
       </div>
     );
@@ -293,7 +308,7 @@ function GaSection({ ga }: { ga: SeoGa }) {
   );
 }
 
-function AddBrandForm({ onSaved, onToast }: { onSaved: () => void; onToast: (m: string) => void }) {
+function AddBrandForm({ onSaved, onToast }: { onSaved: () => void; onToast: ToastFn }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
@@ -313,7 +328,7 @@ function AddBrandForm({ onSaved, onToast }: { onSaved: () => void; onToast: (m: 
       setName(""); setDomain(""); setSeeds("");
       onSaved();
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not save brand");
+      onToast(e instanceof Error ? e.message : "Could not save brand", "error");
     } finally {
       setBusy(false);
     }
@@ -342,7 +357,7 @@ function AddBrandForm({ onSaved, onToast }: { onSaved: () => void; onToast: (m: 
   );
 }
 
-export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; onBack: () => void }) {
+export function SeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => void }) {
   const { user } = useAuth();
   const [overview, setOverview] = useState<SeoOverview | null>(null);
   const [brand, setBrand] = useState<SeoBrand | null>(null);
@@ -353,6 +368,9 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
   const [siteBusy, setSiteBusy] = useState(false);
   const [pagesDoc, setPagesDoc] = useState<SeoPagesDoc | null>(null);
   const [pagesBusy, setPagesBusy] = useState(false);
+  const [pagesError, setPagesError] = useState<string | null>(null);
+  /** The brand whose detail is being fetched right now, for the card's cue. */
+  const [opening, setOpening] = useState<string | null>(null);
   const [tool, setTool] = useState<SeoTool | null>(null);
   const [busy, setBusy] = useState(false);
   const [showAllTodos, setShowAllTodos] = useState(false);
@@ -362,15 +380,30 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
     try {
       setOverview(await seoOverview());
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Failed to load");
+      onToast(e instanceof Error ? e.message : "Failed to load", "error");
     }
   }, [onToast]);
 
   useEffect(() => { void refreshOverview(); }, [refreshOverview]);
 
+  /** One in-flight slot for "open a brand". Two chained requests write into
+   *  seven pieces of shared state, so without this a slower brand A lands after
+   *  the user has opened brand B and every panel below B's name is A's data. */
+  const brandSeq = useRef<RequestSequence | null>(null);
+  /** The brand actually on screen. A ref, not the `brand` state: these handlers
+   *  resume after an await and their captured `brand` is whatever it was when
+   *  the click happened, which is exactly the value that must not be trusted. */
+  const shownBrandId = useRef<string | null>(null);
+  useEffect(() => { shownBrandId.current = brand?.id ?? null; }, [brand]);
+  useEffect(() => () => brandSeq.current?.cancel(), []);
+
   async function openBrand(id: string) {
+    const seq = (brandSeq.current ??= new RequestSequence());
+    const ticket = seq.start();
+    setOpening(id);
     try {
-      const detail = await seoBrandDetail(id);
+      const detail = await seoBrandDetail(id, { signal: ticket.signal });
+      if (!seq.isCurrent(ticket)) return; // a newer brand owns the screen
       setBrand(detail.brand);
       setRun(detail.run);
       setGsc(detail.gsc ?? null);
@@ -379,15 +412,23 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       setTool(null);
       setShowAllTodos(false);
       setPagesDoc(null);
+      setPagesError(null);
       try {
-        const pagesRes = await seoPages(id);
+        const pagesRes = await seoPages(id, { signal: ticket.signal });
+        if (!seq.isCurrent(ticket)) return;
         setPagesDoc(pagesRes.pages);
       } catch (e) {
+        if (isAbortError(e) || !seq.isCurrent(ticket)) return;
         setPagesDoc(null);
-        onToast(e instanceof Error ? e.message : "Could not load pages");
+        const msg = e instanceof Error ? e.message : "Could not load pages";
+        setPagesError(msg);
+        onToast(msg, "error");
       }
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Failed to load brand");
+      if (isAbortError(e) || !seq.isCurrent(ticket)) return;
+      onToast(e instanceof Error ? e.message : "Failed to load brand", "error");
+    } finally {
+      if (seq.isCurrent(ticket)) setOpening(null);
     }
   }
 
@@ -395,10 +436,15 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
     setPagesBusy(true);
     try {
       const doc = await seoPagesRefresh(id);
+      if (shownBrandId.current !== id) return; // user moved on mid-refresh
       setPagesDoc(doc);
+      setPagesError(null);
       onToast(`Pages refreshed — ${fmt(doc.pages.length)} page(s)`);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not refresh pages");
+      if (shownBrandId.current !== id) return;
+      const msg = e instanceof Error ? e.message : "Could not refresh pages";
+      setPagesError(msg);
+      onToast(msg, "error");
     } finally {
       setPagesBusy(false);
     }
@@ -410,7 +456,9 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
     try {
       await seoRunBrand(id);
       const detail = await seoBrandDetail(id);
-      if (brand?.id === id) {
+      // `brand` captured in this closure is the brand at click time; the ref is
+      // the one on screen now.
+      if (shownBrandId.current === id) {
         setBrand(detail.brand);
         setRun(detail.run);
         setGsc(detail.gsc ?? null);
@@ -427,7 +475,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
         onToast("Done — see the brand card for data status");
       }
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Analysis failed");
+      onToast(e instanceof Error ? e.message : "Analysis failed", "error");
     } finally {
       setBusy(false);
     }
@@ -438,13 +486,16 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
     onToast("Reading the website — crawling pages and running the expert review (takes a minute or two)…");
     try {
       const review = await seoAnalyzeSite(id);
-      setSiteReview(review);
       const detail = await seoBrandDetail(id);
+      // A crawl takes minutes — long enough for the user to open another brand,
+      // whose fix list must not be replaced by this one's.
+      if (shownBrandId.current !== id) return;
+      setSiteReview(review);
       setRun(detail.run);
       setPlan(detail.plan ?? []);
       onToast(`Site review done — ${review.issues.length} finding(s) added to the fix list`);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Site analysis failed");
+      onToast(e instanceof Error ? e.message : "Site analysis failed", "error");
     } finally {
       setSiteBusy(false);
     }
@@ -456,7 +507,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       window.open(url, "_blank", "width=540,height=680");
       onToast("Choose the Google account that owns the site's Search Console, press Allow, then hit Refresh data here.");
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not start the Google connect");
+      onToast(e instanceof Error ? e.message : "Could not start the Google connect", "error");
     }
   }
 
@@ -467,7 +518,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       setGsc({ connected: false, property: null });
       onToast("Search Console disconnected");
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Disconnect failed");
+      onToast(e instanceof Error ? e.message : "Disconnect failed", "error");
     }
   }
 
@@ -479,7 +530,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       setBrand(null); setRun(null);
       await refreshOverview();
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Remove failed");
+      onToast(e instanceof Error ? e.message : "Remove failed", "error");
     }
   }
 
@@ -489,7 +540,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
     try {
       await seoSetTodoStatus(brand.id, todoId, status);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not save status");
+      onToast(e instanceof Error ? e.message : "Could not save status", "error");
     }
   }
 
@@ -523,12 +574,14 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
             <div className="seo-grid">
               {(overview?.brands ?? []).map(({ brand: b, last_run, gsc_connected, headline }) => (
                 <div key={b.id} className="seo-card" role="button" tabIndex={0}
+                     aria-busy={opening === b.id}
                      onClick={() => void openBrand(b.id)}
                      onKeyDown={(e) => e.key === "Enter" && void openBrand(b.id)}>
                   <div className="seo-card__head">
                     <span className="seo-card__name">
                       {b.name}
                       {gsc_connected && <span className="seo-chip seo-chip--on seo-card__gsc">GSC ✓</span>}
+                      {opening === b.id && <span className="seo-chip">Opening…</span>}
                     </span>
                     <span className="seo-card__domain">{b.domain}</span>
                   </div>
@@ -766,7 +819,8 @@ export function SeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
             )}
 
             <Fold title="Pages" count={pagesDoc?.pages.length} hint="traffic + health, page by page">
-              <PagesView doc={pagesDoc} busy={pagesBusy} onRefresh={() => void refreshPages(brand.id)} />
+              <PagesView doc={pagesDoc} busy={pagesBusy} error={pagesError}
+                onRefresh={() => void refreshPages(brand.id)} />
             </Fold>
 
             <Fold title="Competitors" hint="top 5 — and what they publish">

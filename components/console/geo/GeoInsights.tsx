@@ -1,7 +1,8 @@
 "use client";
 
-import type { GeoBrandRow, GeoPromptRollup, GeoReport } from "@/lib/api";
+import type { GeoBrandRow, GeoEngineStatus, GeoPromptRollup, GeoReport } from "@/lib/api";
 import { Icon } from "@/lib/kit-ui";
+import { comparableEngines, modeSuffix, proxyEngines, statusOf } from "./provenance";
 
 /** Insights — the plain-language story of the brand's GEO condition.
  *  Built around the most concrete artifact we have: the actual buyer
@@ -13,6 +14,7 @@ type Props = {
   report: GeoReport | null;
   promptCount: number;
   connected: string[];
+  engineStatus: Record<string, GeoEngineStatus>;
   isCreator: boolean;
   onGenerate: () => void;
   onPoll: () => void;
@@ -34,7 +36,7 @@ function visibilityLabel(rate: number): string {
 
 type Step = { icon: string; title: string; detail: string; cta?: { label: string; run: () => void } };
 
-export function GeoInsights({ brand, report, promptCount, connected, isCreator, onGenerate, onPoll, goTab }: Props) {
+export function GeoInsights({ brand, report, promptCount, connected, engineStatus, isCreator, onGenerate, onPoll, goTab }: Props) {
   const blended = report?.blended;
   const n = blended?.mention.n_answers ?? 0;
   const hasData = n > 0;
@@ -54,11 +56,20 @@ export function GeoInsights({ brand, report, promptCount, connected, isCreator, 
   const engineRows = report
     ? Object.entries(report.engines)
         .filter(([e]) => ENGINE_LABELS[e])
-        .map(([e, block]) => ({ engine: e, rate: block.mention.rate ?? 0, n: block.n_answers }))
+        .map(([e, block]) => ({
+          engine: e,
+          rate: block.mention.rate ?? 0,
+          n: block.n_answers,
+          mode: statusOf(engineStatus, e, true).mode,
+          model: engineStatus[e]?.model ?? "",
+        }))
         .sort((a, b) => b.rate - a.rate)
     : [];
-  const bestEngine = engineRows[0];
-  const worstEngine = engineRows[engineRows.length - 1];
+  // rules live in ./provenance.ts so they are pinned by tests, not by eyeballing
+  const comparable = comparableEngines(engineRows);
+  const bestEngine = comparable[0];
+  const worstEngine = comparable[comparable.length - 1];
+  const proxyRows = proxyEngines(engineRows);
 
   const rivals = report
     ? Object.entries(report.blended.sov.share)
@@ -71,6 +82,15 @@ export function GeoInsights({ brand, report, promptCount, connected, isCreator, 
   const steps: Step[] = [];
   if (!connected.length) {
     steps.push({ icon: "lock", title: "Connect an engine", detail: "Nothing can be measured without at least one engine key (Settings → Secrets)." });
+  } else if (proxyRows.length > 0 || Object.values(engineStatus).some((st) => st.mode === "proxy")) {
+    const names = Object.entries(engineStatus)
+      .filter(([e, st]) => st.mode === "proxy" && ENGINE_LABELS[e])
+      .map(([e]) => ENGINE_LABELS[e]);
+    steps.push({
+      icon: "key",
+      title: `Measure ${names.join(" and ")} for real`,
+      detail: `Right now ${names.join(" and ")} ${names.length === 1 ? "is" : "are"} answered by a stand-in model through OpenRouter — close, but not the product your buyers actually use. Paste the native API key in Settings → Secrets and the next poll measures the real thing.`,
+    });
   }
   if (promptCount === 0) {
     steps.push({
@@ -148,6 +168,20 @@ export function GeoInsights({ brand, report, promptCount, connected, isCreator, 
                 : ""}.
               {topRival ? ` Your closest rival in these answers is ${topRival.name}.` : ""}
             </p>
+            <p className="geo-hero__how">
+              How this was measured: {promptCount} questions × {engineRows.length}{" "}
+              {engineRows.length === 1 ? "engine" : "engines"} × 3 runs each = {n} answers, over the last poll window.
+              {proxyRows.length > 0 && (
+                <>
+                  {" "}
+                  <strong>Caveat:</strong> {proxyRows.map((e) => ENGINE_LABELS[e.engine]).join(" and ")}{" "}
+                  {proxyRows.length === 1 ? "was" : "were"} measured through an OpenRouter stand-in model
+                  ({proxyRows.map((e) => e.model).filter(Boolean).join(", ") || "openrouter"}), not the real
+                  product — treat {proxyRows.length === 1 ? "that number" : "those numbers"} as indicative.
+                  Add the native API key in Settings → Secrets to measure the real thing.
+                </>
+              )}
+            </p>
           </div>
 
           <div className="geo-inscards">
@@ -224,8 +258,15 @@ export function GeoInsights({ brand, report, promptCount, connected, isCreator, 
               {engineRows.map((e) => (
                 <div key={e.engine} className="geo-inscard">
                   <span className="geo-inscard__num">{pct(e.rate)}</span>
-                  <span className="geo-inscard__label">{ENGINE_LABELS[e.engine]}</span>
-                  <span className="geo-inscard__hint">named in {e.n} answers sampled</span>
+                  <span className="geo-inscard__label">
+                    {ENGINE_LABELS[e.engine]}{modeSuffix(e.mode)}
+                  </span>
+                  <span className="geo-inscard__hint">
+                    named in {e.n} answers sampled
+                    {e.mode === "proxy"
+                      ? ` — via ${e.model || "OpenRouter"}, not the real product`
+                      : e.model ? ` — ${e.model}` : ""}
+                  </span>
                 </div>
               ))}
             </div>

@@ -2212,6 +2212,10 @@ export interface GeoBrandConfig {
   aliases: Record<string, string[]>;
   competitors: GeoCompetitor[];
   daily_cap: number;
+  /** days between scheduled sweeps (cron fires daily and honours this) */
+  poll_interval_days?: number;
+  auto_poll?: boolean;
+  last_poll_completed_at?: string;
 }
 
 export interface GeoPollProgress {
@@ -2296,6 +2300,25 @@ export interface GeoAnswer {
   no_aio?: boolean;   // Google showed no AI Overview for this query (excluded from rates)
 }
 
+/** Where the brand's sweep stands when nobody is watching a progress bar.
+ *  `next_due_at` is null only when the brand has never completed a sweep — an
+ *  invented date would be worse than saying so. */
+export interface GeoPollStatus {
+  brand_id: string;
+  pending: number;
+  done: number;
+  total: number;
+  auto_poll: boolean;
+  interval_days: number;
+  last_completed_at: string | null;
+  next_due_at: string | null;
+  due_now: boolean;
+  due_reason: string;
+}
+
+export const geoPollStatus = (brandId: string) =>
+  getJson<GeoPollStatus>(`/api/geo/brands/${brandId}/poll/status`);
+
 export const geoConfig = () => getJson<GeoGlobalConfig>("/api/geo/config");
 
 export const geoBrands = () => getJson<{ brands: GeoBrandRow[] }>("/api/geo/brands");
@@ -2323,7 +2346,8 @@ export const geoBrandConfig = (brandId: string) =>
 
 export async function geoSaveBrandConfig(
   brandId: string,
-  patch: Partial<Pick<GeoBrandConfig, "aliases" | "competitors" | "daily_cap">>,
+  patch: Partial<Pick<GeoBrandConfig,
+    "aliases" | "competitors" | "daily_cap" | "poll_interval_days" | "auto_poll">>,
 ): Promise<GeoBrandConfig> {
   const response = await request(`/api/geo/brands/${brandId}/config`, {
     method: "PUT",

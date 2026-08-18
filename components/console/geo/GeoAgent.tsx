@@ -3,17 +3,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   geoAddCustomPrompt, geoAnswers, geoBrandConfig, geoBrands, geoConfig, geoGeneratePrompts, geoPollStep,
-  geoPrompts, geoReport, geoSaveBrandConfig, geoSavePrompts,
+  geoPollStatus, geoPrompts, geoReport, geoSaveBrandConfig, geoSavePrompts,
   type GeoAnswer, type GeoBrandConfig, type GeoBrandRow, type GeoGlobalConfig,
-  type GeoPollProgress, type GeoPrompt, type GeoReport,
+  type GeoEngineStatus, type GeoPollProgress, type GeoPollStatus, type GeoPrompt, type GeoReport,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Icon } from "@/lib/kit-ui";
 import { useReportWork } from "@/lib/work";
+import type { ToastFn } from "@/components/console/ConsoleApp";
 import { AnswerText } from "./AnswerText";
 import { ContentOptimizer } from "./ContentOptimizer";
 import { GeoActionPlan } from "./GeoActionPlan";
 import { GeoInsights } from "./GeoInsights";
+import { initialPollState, pollDecision, pollStoppedByUser, type PollLoopState } from "./pollLoop";
+import { modeSuffix, statusOf } from "./provenance";
+import { partialSweepLine, scheduleLine } from "./schedule";
 
 /** GEO agent (a10) — how often AI answer engines name and cite each brand.
  *  Honesty rules baked in: every rate shows its n and variance; a missing
@@ -28,6 +32,14 @@ const ENGINE_LABELS: Record<string, string> = {
   aio: "Google AIO",
 };
 
+/** Chip colour per measurement surface. Amber for proxy and unknown: both are
+ *  usable data with a caveat, neither is an alarm — and neither may look like
+ *  the green that means "this is the real product". */
+const MODE_CLASS: Record<string, string> = {
+  native: "seo-chip--on", serpapi: "seo-chip--on",
+  proxy: "seo-chip--warn", unknown: "seo-chip--warn", off: "seo-chip--off",
+};
+
 const pct = (x: number | null | undefined) =>
   x === null || x === undefined ? "—" : `${Math.round(x * 100)}%`;
 
@@ -38,7 +50,22 @@ function slug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) || "comp";
 }
 
-export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; onBack: () => void }) {
+/** Sleep that wakes early when the poll is asked to stop, so a user hitting
+ *  Stop never waits out a backoff. */
+function sleepUnlessStopped(ms: number, stopped: { current: boolean }): Promise<void> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const tick = () => {
+      if (stopped.current || Date.now() - started >= ms) {
+        clearInterval(timer);
+        resolve();
+      }
+    };
+    const timer = setInterval(tick, 150);
+  });
+}
+
+export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => void }) {
   const { user } = useAuth();
   const [globalCfg, setGlobalCfg] = useState<GeoGlobalConfig | null>(null);
   const [brands, setBrands] = useState<GeoBrandRow[]>([]);
@@ -52,10 +79,14 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
   const [tab, setTab] = useState<GeoTab>("insights");
   const [busy, setBusy] = useState(false);
   const [polling, setPolling] = useState(false);
+  const [stopRequested, setStopRequested] = useState(false);
   const [progress, setProgress] = useState<GeoPollProgress | null>(null);
+  const [schedule, setSchedule] = useState<GeoPollStatus | null>(null);
+  const [pollNote, setPollNote] = useState<{ text: string; warn: boolean } | null>(null);
   const [newCompetitor, setNewCompetitor] = useState("");
   const [newPrompt, setNewPrompt] = useState("");
   const stopPoll = useRef(false);
+  const mounted = useRef(true);
 
   useReportWork(busy || polling);
 
@@ -65,28 +96,34 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       setGlobalCfg(cfg);
       setBrands(list.brands);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Failed to load");
+      onToast(e instanceof Error ? e.message : "Failed to load", "error");
     }
   }, [onToast]);
 
   useEffect(() => { void refresh(); }, [refresh]);
-  useEffect(() => () => { stopPoll.current = true; }, []);
+  useEffect(() => () => { mounted.current = false; stopPoll.current = true; }, []);
 
   async function openBrand(row: GeoBrandRow) {
     setBrand(row);
     setTab("insights");
     setReport(null);
     setProgress(null);
+    setPollNote(null);
     setAnswers([]);
+    setSchedule(null);
     try {
-      const [p, r, c] = await Promise.all([
+      const [p, r, c, s] = await Promise.all([
         geoPrompts(row.id), geoReport(row.id), geoBrandConfig(row.id),
+        // the schedule is informational — a brand with no engine key still
+        // opens, it just cannot say when its next sweep is
+        geoPollStatus(row.id).catch(() => null),
       ]);
       setPrompts(p.prompts ?? []);
       setReport(r);
       setBrandCfg(c);
+      setSchedule(s);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Failed to load brand");
+      onToast(e instanceof Error ? e.message : "Failed to load brand", "error");
     }
   }
 
@@ -94,7 +131,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
     try {
       setReport(await geoReport(brandId));
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not load the report");
+      onToast(e instanceof Error ? e.message : "Could not load the report", "error");
     }
   }
 
@@ -108,7 +145,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       setTab("prompts");
       onToast(`Drafted ${doc.prompts.length} prompts — review and edit them, then poll.`);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Prompt generation failed");
+      onToast(e instanceof Error ? e.message : "Prompt generation failed", "error");
     } finally {
       setBusy(false);
     }
@@ -121,37 +158,68 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       await geoSavePrompts(brand.id, prompts);
       onToast("Prompts saved");
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Save failed");
+      onToast(e instanceof Error ? e.message : "Save failed", "error");
     } finally {
       setBusy(false);
     }
   }
 
+  function requestStopPoll() {
+    if (!polling || stopPoll.current) return;
+    stopPoll.current = true;
+    setStopRequested(true);
+    setPollNote({ text: "Stopping after the batch that is already paid for…", warn: false });
+  }
+
+  /** Every step of this loop is a batch of real, paid engine calls, so it is
+   *  bounded three ways: the backend's terminal signal, our own stall cap, and
+   *  a hard step ceiling — plus a delay between steps and a user stop control.
+   *  See pollLoop.ts; the decision rules are tested there. */
   async function runPoll() {
     if (!brand || polling) return;
     setPolling(true);
+    setStopRequested(false);
+    setPollNote(null);
     stopPoll.current = false;
     onToast("Polling engines — each prompt runs multiple times so the numbers carry a variance band…");
+    let state: PollLoopState = initialPollState();
     try {
       for (;;) {
         const p = await geoPollStep(brand.id, {});
+        if (!mounted.current) return;
         setProgress(p);
-        if (stopPoll.current) break;
-        if (p.capped) {
-          onToast(`Daily engine-call cap reached (${p.calls_used_today}/${p.daily_cap}) — resumes tomorrow.`);
+
+        const step = pollDecision(state, p, { stopRequested: stopPoll.current });
+        state = step.state;
+        if (step.decision.action === "stop") {
+          onToast(step.decision.message, step.decision.tone);
+          setPollNote({ text: step.decision.message, warn: step.decision.tone !== "ok" });
           break;
         }
-        if (p.done >= p.total) {
-          onToast("Poll complete — report updated.");
+
+        await sleepUnlessStopped(step.decision.delayMs, stopPoll);
+        if (!mounted.current) return;
+        // asked to stop during the gap — do not buy another batch to find out
+        if (stopPoll.current) {
+          const bail = pollStoppedByUser(p);
+          onToast(bail.message, bail.tone);
+          setPollNote({ text: bail.message, warn: false });
           break;
         }
       }
       await reloadReport(brand.id);
       await refresh();
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Polling failed");
+      const msg = e instanceof Error ? e.message : "Polling failed";
+      if (mounted.current) {
+        onToast(msg, "error");
+        setPollNote({ text: `Poll stopped — ${msg}`, warn: true });
+      }
     } finally {
-      setPolling(false);
+      if (mounted.current) {
+        setPolling(false);
+        setStopRequested(false);
+      }
     }
   }
 
@@ -163,7 +231,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       const res = await geoAnswers(brand.id, engine ? { engine } : {});
       setAnswers(res.answers);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not load answers");
+      onToast(e instanceof Error ? e.message : "Could not load answers", "error");
     }
   }
 
@@ -176,7 +244,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       setNewPrompt("");
       onToast("Added — your question survives every regeneration.");
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not add the question");
+      onToast(e instanceof Error ? e.message : "Could not add the question", "error");
     } finally {
       setBusy(false);
     }
@@ -195,12 +263,29 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
       setNewCompetitor("");
       onToast(`${name} tracked — future polls measure them too.`);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not save competitor");
+      onToast(e instanceof Error ? e.message : "Could not save competitor", "error");
     }
   }
 
+  /** Saving the schedule re-reads the status, so the line under the header
+   *  reflects the new cadence immediately instead of after a reload. */
+  async function saveSchedule(patch: { auto_poll?: boolean; poll_interval_days?: number }) {
+    if (!brand) return;
+    try {
+      setBrandCfg(await geoSaveBrandConfig(brand.id, patch));
+      setSchedule(await geoPollStatus(brand.id).catch(() => null));
+      onToast("Schedule saved — the next cron run honours it.");
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "Could not save the schedule", "error");
+    }
+  }
+
+  const isCreator = !!user?.is_creator;
   const engines = globalCfg?.engines ?? {};
   const connected = Object.entries(engines).filter(([, ok]) => ok).map(([e]) => e);
+  // engine_status is the honest source; fall back to the boolean map only for
+  // a backend that predates it, and then claim nothing about the surface
+  const engineStatus: Record<string, GeoEngineStatus> = globalCfg?.engine_status ?? {};
   const blended = report?.blended;
   const hasData = (blended?.mention.n_answers ?? 0) > 0;
 
@@ -242,11 +327,15 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
           <span className="mr-top__sub">How often AI answers name and cite each brand — measured, not guessed</span>
         </div>
         <div className="geo-engines">
-          {Object.keys(ENGINE_LABELS).map((e) => (
-            <span key={e} className={`seo-chip ${engines[e as keyof typeof engines] ? "seo-chip--on" : "seo-chip--off"}`}>
-              {ENGINE_LABELS[e]}
-            </span>
-          ))}
+          {Object.keys(ENGINE_LABELS).map((e) => {
+            const st = statusOf(engineStatus, e, Boolean(engines[e as keyof typeof engines]));
+            return (
+              <span key={e} className={`seo-chip ${MODE_CLASS[st.mode] ?? "seo-chip--off"}`}
+                    title={st.model ? `${st.means} — ${st.model}` : st.means || "not connected"}>
+                {ENGINE_LABELS[e]}{modeSuffix(st.mode)}
+              </span>
+            );
+          })}
         </div>
       </header>
 
@@ -335,17 +424,51 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                   ))}
                 </div>
               )}
+              <div className="geo-hero__sched">
+                {(() => {
+                  const line = scheduleLine(schedule, new Date());
+                  const partial = partialSweepLine(schedule);
+                  return (
+                    <>
+                      <span className={`geo-sched${line.tone === "attention" ? " geo-sched--attn" : ""}`}>
+                        <Icon name="calendar" size={13} /> {line.text}
+                      </span>
+                      {partial && <span className="geo-sched">{partial}</span>}
+                    </>
+                  );
+                })()}
+              </div>
               <div className="geo-hero__ops">
-                <button className="seo-btn seo-btn--primary" disabled={polling || !prompts.length} onClick={() => void runPoll()}>
-                  <Icon name="refresh-cw" size={13} /> {polling ? "Polling…" : "Poll now"}
+                {/* While a poll is running this is the stop control — the run is
+                    real spend, so the user must be able to end it without
+                    navigating away and waiting for the daily cap to trip. */}
+                <button
+                  className="seo-btn seo-btn--primary"
+                  disabled={polling ? stopRequested : !prompts.length}
+                  onClick={() => (polling ? requestStopPoll() : void runPoll())}
+                >
+                  <Icon name={polling ? "pause" : "refresh-cw"} size={13} />{" "}
+                  {polling ? (stopRequested ? "Stopping…" : "Stop after this step") : "Poll now"}
                 </button>
-                {polling && progress && (
-                  <span className="geo-progress">{progress.done}/{progress.total} calls · today {progress.calls_used_today}/{progress.daily_cap}</span>
-                )}
-                {!polling && progress?.capped && (
-                  <span className="geo-progress geo-progress--warn">Daily cap reached — resumes tomorrow</span>
+                {!polling && (
+                  <span className="geo-sched geo-sched--hint">
+                    Only needed if you can&apos;t wait for the scheduled run — a full sweep is
+                    ~400 engine calls and keeps this tab busy.
+                  </span>
                 )}
               </div>
+              {/* What the run is actually spending, in the units it spends them
+                  in — answers banked, and paid engine calls against the cap. */}
+              {progress && (
+                <span className="geo-progress" aria-live="polite">
+                  {progress.done} of {progress.total} answers across {prompts.length}{" "}
+                  {prompts.length === 1 ? "prompt" : "prompts"} · {progress.calls_used_today} of{" "}
+                  {progress.daily_cap} engine calls used today
+                </span>
+              )}
+              {pollNote && (
+                <span className={`geo-progress${pollNote.warn ? " geo-progress--warn" : ""}`}>{pollNote.text}</span>
+              )}
             </section>
 
             <nav className="geo-tabs">
@@ -395,6 +518,32 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                         sampled from {report.blended.mention.n_answers} answers over {report.days} days — AI output
                         varies run to run; the ± band is that variance, not an error.
                       </p>
+                    </div>
+                    <div className="mr-section">
+                      <h3 className="mr-section__title">Polling schedule</h3>
+                      <p className="geo-note">
+                        A full sweep is ~400 engine calls. It runs on a schedule so nobody has to
+                        sit and wait for it — the cron checks daily and polls a brand when it&apos;s due.
+                      </p>
+                      <div className="geo-sched__ctl">
+                        <label className="geo-sched__label">
+                          <input type="checkbox" checked={brandCfg?.auto_poll ?? true}
+                                 disabled={!isCreator}
+                                 onChange={(e) => void saveSchedule({ auto_poll: e.target.checked })} />
+                          Poll automatically
+                        </label>
+                        <label className="geo-sched__label">
+                          Every
+                          <select className="geo-select" value={brandCfg?.poll_interval_days ?? 2}
+                                  disabled={!isCreator || brandCfg?.auto_poll === false}
+                                  onChange={(e) => void saveSchedule({ poll_interval_days: Number(e.target.value) })}>
+                            {[1, 2, 3, 7, 14].map((d) => (
+                              <option key={d} value={d}>{d === 1 ? "day" : `${d} days`}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <span className="geo-sched">{scheduleLine(schedule, new Date()).text}</span>
+                      </div>
                     </div>
                     <div className="mr-section">
                       <h3 className="mr-section__title">Tracked competitors</h3>
@@ -480,6 +629,12 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                       <span className="geo-answer__prompt">{a.prompt_text}</span>
                       <span className="geo-answer__chips">
                         <span className="seo-chip">{ENGINE_LABELS[a.engine] ?? a.engine} · run {a.run}</span>
+                        {a.via === "openrouter" && (
+                          <span className="seo-chip seo-chip--warn"
+                                title={`Answered by ${a.model || "an OpenRouter stand-in model"} via OpenRouter — not the ${ENGINE_LABELS[a.engine] ?? a.engine} product itself.`}>
+                            proxy · {a.model || "openrouter"}
+                          </span>
+                        )}
                         {a.error ? (
                           <span className="seo-chip seo-chip--off">error</span>
                         ) : (
@@ -566,6 +721,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: (m: string) => void; on
                 isCreator={!!user?.is_creator}
                 onGenerate={() => void generate()}
                 onPoll={() => void runPoll()}
+                engineStatus={engineStatus}
                 goTab={(t) => { setTab(t); if (t === "answers" && !answers.length) void loadAnswers(""); }}
               />
             )}
