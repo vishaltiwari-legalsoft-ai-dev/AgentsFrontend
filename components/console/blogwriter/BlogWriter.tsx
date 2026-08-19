@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import type { ToastFn } from "@/components/console/ConsoleApp";
 import {
   bwBrands, bwBuildDraft, bwCommentBlock, bwCreateRun, bwExport, bwPlanVisuals,
   bwResearchStep, bwRun, bwRuns, bwScanInventory, bwInventory, bwStudyVoice, bwVoice,
@@ -88,7 +89,7 @@ function citeNumbers(run: BwRunDoc): Record<string, number> {
   return numbers;
 }
 
-export function BlogWriter({ onToast, onBack }: { onToast: (m: string) => void; onBack: () => void }) {
+export function BlogWriter({ onToast, onBack }: { onToast: ToastFn; onBack: () => void }) {
   const [brands, setBrands] = useState<BwBrand[] | null>(null);
   const [brand, setBrand] = useState<BwBrand | null>(null);
   const [inventory, setInventory] = useState<BwInventoryDoc | null>(null);
@@ -105,7 +106,7 @@ export function BlogWriter({ onToast, onBack }: { onToast: (m: string) => void; 
   useReportWork(!!busy);
 
   const fail = useCallback(
-    (e: unknown, fallback: string) => onToast(e instanceof Error ? e.message : fallback),
+    (e: unknown, fallback: string) => onToast(e instanceof Error ? e.message : fallback, "error"),
     [onToast],
   );
 

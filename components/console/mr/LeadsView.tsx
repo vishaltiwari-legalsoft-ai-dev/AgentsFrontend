@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ToastFn } from "@/components/console/ConsoleApp";
 import { mrLeadAnalysis, mrLeadsPdfUrl, type MrLeadAnalysis, type MrLeadVendor } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
 import { fmtMoney, fmtMonth, fmtNum, fmtTime } from "./shared";
@@ -82,7 +83,7 @@ function VendorRows({ v, open, onToggle }: { v: MrLeadVendor; open: boolean; onT
 
 /* Downloads the panel as a server-rendered, same-format PDF (like the report
    and vendor-dossier downloads). */
-function DownloadLeads({ month, onToast }: { month: string; onToast: (m: string) => void }) {
+function DownloadLeads({ month, onToast }: { month: string; onToast: ToastFn }) {
   const [busy, setBusy] = useState(false);
   async function download() {
     setBusy(true);
@@ -96,7 +97,7 @@ function DownloadLeads({ month, onToast }: { month: string; onToast: (m: string)
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "PDF download failed");
+      onToast(e instanceof Error ? e.message : "PDF download failed", "error");
     } finally {
       setBusy(false);
     }
@@ -111,7 +112,7 @@ function DownloadLeads({ month, onToast }: { month: string; onToast: (m: string)
 
 /* The Leads panel: the lead sheet's whole per-vendor Meeting Outcome / Deal
    Stage picture in one place. Story first, red only where a rule tripped. */
-export function LeadsView({ onGotoData, onToast }: { onGotoData: () => void; onToast: (m: string) => void }) {
+export function LeadsView({ onGotoData, onToast }: { onGotoData: () => void; onToast: ToastFn }) {
   const [data, setData] = useState<MrLeadAnalysis | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [month, setMonth] = useState<string | null>(null);

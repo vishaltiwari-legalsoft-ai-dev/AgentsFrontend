@@ -410,7 +410,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
                   </>
                 ) : (
                   <p className="geo-hero__empty">
-                    Koi baseline nahi abhi — generate prompts, run the first poll, and the truth shows up here.
+                    No baseline yet. Generate the prompts, run the first poll, and the numbers appear here.
                   </p>
                 )}
               </div>

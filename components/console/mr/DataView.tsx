@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ToastFn } from "@/components/console/ConsoleApp";
 import {
   mrGetTargets, mrSaveTargets,
   type MrConfig, type MrConnector, type MrDataset, type MrPlatform,
@@ -52,7 +53,7 @@ const GOAL_FIELDS: { key: string; label: string; pct?: boolean }[] = [
   { key: "completed_demo_pct", label: "Completed demo %", pct: true },
 ];
 
-function TargetsCard({ onToast }: { onToast: (m: string) => void }) {
+function TargetsCard({ onToast }: { onToast: ToastFn }) {
   const [targets, setTargets] = useState<MrTargets | null>(null);
   const [edit, setEdit] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -106,7 +107,7 @@ function TargetsCard({ onToast }: { onToast: (m: string) => void }) {
       setEdit(false);
       onToast(reset ? "Targets reset to the 2026 defaults" : "Targets saved — flags and reports use them immediately");
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Saving targets failed");
+      onToast(e instanceof Error ? e.message : "Saving targets failed", "error");
     } finally {
       setSaving(false);
     }
@@ -210,7 +211,7 @@ export function DataView({ datasets, snapshots, connectors, config, catalog, she
   onScan: () => void;
   onAddSheet: (url: string) => void;
   onRemoveSheet: (s: MrSheetSource) => void;
-  onToast: (m: string) => void;
+  onToast: ToastFn;
 }) {
   const [sheetUrl, setSheetUrl] = useState("");
   const usefulTabs = catalog.filter((t) => t.useful);

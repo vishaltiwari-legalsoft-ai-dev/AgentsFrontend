@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { ToastFn } from "@/components/console/ConsoleApp";
 import { mrSnapshotCapture, mrSnapshotDeltas, type MrVendorDelta } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
 import { fmtMoney, fmtNum } from "./shared";
@@ -20,7 +21,7 @@ function sign(n: number | null, money: boolean): string {
   return n < 0 ? `▼ ${v}` : `▲ ${v}`;
 }
 
-export function DailyMovement({ onToast }: { onToast: (m: string) => void }) {
+export function DailyMovement({ onToast }: { onToast: ToastFn }) {
   const [deltas, setDeltas] = useState<MrVendorDelta[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -40,7 +41,7 @@ export function DailyMovement({ onToast }: { onToast: (m: string) => void }) {
       onToast(errs ? `Captured ${ok} tabs · ${errs} error(s)` : `Captured ${ok} vendor tabs for ${res.date}`);
       load();
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Snapshot failed");
+      onToast(e instanceof Error ? e.message : "Snapshot failed", "error");
     } finally {
       setBusy(false);
     }

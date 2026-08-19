@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ToastFn } from "@/components/console/ConsoleApp";
 import { mrPortfolio, mrTrends, type MrOverview, type MrPortfolio, type MrTrends } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
 import { ChannelCard, Dot, fmtMoney, fmtMonth, fmtNum, fmtTime, sourceLabel } from "./shared";
@@ -118,7 +119,7 @@ export function OverviewView({ overview, busy, onPull, onGotoData, onToast }: {
   busy: boolean;
   onPull: () => void;
   onGotoData: () => void;
-  onToast: (m: string) => void;
+  onToast: ToastFn;
 }) {
   const [trends, setTrends] = useState<MrTrends | null>(null);
   const [portfolio, setPortfolio] = useState<MrPortfolio | null>(null);

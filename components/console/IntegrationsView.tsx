@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { ToastFn } from "@/components/console/ConsoleApp";
 import { Button, Badge } from "@/lib/kit-ui";
 import { gdRefSyncDrive } from "@/lib/api";
 
@@ -12,34 +13,17 @@ interface Integration {
   description: string;
 }
 
+// Only integrations that actually do something are listed. HubSpot, Slack,
+// Google Sheets and Figma used to render here with a Connect button that
+// flipped a useState and fired "<name> connected" without making a request —
+// a user waiting on Slack notifications would wait forever.
 const INTEGRATIONS: Integration[] = [
-  {
-    id: "hubspot",
-    name: "HubSpot",
-    logo: "hubspot",
-    category: "CRM & Marketing",
-    description: "Sync contacts and campaigns, and push generated creatives straight into your HubSpot marketing hub.",
-  },
   {
     id: "google",
     name: "Google Workspace",
     logo: "google",
     category: "Productivity",
-    description: "Single sign-on with Google, save creatives to Drive, and pull briefs from Docs & Sheets.",
-  },
-  {
-    id: "slack",
-    name: "Slack",
-    logo: "slack",
-    category: "Messaging",
-    description: "Get run notifications and approve or reject creatives right from your team channels.",
-  },
-  {
-    id: "google-sheets",
-    name: "Google Sheets",
-    logo: "google-sheets",
-    category: "Data & Spreadsheets",
-    description: "Pull briefs, product data and copy from Sheets, and export campaign results back to a spreadsheet.",
+    description: "Signing in to this console uses your Google account. Nothing else in Workspace is connected.",
   },
   {
     id: "google-drive",
@@ -48,27 +32,10 @@ const INTEGRATIONS: Integration[] = [
     category: "Storage",
     description: "Save generated creatives and brand assets straight to a shared Drive folder your team can access.",
   },
-  {
-    id: "figma",
-    name: "Figma",
-    logo: "figma",
-    category: "Design",
-    description: "Import brand frames and components from Figma, and push generated designs back as new frames.",
-  },
 ];
 
-export function IntegrationsView({ onToast }: { onToast?: (msg: string) => void }) {
-  // Google starts "connected" to mirror the Google sign-in already used for auth.
-  const [connected, setConnected] = useState<Record<string, boolean>>({ google: true });
+export function IntegrationsView({ onToast }: { onToast?: ToastFn }) {
   const [syncing, setSyncing] = useState(false);
-
-  function toggle(id: string, name: string) {
-    setConnected((prev) => {
-      const next = !prev[id];
-      onToast?.(next ? `${name} connected` : `${name} disconnected`);
-      return { ...prev, [id]: next };
-    });
-  }
 
   // Pull the shared Drive folder of on-brand references into the agent's library.
   async function syncDrive() {
@@ -86,7 +53,7 @@ export function IntegrationsView({ onToast }: { onToast?: (msg: string) => void 
           (r.skipped_folders.length ? `. Skipped: ${r.skipped_folders.join(", ")}` : ""),
       );
     } catch (e) {
-      onToast?.(`Drive sync failed: ${e instanceof Error ? e.message : String(e)}`);
+      onToast?.(`Drive sync failed: ${e instanceof Error ? e.message : String(e)}`, "error");
     } finally {
       setSyncing(false);
     }
@@ -104,51 +71,40 @@ export function IntegrationsView({ onToast }: { onToast?: (msg: string) => void 
       </div>
 
       <div className="cgrid cgrid--3">
-        {INTEGRATIONS.map((it) => {
-          const on = !!connected[it.id];
-          return (
-            <div className="cintg" key={it.id}>
-              <div className="cintg__top">
-                <span className="logotile">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`/logo/${it.logo}.svg`} alt={`${it.name} logo`} width={28} height={28} style={{ objectFit: "contain" }} />
-                </span>
-                {on ? (
-                  <Badge variant="success" dot>
-                    Connected
-                  </Badge>
-                ) : (
-                  <Badge variant="outline">Not connected</Badge>
-                )}
-              </div>
-              <div className="cintg__id">
-                <div className="cintg__name">{it.name}</div>
-                <div className="cintg__cat">{it.category}</div>
-              </div>
-              <p className="cintg__desc">{it.description}</p>
-              <div className="cintg__foot">
-                {it.id === "google-drive" ? (
-                  <Button size="sm" variant="brand" onClick={syncDrive} disabled={syncing}>
-                    {syncing ? "Syncing…" : "Sync references"}
-                  </Button>
-                ) : (
-                  <Button size="sm" variant={on ? "secondary" : "brand"} onClick={() => toggle(it.id, it.name)}>
-                    {on ? "Disconnect" : "Connect"}
-                  </Button>
-                )}
-                {it.id === "google-drive" ? (
-                  <span className="cintg__cat" style={{ alignSelf: "center" }}>
-                    Pulls on-brand reference creatives into the agent
-                  </span>
-                ) : on ? (
-                  <button type="button" className="cintg__manage" onClick={() => onToast?.(`${it.name} settings — coming soon`)}>
-                    Manage
-                  </button>
-                ) : null}
-              </div>
+        {INTEGRATIONS.map((it) => (
+          <div className="cintg" key={it.id}>
+            <div className="cintg__top">
+              <span className="logotile">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/logo/${it.logo}.svg`} alt={`${it.name} logo`} width={28} height={28} style={{ objectFit: "contain" }} />
+              </span>
+              {it.id === "google" ? (
+                <Badge variant="neutral">Used for sign-in</Badge>
+              ) : (
+                <Badge variant="outline">Not connected</Badge>
+              )}
             </div>
-          );
-        })}
+            <div className="cintg__id">
+              <div className="cintg__name">{it.name}</div>
+              <div className="cintg__cat">{it.category}</div>
+            </div>
+            <p className="cintg__desc">{it.description}</p>
+            {it.id === "google-drive" ? (
+              <div className="cintg__foot">
+                <Button size="sm" variant="brand" onClick={syncDrive} disabled={syncing}>
+                  {syncing ? "Syncing…" : "Sync references"}
+                </Button>
+                <span className="cintg__cat" style={{ alignSelf: "center" }}>
+                  Pulls on-brand reference creatives into the agent
+                </span>
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 13.5, color: "var(--text-secondary)", marginTop: 18 }}>
+        More integrations are not built yet.
       </div>
     </div>
   );

@@ -195,7 +195,7 @@ export function AskView({ brandId, brandName }: { brandId: string; brandName: st
 
   const suggestions = [
     "What should we do first?",
-    "Kaunse keywords pe focus karna chahiye?",
+    "Which keywords should we focus on?",
     "What content should we publish this month?",
     "Where are competitors beating us?",
   ];

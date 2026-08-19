@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ToastFn } from "@/components/console/ConsoleApp";
 import {
   browserConfig, browserDeleteSkill, browserDigest, browserDigests, browserExtensionBlob,
   browserPairingCode, browserRun, browserRuns, browserSaveConfig, browserSkills,
@@ -71,7 +72,7 @@ export function BrowserAgent({
   onToast,
   onBack,
 }: {
-  onToast: (m: string) => void;
+  onToast: ToastFn;
   onBack: () => void;
 }) {
   const [status, setStatus] = useState<BrowserStatus | null>(null);
@@ -117,7 +118,7 @@ export function BrowserAgent({
       setRules(saved.watch_rules);
     } catch (err) {
       setRules(previous);
-      onToast(err instanceof Error ? err.message : "Couldn't save that.");
+      onToast(err instanceof Error ? err.message : "Couldn't save that.", "error");
     }
   };
 
@@ -128,7 +129,7 @@ export function BrowserAgent({
       await browserDeleteSkill(id);
     } catch (err) {
       setSkills(previous);
-      onToast(err instanceof Error ? err.message : "Couldn't forget that one.");
+      onToast(err instanceof Error ? err.message : "Couldn't forget that one.", "error");
     }
   };
 
@@ -173,7 +174,7 @@ export function BrowserAgent({
       setShowInstall(true);
       onToast("Downloaded. Unzip it, then follow the steps below.");
     } catch (err) {
-      onToast(err instanceof Error ? err.message : "Couldn't download the extension.");
+      onToast(err instanceof Error ? err.message : "Couldn't download the extension.", "error");
     } finally {
       setBusy(false);
     }
@@ -182,14 +183,14 @@ export function BrowserAgent({
   const copyPairingCode = async () => {
     const token = storedToken();
     if (!token) {
-      onToast("Sign in again — no session token found in this browser.");
+      onToast("Sign in again — no session token found in this browser.", "error");
       return;
     }
     try {
       await navigator.clipboard.writeText(browserPairingCode(token, status?.email));
       onToast("Pairing code copied — paste it into the extension's side panel.");
     } catch {
-      onToast("Couldn't reach the clipboard. Allow clipboard access and retry.");
+      onToast("Couldn't reach the clipboard. Allow clipboard access and retry.", "error");
     }
   };
 
@@ -198,7 +199,7 @@ export function BrowserAgent({
     try {
       setOpenRun(await browserRun(id));
     } catch (err) {
-      onToast(err instanceof Error ? err.message : "Couldn't load that run.");
+      onToast(err instanceof Error ? err.message : "Couldn't load that run.", "error");
     } finally {
       setBusy(false);
     }
@@ -209,7 +210,7 @@ export function BrowserAgent({
     try {
       setOpenDigest(await browserDigest(id));
     } catch (err) {
-      onToast(err instanceof Error ? err.message : "Couldn't load that digest.");
+      onToast(err instanceof Error ? err.message : "Couldn't load that digest.", "error");
     } finally {
       setBusy(false);
     }
@@ -222,7 +223,7 @@ export function BrowserAgent({
       if (openRun?.id === id) setOpenRun(await browserRun(id));
       void refresh();
     } catch (err) {
-      onToast(err instanceof Error ? err.message : "Couldn't stop that run.");
+      onToast(err instanceof Error ? err.message : "Couldn't stop that run.", "error");
     }
   };
 
@@ -539,9 +540,15 @@ export function BrowserAgent({
             )
           ) : (
             <>
+              {/* The old copy promised "sends nothing until you ask it for a digest".
+                  That is false during a run: the extension enumerates every tab in
+                  every window and the backend puts each tab's title and URL into the
+                  model prompt on every step — monitor mode included, up to 40 steps.
+                  A signed URL sitting in an unrelated tab goes to the provider. */}
               <p className="ba-note">
-                The extension notes which pages you visit, entirely on your machine, and sends
-                nothing until you ask it for a digest from the side panel.
+                Between runs, the pages you visit are noted only in this browser. While a task is
+                running, the titles and addresses of your open tabs are sent to the model on every
+                step so it knows where it is.
               </p>
 
               <div className="ba-rules">

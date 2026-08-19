@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { ToastFn } from "@/components/console/ConsoleApp";
 import { mrAsk, type MrAskAnswer } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
 import { Prose } from "./Prose";
@@ -18,7 +19,7 @@ interface Entry { question: string; answer: MrAskAnswer | null }
 export function AskView({ seed, onSeedConsumed, onToast }: {
   seed: string | null;
   onSeedConsumed: () => void;
-  onToast: (m: string) => void;
+  onToast: ToastFn;
 }) {
   const [question, setQuestion] = useState("");
   const [thread, setThread] = useState<Entry[]>([]);
@@ -36,7 +37,7 @@ export function AskView({ seed, onSeedConsumed, onToast }: {
       setThread((t) => t.map((e, i) => (i === t.length - 1 ? { ...e, answer: a } : e)));
     } catch (e) {
       setThread((t) => t.slice(0, -1));
-      onToast(e instanceof Error ? e.message : "Ask failed");
+      onToast(e instanceof Error ? e.message : "Ask failed", "error");
     } finally {
       setAsking(false);
     }

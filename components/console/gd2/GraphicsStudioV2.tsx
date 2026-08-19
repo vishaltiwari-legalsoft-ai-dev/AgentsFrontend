@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ToastFn } from "@/components/console/ConsoleApp";
 import dynamic from "next/dynamic";
 import type { DragMarker, TextNodeSpec } from "@/components/console/stage3/KonvaCanvas";
 // Non-social types route to the existing Creative Agent rail — same engine
@@ -154,7 +155,7 @@ export function GraphicsStudioV2({
   onToast,
   onBack,
 }: {
-  onToast: (m: string) => void;
+  onToast: ToastFn;
   onBack?: () => void;
 }) {
   /* ---------------- state ---------------- */
@@ -221,7 +222,7 @@ export function GraphicsStudioV2({
   const [tweakPreview, setTweakPreview] = useState<GdAttempt | null>(null);
 
   const fail = useCallback(
-    (e: unknown) => onToast(e instanceof Error ? e.message : String(e)),
+    (e: unknown) => onToast(e instanceof Error ? e.message : String(e), "error"),
     [onToast],
   );
 
@@ -477,7 +478,7 @@ export function GraphicsStudioV2({
     if (!run) return;
     const list = [...(run.config.subheadings ?? [])];
     if (list.length >= 5) {
-      onToast("Text-box limit reached (5 lines).");
+      onToast("Text-box limit reached (5 lines).", "warn");
       return;
     }
     list.push({ text: "New text" });
@@ -508,7 +509,7 @@ export function GraphicsStudioV2({
     if (!run) return;
     const list = (run.config.subheadings ?? []).filter((_, i) => i !== idx);
     if (!list.length) {
-      onToast("At least one sub-heading line must remain.");
+      onToast("At least one sub-heading line must remain.", "warn");
       return;
     }
     patch({ subheadings: list });
@@ -532,7 +533,7 @@ export function GraphicsStudioV2({
     if (!run) return;
     const els = run.config.elements ?? [];
     if (els.length >= maxElements) {
-      onToast(`Element limit reached (${maxElements}).`);
+      onToast(`Element limit reached (${maxElements}).`, "warn");
       return;
     }
     const el: GdElement = {
@@ -637,7 +638,7 @@ export function GraphicsStudioV2({
     for (const file of files) {
       const verdict = canAttach(attached.length + additions.length, file);
       if (!verdict.ok) {
-        onToast(attachErrorMessage(file.name, verdict.reason));
+        onToast(attachErrorMessage(file.name, verdict.reason), "warn");
         if (verdict.reason === "limit") break;
         continue;
       }
@@ -654,7 +655,7 @@ export function GraphicsStudioV2({
 
   const start = () => {
     if (autoMode && !brief.trim()) {
-      onToast("Auto mode needs a brief — tell the studio what this is about.");
+      onToast("Auto mode needs a brief — tell the studio what this is about.", "warn");
       return;
     }
     return guard("Studio is getting your brand kit ready…", async () => {
@@ -670,7 +671,7 @@ export function GraphicsStudioV2({
         try {
           await gdSubjectUpload(created.id, a.file, "prompt");
         } catch {
-          onToast(`Couldn't attach ${a.file.name} — continuing without it.`);
+          onToast(`Couldn't attach ${a.file.name} — continuing without it.`, "error");
         }
       }
       setRun(created);
@@ -698,7 +699,7 @@ export function GraphicsStudioV2({
           setRun(res.run);
         } catch (e) {
           fail(e);
-          onToast("Auto mode couldn’t plan — continuing in manual mode.");
+          onToast("Auto mode couldn’t plan — continuing in manual mode.", "error");
         }
       }
     });
@@ -848,7 +849,7 @@ export function GraphicsStudioV2({
             setStyleSet(null);
             setStyleSel(null);
           } catch (e) {
-            onToast("Your layout changed since these styles — hit Generate again, then approve.");
+            onToast("Your layout changed since these styles — hit Generate again, then approve.", "error");
             throw e;
           }
           return;
@@ -890,7 +891,7 @@ export function GraphicsStudioV2({
       setRun(res.run);
       setTweakPreview(res.attempt);
       if (res.attempt.qa === "skipped")
-        onToast("Tweak ready — QA check was unavailable, review it yourself.");
+        onToast("Tweak ready — QA check was unavailable, review it yourself.", "warn");
     });
   };
 
@@ -929,7 +930,7 @@ export function GraphicsStudioV2({
       })) as unknown as GdGradientSuggestion;
       if (res.gradient.cid) setGradExclude([...exclude, res.gradient.cid]);
       // Never pass a curated preset off as an AI result — say what happened.
-      if (!res.ai) onToast(res.fallback_reason ?? "AI unavailable — showing a curated brand preset instead.");
+      if (!res.ai) onToast(res.fallback_reason ?? "AI unavailable — showing a curated brand preset instead.", "warn");
       const r = await gdUpdateConfig(run.id, { custom_gradient: res.gradient });
       setRun(r);
       setSel1("AI");
@@ -1032,11 +1033,11 @@ export function GraphicsStudioV2({
     e.target.value = "";
     if (!file) return;
     if (!run) {
-      onToast("Start a design first, then upload your photo.");
+      onToast("Start a design first, then upload your photo.", "warn");
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      onToast("That image is over 10 MB — please use a smaller file.");
+      onToast("That image is over 10 MB — please use a smaller file.", "warn");
       return;
     }
     const role = cur === 1 ? "background" : "subject";

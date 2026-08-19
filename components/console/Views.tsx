@@ -224,39 +224,13 @@ function ThemePicker() {
   );
 }
 
-function SettingToggleRow({
-  on,
-  onToggle,
-  label,
-  desc,
-}: {
-  on: boolean;
-  onToggle: () => void;
-  label: string;
-  desc: string;
-}) {
-  return (
-    <button type="button" className="csrow csrow--btn" onClick={onToggle} aria-pressed={on}>
-      <span className="csrow__main">
-        <span className="csrow__label">{label}</span>
-        <span className="csrow__desc">{desc}</span>
-      </span>
-      <span className="csswitch" data-on={on ? "1" : "0"} aria-hidden>
-        <span />
-      </span>
-    </button>
-  );
-}
-
 export function SettingsView({ userName, userEmail }: { userName: string; userEmail: string }) {
-  const [prefs, setPrefs] = useState({
-    runAlerts: true,
-    weeklyDigest: false,
-    productNews: true,
-    reducedMotion: false,
-  });
-  const toggle = (k: keyof typeof prefs) => setPrefs((p) => ({ ...p, [k]: !p[k] }));
-
+  // There used to be four toggles here (run alerts, weekly digest, product news,
+  // reduce motion) backed by a bare useState — no API, no localStorage, so a
+  // reload undid every one of them and no code ever sent a notification. Reduce
+  // motion was the worst: the console already honours `prefers-reduced-motion`
+  // in its stylesheets, so the switch implied an app-level override that does
+  // not exist and is not needed. Nothing renders here until it is real.
   return (
     <div className="cview" style={{ maxWidth: 860 }}>
       <section className="cset">
@@ -283,23 +257,7 @@ export function SettingsView({ userName, userEmail }: { userName: string; userEm
                 <span className="csrow__desc">{userEmail}</span>
               </span>
             </span>
-            <Button size="sm" variant="secondary">Manage</Button>
           </div>
-        </div>
-      </section>
-
-      <section className="cset">
-        <div className="cset__head">
-          <GlyphTile glyph="bolt" tint="seo" size={38} glyphSize={20} />
-          <div className="cset__id">
-            <div className="cset__title">Notifications</div>
-            <div className="cset__sub">How we keep you posted</div>
-          </div>
-        </div>
-        <div className="cset__rows">
-          <SettingToggleRow on={prefs.runAlerts} onToggle={() => toggle("runAlerts")} label="Run completion alerts" desc="Notify me when an agent finishes a run." />
-          <SettingToggleRow on={prefs.weeklyDigest} onToggle={() => toggle("weeklyDigest")} label="Weekly digest" desc="A Monday summary of your workspace activity." />
-          <SettingToggleRow on={prefs.productNews} onToggle={() => toggle("productNews")} label="Product news" desc="Occasional updates about new agents and features." />
         </div>
       </section>
 
@@ -319,7 +277,11 @@ export function SettingsView({ userName, userEmail }: { userName: string; userEm
             </span>
             <ThemePicker />
           </div>
-          <SettingToggleRow on={prefs.reducedMotion} onToggle={() => toggle("reducedMotion")} label="Reduce motion" desc="Minimize animations and transitions across the app." />
+          <div className="csrow">
+            <span className="csrow__main">
+              <span className="csrow__desc">Animations already follow your system&rsquo;s reduce-motion setting.</span>
+            </span>
+          </div>
         </div>
       </section>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { ToastFn } from "@/components/console/ConsoleApp";
 import {
   MR_REPORT_KINDS, mrBuildReport, mrGetRun, mrReportPdfUrl, mrReportPeriods,
   type MrReport, type MrReportKind, type MrReportPeriods, type MrRunSummary,
@@ -35,7 +36,7 @@ const PICKER_KINDS: Partial<Record<MrReportKind, "months" | "quarters">> = {
 export function ReportsView({ runs, onRunsChanged, onToast }: {
   runs: MrRunSummary[];
   onRunsChanged: () => Promise<void>;
-  onToast: (m: string) => void;
+  onToast: ToastFn;
 }) {
   const [report, setReport] = useState<MrReport | null>(null);
   const [busy, setBusy] = useState(false);
@@ -76,7 +77,7 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "PDF download failed");
+      onToast(e instanceof Error ? e.message : "PDF download failed", "error");
     } finally {
       setDownloading(false);
     }
@@ -95,7 +96,7 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
       } catch (e) {
         // Not cached: the next open retries, and the menu falls back to the
         // default entry meanwhile.
-        onToast(e instanceof Error ? e.message : "Couldn't load available months");
+        onToast(e instanceof Error ? e.message : "Couldn't load available months", "error");
       } finally {
         setPeriodsLoading(false);
       }
@@ -109,7 +110,7 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
       setReport(await mrBuildReport(kind, period));
       await onRunsChanged();
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Report failed");
+      onToast(e instanceof Error ? e.message : "Report failed", "error");
     } finally {
       setBusy(false);
     }
@@ -119,7 +120,7 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
     try {
       setReport(await mrGetRun(id));
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Failed to open report");
+      onToast(e instanceof Error ? e.message : "Failed to open report", "error");
     }
   }
 

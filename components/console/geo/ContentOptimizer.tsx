@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ToastFn } from "@/components/console/ConsoleApp";
 import {
   geoOptimizerAnalyses, geoOptimizerAnalysis, geoOptimizerAnalyze, geoOptimizerRescore,
   type OptimizerAnalysis, type OptimizerIndexRow, type OptimizerReport,
@@ -29,7 +30,7 @@ const FEATURE_LABELS: Record<string, string> = {
 const fmt = (v: number | null | undefined) =>
   v === null || v === undefined ? "—" : Number.isInteger(v) ? String(v) : v.toFixed(1);
 
-export function ContentOptimizer({ ownDomain, onToast }: { ownDomain?: string; onToast: (m: string) => void }) {
+export function ContentOptimizer({ ownDomain, onToast }: { ownDomain?: string; onToast: ToastFn }) {
   const [keyword, setKeyword] = useState("");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -53,7 +54,7 @@ export function ContentOptimizer({ ownDomain, onToast }: { ownDomain?: string; o
       const r = await geoOptimizerAnalyses();
       setHistory(r.analyses);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Analysis failed");
+      onToast(e instanceof Error ? e.message : "Analysis failed", "error");
     } finally {
       setBusy(false);
     }
@@ -67,7 +68,7 @@ export function ContentOptimizer({ ownDomain, onToast }: { ownDomain?: string; o
       setDoc({ ...doc, last_report: report });
       onToast("Re-scored against the same snapshot — same corpus, honest comparison.");
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Re-score failed");
+      onToast(e instanceof Error ? e.message : "Re-score failed", "error");
     } finally {
       setBusy(false);
     }
@@ -80,7 +81,7 @@ export function ContentOptimizer({ ownDomain, onToast }: { ownDomain?: string; o
       setDoc(res);
       setKeyword(res.meta.keyword);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not load analysis");
+      onToast(e instanceof Error ? e.message : "Could not load analysis", "error");
     } finally {
       setBusy(false);
     }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ToastFn } from "@/components/console/ConsoleApp";
 import {
   creativeAcknowledge,
   creativeApprove,
@@ -57,7 +58,7 @@ export function CreativeAgent({
   brandId: string | null;
   brandName?: string;
   creativeType: string;
-  onToast: (m: string) => void;
+  onToast: ToastFn;
   onBack: () => void;
 }) {
   const [meta, setMeta] = useState<{
@@ -96,7 +97,7 @@ export function CreativeAgent({
       .then((d) =>
         setMeta({ types: d.types, steps: d.steps, warning: d.autonomous_warning, engines: d.engines }),
       )
-      .catch((e) => onToast((e as Error).message));
+      .catch((e) => onToast((e as Error).message, "error"));
   }, [onToast]);
 
   // Drive a long generation (manual generate OR autonomous) while polling the run
@@ -125,7 +126,7 @@ export function CreativeAgent({
           onToast(doneToast);
         }
       } catch (e) {
-        if (mounted.current) onToast((e as Error).message);
+        if (mounted.current) onToast((e as Error).message, "error");
       } finally {
         active = false;
         await polling;
@@ -162,7 +163,7 @@ export function CreativeAgent({
         if (toast) onToast(toast);
         return r;
       } catch (e) {
-        onToast((e as Error).message);
+        onToast((e as Error).message, "error");
         return null;
       } finally {
         setBusy(false);
@@ -242,7 +243,7 @@ export function CreativeAgent({
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
     } catch (e) {
-      onToast((e as Error).message);
+      onToast((e as Error).message, "error");
     }
   };
 

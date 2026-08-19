@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ToastFn } from "@/components/console/ConsoleApp";
 import {
   geoStrategyActionStatus, geoStrategyGenerate, geoStrategyGet,
   type GeoBrandRow, type GeoReport, type GeoStrategyAction, type GeoStrategyDoc,
@@ -18,7 +19,7 @@ type Props = {
   brand: GeoBrandRow;
   report: GeoReport | null;
   isCreator: boolean;
-  onToast: (m: string) => void;
+  onToast: ToastFn;
 };
 
 const KPI_LABELS: Record<string, string> = {
@@ -86,7 +87,7 @@ export function GeoActionPlan({ brand, report, isCreator, onToast }: Props) {
       setDoc(await geoStrategyGenerate(brand.id));
       onToast("Plan drafted from this week's measured numbers.");
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not generate the plan");
+      onToast(e instanceof Error ? e.message : "Could not generate the plan", "error");
     } finally {
       setBusy(false);
     }
@@ -96,7 +97,7 @@ export function GeoActionPlan({ brand, report, isCreator, onToast }: Props) {
     try {
       setDoc(await geoStrategyActionStatus(brand.id, action.id, STATUS_CYCLE[action.status]));
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not update the action");
+      onToast(e instanceof Error ? e.message : "Could not update the action", "error");
     }
   }
 
@@ -104,7 +105,7 @@ export function GeoActionPlan({ brand, report, isCreator, onToast }: Props) {
     try {
       setDoc(await geoStrategyActionStatus(brand.id, action.id, "skipped"));
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not update the action");
+      onToast(e instanceof Error ? e.message : "Could not update the action", "error");
     }
   }
 
