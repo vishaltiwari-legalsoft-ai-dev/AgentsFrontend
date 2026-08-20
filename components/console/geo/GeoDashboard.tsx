@@ -230,7 +230,7 @@ export function GeoDashboard({ brand, onToast }: Props) {
  *  actually used, so the bars and the score agree. */
 function ScoreRecipe({ point, labels }: { point: GeoHistoryPoint | null; labels: Record<string, string> }) {
   if (!point || point.score === null) return null;
-  const parts = Object.entries(point.components);
+  const parts = Object.entries(point.components ?? {});
   return (
     <div className="mr-section">
       <h3 className="mr-section__title">What the score is made of</h3>
@@ -238,7 +238,7 @@ function ScoreRecipe({ point, labels }: { point: GeoHistoryPoint | null; labels:
         <div key={key} className="geo-bar">
           <span className="geo-bar__label">
             {labels[key] ?? key}
-            <em className="geo-recipe__weight">{Math.round((point.weights[key] ?? 0) * 100)}% of score</em>
+            <em className="geo-recipe__weight">{Math.round((point.weights?.[key] ?? 0) * 100)}% of score</em>
           </span>
           <span className="geo-bar__track">
             <span className="geo-bar__fill geo-bar__fill--self"
@@ -247,9 +247,9 @@ function ScoreRecipe({ point, labels }: { point: GeoHistoryPoint | null; labels:
           <span className="geo-bar__num">{Math.round(value * 100)}%</span>
         </div>
       ))}
-      {point.missing.length > 0 && (
+      {(point.missing ?? []).length > 0 && (
         <p className="geo-note">
-          Not measurable in this sweep: {point.missing.map((m) => labels[m] ?? m).join(", ")}.
+          Not measurable in this sweep: {(point.missing ?? []).map((m) => labels[m] ?? m).join(", ")}.
           Those parts were left out and the remaining weights rescaled — a part we could not
           measure is not scored as a zero.
         </p>

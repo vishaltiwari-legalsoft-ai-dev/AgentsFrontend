@@ -7,8 +7,8 @@
 import { describe, expect, it } from "vitest";
 import type { GeoComparisonRow, GeoQuestionRow, GeoUntrackedDomain } from "../../../lib/api";
 import {
-  citationCell, headline, losingQuestions, positionCell, scoreboard, slugKey,
-  suggestName, trackableDomains,
+  citationCell, headline, losingQuestions, matchNames, positionCell, scoreboard,
+  slugKey, suggestName, trackableDomains,
 } from "./compare";
 
 const row = (over: Partial<GeoComparisonRow> = {}): GeoComparisonRow => ({
@@ -64,6 +64,39 @@ describe("citationCell", () => {
 
     expect(cell.text).toBe("0%");
     expect(cell.unknown).toBe(false);
+  });
+});
+
+describe("deploy skew", () => {
+  /** Vercel ships the frontend in about a minute; Cloud Run takes several. For
+   *  that window this build talks to the PREVIOUS API. `row.match_names.length`
+   *  on a payload without the field threw, React unmounted, and the whole
+   *  console showed "Application error: a client-side exception has occurred" —
+   *  in production, for every user, until the backend caught up. */
+  it("survives a payload from an API that does not send the field yet", () => {
+    const old = { ...row() } as unknown as Record<string, unknown>;
+    delete old.match_names;
+
+    expect(matchNames(old as unknown as GeoComparisonRow)).toEqual([]);
+  });
+
+  it("returns the names when they are there", () => {
+    expect(matchNames(row())).toEqual(["Clio", "clio.com"]);
+  });
+
+  it("does not blow up on rows or questions the old API omitted", () => {
+    expect(losingQuestions(undefined)).toEqual([]);
+    expect(trackableDomains(undefined)).toEqual([]);
+    expect(headline([], "Legal Soft", 1)).toContain("Nothing measured");
+  });
+
+  it("treats a missing position as unknown, not as zero", () => {
+    const old = { ...row() } as unknown as Record<string, unknown>;
+    delete old.avg_position;
+
+    const cell = positionCell(old as unknown as GeoComparisonRow);
+    expect(cell.unknown).toBe(true);
+    expect(cell.text).toBe("—");
   });
 });
 

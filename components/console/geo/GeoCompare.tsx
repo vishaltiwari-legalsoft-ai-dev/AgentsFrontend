@@ -8,7 +8,7 @@ import {
 } from "@/lib/api";
 import { Icon } from "@/lib/kit-ui";
 import {
-  citationCell, headline, losingQuestions, pct, positionCell, scoreboard,
+  citationCell, headline, losingQuestions, matchNames, pct, positionCell, scoreboard,
   slugKey, suggestName, trackableDomains,
 } from "./compare";
 
@@ -136,6 +136,7 @@ export function GeoCompare({ brand, competitors, isCreator, onTrack, onToast, go
   if (!doc) return null;
 
   const losing = losingQuestions(doc.questions);
+  const rivals = (doc.rows ?? []).filter((r) => !r.is_self);
   const suggestions = trackableDomains(doc.untracked_domains);
   const hasData = doc.n_measured > 0;
 
@@ -156,7 +157,7 @@ export function GeoCompare({ brand, competitors, isCreator, onTrack, onToast, go
       ) : (
         <>
           <p className="geo-compare__headline">
-            {headline(doc.rows, brand.name, doc.tracked_competitors)}
+            {headline(doc.rows ?? [], brand.name, doc.tracked_competitors)}
           </p>
 
           {doc.tracked_competitors > 0 && (
@@ -172,7 +173,7 @@ export function GeoCompare({ brand, competitors, isCreator, onTrack, onToast, go
                 </tr>
               </thead>
               <tbody>
-                {doc.rows.map((row) => <Row key={row.key} row={row} />)}
+                {(doc.rows ?? []).map((row) => <Row key={row.key} row={row} />)}
               </tbody>
             </table>
           )}
@@ -186,13 +187,13 @@ export function GeoCompare({ brand, competitors, isCreator, onTrack, onToast, go
                 each name and domain. If a rival still reads 0%, the spelling the engines
                 use is probably missing here; add it and we re-read immediately.
               </p>
-              {doc.rows.filter((r) => !r.is_self).map((r) => (
+              {rivals.map((r) => (
                 <div key={r.key} className="geo-aliasrow">
                   <span className="geo-aliasrow__name">{r.name}</span>
                   <span className="geo-aliasrow__chips">
-                    {r.match_names.length
-                      ? r.match_names.map((m) => <span key={m} className="seo-chip">{m}</span>)
-                      : <span className="geo-compare__unknown">no names on record</span>}
+                    {matchNames(r).length
+                      ? matchNames(r).map((m) => <span key={m} className="seo-chip">{m}</span>)
+                      : <span className="geo-compare__unknown">not reported yet</span>}
                   </span>
                   {isCreator && (extraFor === r.key ? (
                     <span className="geo-addcomp">

@@ -37,10 +37,23 @@ export function citationCell(row: GeoComparisonRow): Cell {
   };
 }
 
+/** The strings a rival's rate was matched on.
+ *
+ *  Tolerates a payload without them. Vercel ships a frontend in about a minute
+ *  and Cloud Run takes several, so after every deploy there is a window where
+ *  this build is talking to the PREVIOUS API. A field that has not arrived yet
+ *  is a deploy in progress — it must never take the panel down, which is
+ *  exactly what `row.match_names.length` did.
+ */
+export function matchNames(row: GeoComparisonRow): string[] {
+  return row.match_names ?? [];
+}
+
 /** "1st or 2nd name" — where a brand lands inside the answer. Being named
  *  ninth is not the same win as being named first. */
 export function positionCell(row: GeoComparisonRow): Cell {
-  if (row.avg_position === null) {
+  // `== null` on purpose: undefined is "not sent", and .toFixed() on it throws
+  if (row.avg_position == null) {
     return { text: "—", unknown: true, title: `${row.name} is never named in this window.` };
   }
   return {
@@ -97,15 +110,15 @@ export function headline(
 
 /** Questions where at least one rival beats us — the work list, worst first.
  *  Already sorted that way by the backend; this just names the cut. */
-export function losingQuestions(questions: GeoQuestionRow[]): GeoQuestionRow[] {
-  return questions.filter((q) => q.rivals_ahead.length > 0);
+export function losingQuestions(questions: GeoQuestionRow[] | undefined): GeoQuestionRow[] {
+  return (questions ?? []).filter((q) => (q.rivals_ahead ?? []).length > 0);
 }
 
 /** Domains worth proposing as competitors: cited on our questions, and mostly
  *  in answers we are absent from. Ranked by the backend; this only drops the
  *  ones that never coincide with our absence. */
-export function trackableDomains(domains: GeoUntrackedDomain[]): GeoUntrackedDomain[] {
-  return domains.filter((d) => d.answers_you_absent > 0);
+export function trackableDomains(domains: GeoUntrackedDomain[] | undefined): GeoUntrackedDomain[] {
+  return (domains ?? []).filter((d) => d.answers_you_absent > 0);
 }
 
 /** A domain to a competitor name: "clio.com" → "Clio". Good enough for a

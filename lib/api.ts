@@ -2410,8 +2410,10 @@ export interface GeoComparisonRow {
   avg_position: number | null;
   /** the exact strings this rate was matched on, derived from the name and
    *  domain. A 0% beside the names we searched for is debuggable; a bare 0%
-   *  sends someone hunting for a bug that is really a spelling. */
-  match_names: string[];
+   *  sends someone hunting for a bug that is really a spelling.
+   *  OPTIONAL on purpose: a browser can be running this build against the
+   *  previous API for minutes after a deploy — see `matchNames`. */
+  match_names?: string[];
   per_engine: Record<string, number | null>;
   /** Question-level scoreboard against us; null on our own row.
    *  Compared by RATE, not by "appeared at least once" — presence saturates
