@@ -21,6 +21,7 @@ const row = (over: Partial<GeoComparisonRow> = {}): GeoComparisonRow => ({
   sov_share: 0.3,
   sov_credit: 4,
   avg_position: 2.4,
+  match_names: ["Clio", "clio.com"],
   per_engine: { perplexity: 0.4 },
   vs_self: { n_prompts: 10, ahead: 3, behind: 4, tied: 2, both_absent: 1, behind_prompt_ids: [] },
   ...over,

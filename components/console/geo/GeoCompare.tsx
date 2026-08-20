@@ -39,6 +39,8 @@ export function GeoCompare({ brand, competitors, isCreator, onTrack, onToast, go
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
   const [saving, setSaving] = useState(false);
+  const [extraFor, setExtraFor] = useState<string>("");
+  const [extraName, setExtraName] = useState("");
 
   const load = useCallback(() => {
     setLoading(true);
@@ -78,6 +80,35 @@ export function GeoCompare({ brand, competitors, isCreator, onTrack, onToast, go
       load();
     } catch (e) {
       onToast(e instanceof Error ? e.message : "Could not save the competitor", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Add another spelling for a rival, then re-read — the escape hatch for a
+   *  brand the engines write in a way the name and domain do not cover. */
+  async function addAlias(key: string) {
+    const alias = extraName.trim();
+    if (!alias || saving) return;
+    const next = competitors.map((c) =>
+      c.key === key
+        ? { ...c, aliases: [...new Set([...(c.aliases ?? []), alias])] }
+        : c,
+    );
+    setSaving(true);
+    try {
+      await onTrack(next);
+      const result = await geoRescan(brand.id);
+      setExtraName("");
+      setExtraFor("");
+      onToast(
+        result.answers_updated
+          ? `"${alias}" added — found in ${result.answers_updated} stored answers.`
+          : `"${alias}" added, but it appears in none of the stored answers.`,
+      );
+      load();
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "Could not add the name", "error");
     } finally {
       setSaving(false);
     }
@@ -144,6 +175,42 @@ export function GeoCompare({ brand, competitors, isCreator, onTrack, onToast, go
                 {doc.rows.map((row) => <Row key={row.key} row={row} />)}
               </tbody>
             </table>
+          )}
+
+          {doc.tracked_competitors > 0 && (
+            <div className="mr-section">
+              <h3 className="mr-section__title">Names we search the answers for</h3>
+              <p className="geo-note">
+                Mentions are matched on the exact spelling. Engines write
+                &ldquo;Smith.ai&rdquo;, not &ldquo;smith ai&rdquo; — so these are derived from
+                each name and domain. If a rival still reads 0%, the spelling the engines
+                use is probably missing here; add it and we re-read immediately.
+              </p>
+              {doc.rows.filter((r) => !r.is_self).map((r) => (
+                <div key={r.key} className="geo-aliasrow">
+                  <span className="geo-aliasrow__name">{r.name}</span>
+                  <span className="geo-aliasrow__chips">
+                    {r.match_names.length
+                      ? r.match_names.map((m) => <span key={m} className="seo-chip">{m}</span>)
+                      : <span className="geo-compare__unknown">no names on record</span>}
+                  </span>
+                  {isCreator && (extraFor === r.key ? (
+                    <span className="geo-addcomp">
+                      <input autoFocus value={extraName} placeholder="another spelling…"
+                             onChange={(e) => setExtraName(e.target.value)}
+                             onKeyDown={(e) => e.key === "Enter" && void addAlias(r.key)} />
+                      <button className="seo-btn" disabled={saving || !extraName.trim()}
+                              onClick={() => void addAlias(r.key)}>Add</button>
+                    </span>
+                  ) : (
+                    <button className="geo-linkbtn"
+                            onClick={() => { setExtraFor(r.key); setExtraName(""); }}>
+                      add a name
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
           )}
 
           {doc.tracked_competitors > 0 && (

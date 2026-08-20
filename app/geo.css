@@ -370,3 +370,8 @@
 /* Loading headline — same weight as the real number so the panel does not
    jump, but visibly not a measurement. */
 .geo-hero__big--muted{ color:var(--text-tertiary); font-size:30px; }
+.geo-aliasrow{ display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding:7px 0; border-bottom:1px solid var(--border-subtle); }
+.geo-aliasrow__name{ font-size:13px; font-weight:600; color:var(--text-primary);
+  min-width:120px; }
+.geo-aliasrow__chips{ display:flex; flex-wrap:wrap; gap:5px; flex:1; min-width:0; }
