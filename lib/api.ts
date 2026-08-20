@@ -441,12 +441,19 @@ export interface ModelOption {
 }
 
 /** A model field that can be overridden per agent (matches backend slugs). */
+/** Must stay in step with AGENT_OVERRIDE_FIELDS in the backend's
+ *  app/services/runtime_config.py. A field the backend serves but this union
+ *  omits is dropped silently by AgentConfigView's FIELD_ORDER filter, so the
+ *  control simply never renders — which is how browser_planner_model went
+ *  live without ever appearing in the panel. */
 export type AgentModelField =
   | "openrouter_model"
   | "openrouter_fast_model"
   | "openrouter_image_model"
   | "openrouter_vision_model"
-  | "gd_planner_model";
+  | "gd_planner_model"
+  | "gd_polish_image_model"
+  | "browser_planner_model";
 
 export interface AgentConfigItem {
   id: string;

@@ -20,17 +20,24 @@ import { useAuth } from "@/lib/auth";
 /** Friendly labels + display order for the per-agent model fields. */
 const FIELD_LABEL: Record<AgentModelField, string> = {
   openrouter_image_model: "Image model",
+  gd_polish_image_model: "Polish model",
   openrouter_model: "Reasoning model",
   openrouter_fast_model: "Fast / parsing model",
   openrouter_vision_model: "Vision model",
   gd_planner_model: "Planner model",
+  browser_planner_model: "Planner model",
 };
+/** A field missing from this list is filtered out below and never renders,
+ *  however happily the backend serves it. Add new AgentModelField values here
+ *  as well as to the union. */
 const FIELD_ORDER: AgentModelField[] = [
   "openrouter_image_model",
+  "gd_polish_image_model",
   "openrouter_model",
   "openrouter_fast_model",
   "openrouter_vision_model",
   "gd_planner_model",
+  "browser_planner_model",
 ];
 /** Per-agent label overrides where the generic field name would mislead. */
 const AGENT_FIELD_LABEL: Record<string, Partial<Record<AgentModelField, string>>> = {};
