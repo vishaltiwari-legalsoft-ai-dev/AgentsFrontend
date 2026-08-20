@@ -88,6 +88,12 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
   const { user } = useAuth();
   const [globalCfg, setGlobalCfg] = useState<GeoGlobalConfig | null>(null);
   const [brands, setBrands] = useState<GeoBrandRow[]>([]);
+  /** Both kept apart from `brands`, because an empty list is only honest once
+   *  a read has finished and succeeded. The registry read takes seconds, and
+   *  until it lands `brands` is [] — which used to render "no brands yet" and
+   *  send you to the SEO agent to add a brand that is already there. */
+  const [brandsError, setBrandsError] = useState<string | null>(null);
+  const [brandsLoaded, setBrandsLoaded] = useState(false);
   const [brand, setBrand] = useState<GeoBrandRow | null>(null);
   const [prompts, setPrompts] = useState<GeoPrompt[]>([]);
   const [report, setReport] = useState<GeoReport | null>(null);
@@ -125,9 +131,15 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
       if (!attempt.current()) return;
       setGlobalCfg(cfg);
       setBrands(list.brands);
+      setBrandsError(null);
+      setBrandsLoaded(true);
     } catch (e) {
       const message = attempt.failure(e, "Couldn't load the brands");
-      if (message) onToast(message, "error");
+      if (message) {
+        setBrandsError(message);
+        setBrandsLoaded(true);
+        onToast(message, "error");
+      }
     }
   }, [onToast, session]);
 
@@ -460,7 +472,21 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
                   </div>
                 </div>
               ))}
-              {brands.length === 0 && (
+              {brands.length === 0 && brandsError && (
+                <div className="geo-hero">
+                  <div className="geo-hero__big geo-hero__big--muted">Couldn&apos;t load the brand registry</div>
+                  <p className="geo-hero__empty">{brandsError}</p>
+                  <p className="geo-note">
+                    This is a failed read, not an empty registry — any brands you track are still
+                    there, so adding one in the SEO agent will not fix it.
+                  </p>
+                  <button className="seo-btn" onClick={() => void refresh()}>Try again</button>
+                </div>
+              )}
+              {brands.length === 0 && !brandsError && !brandsLoaded && (
+                <div className="seo-empty">Reading the brand registry…</div>
+              )}
+              {brands.length === 0 && !brandsError && brandsLoaded && (
                 <div className="seo-empty">No brands yet — add one in the SEO agent first; GEO shares its brand registry.</div>
               )}
             </div>
