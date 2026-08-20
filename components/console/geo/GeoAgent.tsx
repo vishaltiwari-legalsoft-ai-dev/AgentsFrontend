@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   geoAddCustomPrompt, geoAnswers, geoBrandConfig, geoBrands, geoConfig, geoGeneratePrompts, geoPollStep,
-  geoPollStatus, geoPrompts, geoReport, geoSaveBrandConfig, geoSavePrompts,
-  type GeoAnswer, type GeoBrandConfig, type GeoBrandRow, type GeoGlobalConfig,
+  geoPollStatus, geoPrompts, geoReport, geoRescan, geoSaveBrandConfig, geoSavePrompts,
+  type GeoAnswer, type GeoBrandConfig, type GeoBrandRow, type GeoCompetitor, type GeoGlobalConfig,
   type GeoEngineStatus, type GeoPollProgress, type GeoPollStatus, type GeoPrompt, type GeoReport,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -12,8 +12,11 @@ import { Icon } from "@/lib/kit-ui";
 import { useReportWork } from "@/lib/work";
 import type { ToastFn } from "@/components/console/ConsoleApp";
 import { AnswerText } from "./AnswerText";
+import { slugKey } from "./compare";
 import { ContentOptimizer } from "./ContentOptimizer";
 import { GeoActionPlan } from "./GeoActionPlan";
+import { GeoCompare } from "./GeoCompare";
+import { GeoDashboard } from "./GeoDashboard";
 import { GeoInsights } from "./GeoInsights";
 import { initialPollState, pollDecision, pollStoppedByUser, type PollLoopState } from "./pollLoop";
 import { modeSuffix, statusOf } from "./provenance";
@@ -23,7 +26,26 @@ import { partialSweepLine, scheduleLine } from "./schedule";
  *  Honesty rules baked in: every rate shows its n and variance; a missing
  *  engine key reads as "not connected", never as a zero. */
 
-type GeoTab = "insights" | "plan" | "overview" | "prompts" | "answers" | "sources" | "optimizer";
+type GeoTab =
+  | "insights" | "plan" | "dashboard" | "competitors"
+  | "overview" | "prompts" | "answers" | "sources" | "optimizer";
+
+const TAB_LABELS: Record<GeoTab, string> = {
+  insights: "Insights",
+  plan: "Action Plan",
+  dashboard: "Dashboard",
+  competitors: "Competitors",
+  overview: "Overview",
+  prompts: "Prompts",
+  answers: "Answers",
+  sources: "Sources",
+  optimizer: "Content Optimizer",
+};
+
+const TAB_ORDER: GeoTab[] = [
+  "insights", "plan", "dashboard", "competitors",
+  "overview", "prompts", "answers", "sources", "optimizer",
+];
 
 const ENGINE_LABELS: Record<string, string> = {
   perplexity: "Perplexity",
@@ -45,10 +67,6 @@ const pct = (x: number | null | undefined) =>
 
 const band = (stdev: number | null | undefined) =>
   stdev === null || stdev === undefined || stdev === 0 ? "" : ` ±${Math.round(stdev * 100)}`;
-
-function slug(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) || "comp";
-}
 
 /** Sleep that wakes early when the poll is asked to stop, so a user hitting
  *  Stop never waits out a backoff. */
@@ -255,16 +273,31 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
     const name = newCompetitor.trim();
     const next = [
       ...(brandCfg.competitors ?? []),
-      { key: slug(name), name, aliases: [name] },
+      { key: slugKey(name), name, aliases: [name] },
     ];
     try {
       const cfg = await geoSaveBrandConfig(brand.id, { competitors: next });
       setBrandCfg(cfg);
       setNewCompetitor("");
-      onToast(`${name} tracked — future polls measure them too.`);
+      // Same rule as the Competitors tab: mentions are read when an answer is
+      // stored, so without the re-read this rival sits at 0% for two days.
+      const result = await geoRescan(brand.id);
+      await reloadReport(brand.id);
+      onToast(
+        result.answers_updated
+          ? `${name} tracked — found in ${result.answers_updated} stored answers.`
+          : `${name} tracked. Not named in any stored answer yet; future polls measure them.`,
+      );
     } catch (e) {
       onToast(e instanceof Error ? e.message : "Could not save competitor", "error");
     }
+  }
+
+  /** Shared by the Overview chips and the Competitors tab, so one competitor
+   *  list cannot drift into two. Throws on failure — the caller shows it. */
+  async function saveCompetitors(next: GeoCompetitor[]) {
+    if (!brand) return;
+    setBrandCfg(await geoSaveBrandConfig(brand.id, { competitors: next }));
   }
 
   /** Saving the schedule re-reads the status, so the line under the header
@@ -472,10 +505,10 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
             </section>
 
             <nav className="geo-tabs">
-              {(["insights", "plan", "overview", "prompts", "answers", "sources", "optimizer"] as GeoTab[]).map((t) => (
+              {TAB_ORDER.map((t) => (
                 <button key={t} className={`geo-tab${tab === t ? " geo-tab--on" : ""}`}
                         onClick={() => { setTab(t); if (t === "answers" && !answers.length) void loadAnswers(""); }}>
-                  {t === "insights" ? "Insights" : t === "plan" ? "Action Plan" : t === "overview" ? "Overview" : t === "prompts" ? `Prompts (${prompts.length})` : t === "answers" ? "Answers" : t === "sources" ? "Sources" : "Content Optimizer"}
+                  {t === "prompts" ? `Prompts (${prompts.length})` : TAB_LABELS[t]}
                 </button>
               ))}
             </nav>
@@ -560,6 +593,13 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
                           </span>
                         )}
                       </div>
+                      <p className="geo-note">
+                        These are mention rates only. The{" "}
+                        <button className="geo-linkbtn" onClick={() => setTab("competitors")}>
+                          Competitors tab
+                        </button>{" "}
+                        scores them question by question, with citations and who is ahead where.
+                      </p>
                     </div>
                   </>
                 )}
@@ -728,6 +768,19 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
 
             {tab === "plan" && (
               <GeoActionPlan brand={brand} report={report} isCreator={!!user?.is_creator} onToast={onToast} />
+            )}
+
+            {tab === "dashboard" && <GeoDashboard brand={brand} onToast={onToast} />}
+
+            {tab === "competitors" && (
+              <GeoCompare
+                brand={brand}
+                competitors={brandCfg?.competitors ?? []}
+                isCreator={isCreator}
+                onTrack={saveCompetitors}
+                onToast={onToast}
+                goPrompts={() => setTab("prompts")}
+              />
             )}
 
             {tab === "optimizer" && (

@@ -2205,6 +2205,10 @@ export interface GeoCompetitor {
   key: string;
   name: string;
   aliases: string[];
+  /** what their citations are counted against. Optional: without it the
+   *  comparison falls back to an alias that looks like a hostname, and if
+   *  there is none their citation rate reads "no domain", not 0%. */
+  domain?: string;
 }
 
 export interface GeoBrandConfig {
@@ -2385,6 +2389,145 @@ export const geoAnswers = (brandId: string, opts: { prompt_id?: string; engine?:
     `/api/geo/brands/${brandId}/answers${qs ? `?${qs}` : ""}`,
   );
 };
+
+/* ------------- GEO competitor comparison (a10) --------------------------- */
+
+/** One tracked entity — us or a rival — scored on exactly the answers the
+ *  brand was scored on, so the two can be read side by side. */
+export interface GeoComparisonRow {
+  key: string;
+  name: string;
+  is_self: boolean;
+  /** the domain their citations are counted against; "" = none on record */
+  domain: string;
+  mention: GeoMentionStats;
+  /** null = no domain on record, so the citation rate is UNKNOWN. Never draw
+   *  it as a zero — that reads as "never cited", which we did not measure. */
+  citation: { rate: number | null; n_answers_with_citations: number; cited_answers: number } | null;
+  sov_share: number | null;
+  sov_credit: number | null;
+  /** mean 1-based order they are named in; lower is better, null = never named */
+  avg_position: number | null;
+  per_engine: Record<string, number | null>;
+  /** Question-level scoreboard against us; null on our own row.
+   *  Compared by RATE, not by "appeared at least once" — presence saturates
+   *  over a week and would score every question a tie. */
+  vs_self: {
+    n_prompts: number;
+    ahead: number;        // questions the engines name us on more often
+    behind: number;       // questions they own
+    tied: number;         // same rate, both present
+    both_absent: number;  // open ground: neither of us is ever named
+    behind_prompt_ids: string[];
+  } | null;
+}
+
+export interface GeoQuestionRow {
+  prompt_id: string;
+  text: string;
+  intent: string;
+  n: number;
+  rates: Record<string, number>;
+  self_rate: number;
+  rivals_ahead: { key: string; name: string; rate: number }[];
+  leader: string;
+  engines: string[];
+}
+
+/** A domain cited on our questions that belongs to nobody we track yet — the
+ *  discovery half: who else is in the answer. */
+export interface GeoUntrackedDomain {
+  domain: string;
+  count: number;
+  answers_you_absent: number;
+  example_prompt_ids: string[];
+}
+
+export interface GeoComparison {
+  brand_id: string;
+  days: number;
+  entities: string[];
+  names: Record<string, string>;
+  domains: Record<string, string>;
+  rows: GeoComparisonRow[];
+  questions: GeoQuestionRow[];
+  untracked_domains: GeoUntrackedDomain[];
+  n_answers: number;
+  n_measured: number;
+  tracked_competitors: number;
+}
+
+export const geoComparison = (brandId: string, days = 7) =>
+  getJson<GeoComparison>(`/api/geo/brands/${brandId}/comparison?days=${days}`);
+
+/** What a re-read of stored answers changed. Zero engine calls: nothing is
+ *  re-asked, only re-parsed with the current competitor list. */
+export interface GeoRescanResult {
+  brand_id: string;
+  days: number;
+  answers_scanned: number;
+  answers_updated: number;
+  days_updated: string[];
+  entities: string[];
+  /** characters of each answer that were stored — a name past this point was
+   *  never kept and only a real poll can recover it */
+  text_cap: number;
+}
+
+export const geoRescan = (brandId: string, days = 7) =>
+  postJson<GeoRescanResult>(`/api/geo/brands/${brandId}/rescan`, { days });
+
+/* ------------- GEO score history (a10 performance dashboard) ------------- */
+
+/** One completed sweep. `score` is null when nothing in it was measurable —
+ *  an empty sweep scores nothing, it does not score zero. */
+export interface GeoHistoryPoint {
+  date: string;              // YYYYMMDD
+  at: string;
+  source: "sweep" | "backfill";
+  score: number | null;
+  components: Record<string, number>;
+  /** renormalised over the components that COULD be measured, so the bars add
+   *  up to the score above them */
+  weights: Record<string, number>;
+  missing: string[];
+  mention_rate: number | null;
+  citation_rate: number | null;
+  sov_self: number | null;
+  n_measured: number;
+  n_answers: number;
+  n_prompts: number;
+  engines: Record<string, number | null>;
+  competitors: Record<string, number | null>;
+  /** measured on far fewer answers than the series' best — real, but thin */
+  partial?: boolean;
+}
+
+export interface GeoTrendMove {
+  change: number | null;
+  direction: "up" | "down" | "flat" | "unknown";
+}
+
+export interface GeoHistory {
+  brand_id: string;
+  days: number;
+  points: GeoHistoryPoint[];
+  trend: {
+    current: GeoHistoryPoint | null;
+    previous: GeoHistoryPoint | null;
+    first: GeoHistoryPoint | null;
+    since_last: GeoTrendMove;
+    since_start: GeoTrendMove;
+    n_points: number;
+  };
+  component_labels: Record<string, string>;
+  min_point_answers: number;
+  names: Record<string, string>;
+  backfill_days: number;
+}
+
+export const geoHistory = (brandId: string, days = 90) =>
+  getJson<GeoHistory>(`/api/geo/brands/${brandId}/history?days=${days}`);
 
 /* --------------------- GEO Action Plan (a10 strategy) -------------------- */
 

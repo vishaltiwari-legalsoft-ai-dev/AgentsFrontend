@@ -309,3 +309,61 @@
 .geo-plan__leading li{ font-size:13px; line-height:1.6; color:var(--text-secondary); margin-bottom:4px; }
 .geo-plan__foot{ display:flex; align-items:center; justify-content:space-between; gap:12px;
   margin-top:14px; padding-top:10px; border-top:1px solid var(--border-subtle); }
+
+/* ---- Performance dashboard (a10): the GEO score over time ---------------
+   The chart is inline SVG on purpose — a whole plotting library for one
+   sparse line is bundle weight nobody asked for, and the marks have to obey
+   the same tokens as the rest of the panel in both themes. */
+.geo-dash__windows{ display:flex; gap:4px; background:var(--surface-active);
+  border:1px solid var(--border-subtle); border-radius:var(--radius-pill); padding:3px; }
+.geo-dash__hero{ display:flex; align-items:center; gap:24px; flex-wrap:wrap;
+  padding:4px 0 14px; }
+.geo-dash__score{ display:flex; align-items:baseline; gap:10px; flex:none; }
+.geo-dash__band{ font-size:13px; font-weight:600; color:var(--text-secondary); }
+.geo-dash__moves{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.geo-dash__moves .geo-note{ margin:0; }
+.geo-dash__move{ display:flex; align-items:center; gap:6px; margin:0;
+  font-size:13.5px; font-weight:600; color:var(--text-secondary); }
+.geo-dash__move--up{ color:var(--success); }
+/* Amber, not red: a score dip is information to act on, not an outage. */
+.geo-dash__move--down{ color:var(--amber-600); }
+.geo-dash__move--unknown, .geo-dash__move--flat{ color:var(--text-tertiary); }
+
+.geo-dash__legend{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.geo-legend{ display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+  border:1px solid var(--border-subtle); background:var(--surface);
+  border-radius:var(--radius-pill); padding:4px 11px;
+  font:600 12px var(--font-sans); color:var(--text-tertiary);
+  transition:color var(--dur-fast), border-color var(--dur-fast); }
+.geo-legend:hover{ color:var(--text-secondary); }
+.geo-legend--on{ color:var(--text-primary); border-color:var(--border-strong); }
+.geo-legend__dot{ width:8px; height:8px; border-radius:50%; opacity:0.35; }
+.geo-legend--on .geo-legend__dot{ opacity:1; }
+
+.geo-chart{ width:100%; height:auto; display:block; margin-bottom:6px; overflow:visible; }
+.geo-chart__grid{ stroke:var(--border-subtle); stroke-width:1; }
+.geo-chart__axis{ fill:var(--text-tertiary); font:500 10px var(--font-sans);
+  font-variant-numeric:var(--fvn-tabular); }
+/* A thin sweep is a real measurement on a smaller sample — drawn quieter,
+   never hidden and never redrawn as a drop. */
+.geo-chart__dot--partial{ opacity:0.5; }
+.geo-recipe__weight{ font-style:normal; font-size:11.5px; font-weight:500;
+  color:var(--text-tertiary); margin-left:8px; }
+
+/* ---- Competitors (a10): everyone else, on the same answers -------------- */
+.geo-compare__headline{ margin:0 0 14px; font-size:14.5px; line-height:1.6;
+  color:var(--text-secondary); max-width:720px; }
+.geo-compare__table td{ font-variant-numeric:var(--fvn-tabular); }
+.geo-compare__self td{ background:var(--brand-subtle); }
+.geo-compare__self td:first-child{ border-top-left-radius:var(--radius-md);
+  border-bottom-left-radius:var(--radius-md); }
+/* "We did not measure this" must not look like a measured zero. */
+.geo-compare__unknown{ color:var(--text-tertiary); font-style:italic; }
+.geo-compare__zero{ color:var(--amber-600); }
+.geo-compare__q{ font-weight:500 !important; line-height:1.5; max-width:420px; }
+.geo-compare__board{ font-size:12.5px; color:var(--text-secondary); white-space:nowrap; }
+.geo-compare__board strong{ color:var(--text-primary); }
+.geo-table td .seo-chip{ margin:0 4px 2px 0; }
+.geo-linkbtn{ border:0; background:transparent; padding:0; cursor:pointer;
+  font:inherit; color:var(--brand); text-decoration:underline; }
+.geo-compare__rescan{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:10px; }
