@@ -80,9 +80,15 @@ async function send(
   return { response, deadline, timedOut };
 }
 
-/** Returns the raw `Response` — used by the blob, file-upload and export calls
- *  that read the body themselves. The deadline covers up to the response
- *  headers only; callers that stream a large body own that part. */
+/** Returns the raw `Response` for a body we *stream* rather than parse. The
+ *  deadline covers up to the response headers only; whoever reads the body owns
+ *  that part — which is right for a multi-megabyte PDF or image download that
+ *  legitimately takes longer than any deadline, and wrong for everything else.
+ *
+ *  `fetchBlob` below is its only caller, deliberately: 22 call sites used to
+ *  reach for this and hand-roll the rest of `requestJson`, and 11 of them were
+ *  parsing JSON with the deadline already disarmed — a reply that stalled after
+ *  the headers hung for the life of the tab. Reach for a verb, not for this. */
 async function request(
   path: string,
   init: RequestInit = {},
@@ -113,8 +119,66 @@ async function requestJson<T>(
   }
 }
 
+/* The verbs. Every call in this file goes through one of these, so the deadline
+ * rules, the auth header, the 401 handling and the error shape are decided once
+ * here instead of being re-typed (and half-remembered) at the call site. */
+
 async function getJson<T>(path: string, opts?: RequestOptions): Promise<T> {
   return requestJson<T>(path, {}, opts);
+}
+
+async function postJson<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T> {
+  return requestJson<T>(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }, opts);
+}
+
+async function putJson<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T> {
+  return requestJson<T>(path, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }, opts);
+}
+
+/** DELETE. Every delete endpoint this backend exposes answers 200 with a small
+ *  JSON body (`{deleted: id}` and friends) rather than 204, so the reply is read
+ *  like any other — which is what keeps the deadline armed through it. Callers
+ *  that don't care what came back just ignore the result. */
+async function deleteJson<T>(path: string, opts?: RequestOptions): Promise<T> {
+  return requestJson<T>(path, { method: "DELETE" }, opts);
+}
+
+/** Multipart upload with a JSON reply. No `Content-Type` header on purpose: the
+ *  browser must set it itself so the multipart boundary matches the body. */
+async function sendForm<T>(path: string, form: FormData, opts?: RequestOptions): Promise<T> {
+  return requestJson<T>(path, { method: "POST", body: form }, opts);
+}
+
+/** A body we stream instead of parsing — an artifact, a font, a report PDF, the
+ *  extension bundle. This is the one place `request()` is called: the deadline
+ *  is released once the headers land, so a large download is never cut off
+ *  mid-stream by a timer meant for a slow *server*, not a slow *transfer*. */
+async function fetchBlob(
+  path: string,
+  init: RequestInit = {},
+  opts?: RequestOptions,
+): Promise<Blob> {
+  const response = await request(path, init, opts);
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.blob();
+}
+
+/** `fetchBlob` as an object URL, for an `<img src>` or an `<a download>` click.
+ *  Callers own the URL and should revoke it when they're done with it. */
+async function blobUrl(
+  path: string,
+  init?: RequestInit,
+  opts?: RequestOptions,
+): Promise<string> {
+  return URL.createObjectURL(await fetchBlob(path, init, opts));
 }
 
 /* --------------------------------- Types --------------------------------- */
@@ -168,6 +232,20 @@ export interface Analytics {
 
 /* --------------------------------- Auth ---------------------------------- */
 
+/** The one call that deliberately does NOT use the transport above, and must
+ *  stay that way.
+ *
+ *  `send()` treats every 401 as "your session expired" — it fires the
+ *  unauthorized handler (which logs you out) and replaces the server's message
+ *  with a generic one. That is right for the ~150 calls made *with* a session
+ *  and wrong for the one call made to *get* one: this endpoint answers 401 with
+ *  the actual reason a sign-in was refused ("Invalid Google credential: …",
+ *  "Google account email is not verified"), and the person at the login screen
+ *  needs to read that, not "please sign in again" while already signing in.
+ *  Routing it through `postJson` would swallow the only useful thing the server
+ *  said. The missing deadline is a smaller cost than a lying error message —
+ *  fixing it means giving `send()` a no-401-handling mode, which is an auth
+ *  change, not a refactor. */
 export async function googleLogin(
   credential: string,
 ): Promise<{ token: string; user: User }> {
@@ -274,9 +352,7 @@ export function getImageLibrary(limit = 200): Promise<{ items: ImageLibraryItem[
 /** Proxy-served gallery images need the Bearer header, so fetch as a blob and
  *  hand back an object URL (callers should revoke it on unmount). */
 export async function imageLibraryBlob(path: string): Promise<string> {
-  const response = await request(path);
-  if (!response.ok) throw new Error(await parseError(response));
-  return URL.createObjectURL(await response.blob());
+  return blobUrl(path);
 }
 
 /* --------------------------- Database viewer ----------------------------- */
@@ -410,14 +486,6 @@ export function updateAgentConfig(
 
 /* ----------------------- Graphic Designer pipeline ----------------------- */
 /* The 4-stage ad-creative pipeline (backend: graphics_designer_agent).      */
-
-async function postJson<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T> {
-  return requestJson<T>(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  }, opts);
-}
 
 export interface GdDiff {
   token: string;
@@ -978,17 +1046,13 @@ export async function gdStage4(
   if (logo) form.append("logo", logo);
   form.append("use_ai", String(useAi));
   if (!logo && logoId) form.append("logo_id", logoId);
-  const response = await request(`/api/gd/runs/${id}/stage4`, { method: "POST", body: form });
-  if (!response.ok) throw new Error(await parseError(response));
-  return (await response.json()) as { attempt: GdAttempt; run: GdRun };
+  return sendForm<{ attempt: GdAttempt; run: GdRun }>(`/api/gd/runs/${id}/stage4`, form);
 }
 
 /** Artifacts require the Bearer header, so fetch as a blob and hand back an
  *  object URL (callers should revoke it on unmount). */
 export async function gdArtifactBlob(path: string): Promise<string> {
-  const response = await request(path);
-  if (!response.ok) throw new Error(await parseError(response));
-  return URL.createObjectURL(await response.blob());
+  return blobUrl(path);
 }
 
 /** Live Stage-3 overlay preview: renders the real (deterministic) text overlay
@@ -998,13 +1062,11 @@ export async function gdTextPreview(
   id: string,
   body: { tokens?: Record<string, string>; subheading_texts?: string[] },
 ): Promise<string> {
-  const response = await request(`/api/gd/runs/${id}/text-preview`, {
+  return blobUrl(`/api/gd/runs/${id}/text-preview`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(await parseError(response));
-  return URL.createObjectURL(await response.blob());
 }
 
 /** Stage-3 element catalogue (emoji / icon / sticker keys + the per-run cap). */
@@ -1015,27 +1077,20 @@ export const gdElements = () =>
 
 /** Upload a custom image element for one run; returns a `ref` to use in a
  *  GdElement with kind "image". Multipart — no JSON Content-Type so the
- *  browser sets the boundary; auth header still comes from `request()`. */
+ *  browser sets the boundary; auth header still comes from `sendForm()`. */
 export async function gdElementUpload(runId: string, file: File): Promise<{ ref: string }> {
   const form = new FormData();
   form.append("file", file);
-  const response = await request(`/api/gd/runs/${runId}/elements/upload`, {
-    method: "POST",
-    body: form,
-  });
-  if (!response.ok) throw new Error(await parseError(response));
-  return (await response.json()) as { ref: string };
+  return sendForm<{ ref: string }>(`/api/gd/runs/${runId}/elements/upload`, form);
 }
 
 /** Fetch one brand font file (validated server-side against the pack) as an
  *  object URL, for FontFace registration so the editor canvas shows TRUE
  *  brand typography. Callers should revoke the URL after the face loads. */
 export async function gdFontBlob(name: string, brand?: string | null): Promise<string> {
-  const response = await request(
+  return blobUrl(
     `/api/gd/fonts/${encodeURIComponent(name)}${brand ? `?brand=${encodeURIComponent(brand)}` : ""}`,
   );
-  if (!response.ok) throw new Error(await parseError(response));
-  return URL.createObjectURL(await response.blob());
 }
 
 /** Upload an image for a run. role="subject"/"background": the deterministic
@@ -1052,12 +1107,7 @@ export async function gdSubjectUpload(
 ): Promise<{ ref: string }> {
   const form = new FormData();
   form.append("file", file);
-  const response = await request(
-    `/api/gd/runs/${runId}/subject/upload?role=${role}`,
-    { method: "POST", body: form },
-  );
-  if (!response.ok) throw new Error(await parseError(response));
-  return (await response.json()) as { ref: string };
+  return sendForm<{ ref: string }>(`/api/gd/runs/${runId}/subject/upload?role=${role}`, form);
 }
 
 /* ---------------- Creative Agent (brochures / decks / carousels / blogs) --- */
@@ -1188,9 +1238,7 @@ export const creativeOverride = (id: string) =>
 /** Download a produced artifact (PDF/PPTX/PNG/zip) with the auth header, as an
  *  object URL (callers should revoke it after triggering the download). */
 export async function creativeArtifactBlob(url: string): Promise<string> {
-  const response = await request(url);
-  if (!response.ok) throw new Error(await parseError(response));
-  return URL.createObjectURL(await response.blob());
+  return blobUrl(url);
 }
 
 /* ----------------------- Marketing Research agent ------------------------ */
@@ -1452,9 +1500,7 @@ export async function mrIngest(file: File, platform: MrPlatform): Promise<MrInge
   const form = new FormData();
   form.append("file", file);
   form.append("platform", platform);
-  const response = await request("/api/mr/ingest", { method: "POST", body: form });
-  if (!response.ok) throw new Error(await parseError(response));
-  return (await response.json()) as MrIngestResult;
+  return sendForm<MrIngestResult>("/api/mr/ingest", form);
 }
 
 export interface MrSheetTabResult {
@@ -1485,17 +1531,14 @@ export const mrDatasets = () => getJson<MrDataset[]>("/api/mr/datasets");
 
 /** Remove one ingested file/pull; its numbers leave the dashboard immediately. */
 export async function mrDeleteDataset(id: string): Promise<void> {
-  const response = await request(`/api/mr/datasets/${id}`, { method: "DELETE" });
-  if (!response.ok) throw new Error(await parseError(response));
+  await deleteJson<{ deleted: string }>(`/api/mr/datasets/${id}`);
 }
 
 /** Upload a PDF report — text is extracted and metrics parsed into a dataset. */
 export async function mrIngestPdf(file: File): Promise<MrIngestResult> {
   const form = new FormData();
   form.append("file", file);
-  const response = await request("/api/mr/ingest-pdf", { method: "POST", body: form });
-  if (!response.ok) throw new Error(await parseError(response));
-  return (await response.json()) as MrIngestResult;
+  return sendForm<MrIngestResult>("/api/mr/ingest-pdf", form);
 }
 
 export const mrConnectors = () => getJson<MrConnector[]>("/api/mr/connectors");
@@ -1560,8 +1603,7 @@ export const mrAddSource = (url: string) =>
 
 /** Disconnect a secondary sheet — the agent stops reading it immediately. */
 export async function mrDeleteSource(id: string): Promise<void> {
-  const response = await request(`/api/mr/sources/${id}`, { method: "DELETE" });
-  if (!response.ok) throw new Error(await parseError(response));
+  await deleteJson<{ removed: string }>(`/api/mr/sources/${id}`);
 }
 
 export const mrWorkbook = () => getJson<{ tabs: MrTabProfile[]; count: number }>("/api/mr/workbook");
@@ -1596,9 +1638,7 @@ export const mrGetRun = (id: string) => getJson<MrReport>(`/api/mr/runs/${id}`);
 /** Download-report PDFs — the console panels rendered server-side in the same
  *  format. Returns an object URL ready for an <a download> click. */
 async function mrPdfBlobUrl(path: string): Promise<string> {
-  const response = await request(path);
-  if (!response.ok) throw new Error(await parseError(response));
-  return URL.createObjectURL(await response.blob());
+  return blobUrl(path);
 }
 export const mrReportPdfUrl = (id: string) => mrPdfBlobUrl(`/api/mr/runs/${id}/pdf`);
 export const mrVendorPdfUrl = (slug: string, date?: string) =>
@@ -1781,9 +1821,7 @@ export const seoSaveBrand = (b: { id?: string; name: string; domain: string; gsc
   postJson<{ brands: SeoBrand[] }>("/api/seo-geo/brands", b);
 
 export async function seoDeleteBrand(id: string): Promise<{ brands: SeoBrand[] }> {
-  const response = await request(`/api/seo-geo/brands/${id}`, { method: "DELETE" });
-  if (!response.ok) throw new Error(await parseError(response));
-  return (await response.json()) as { brands: SeoBrand[] };
+  return deleteJson<{ brands: SeoBrand[] }>(`/api/seo-geo/brands/${id}`);
 }
 
 export const seoSetTodoStatus = (brandId: string, todoId: string, status: SeoTodoStatus) =>
@@ -1906,13 +1944,7 @@ export const seoCompetitors = (brandId: string, opts?: RequestOptions) =>
   getJson<SeoCompetitors>(`/api/seo-geo/competitors/${brandId}`, opts);
 
 export async function seoSetCompetitors(brandId: string, domains: string[]): Promise<{ tracked: string[] }> {
-  const response = await request(`/api/seo-geo/competitors/${brandId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ domains }),
-  });
-  if (!response.ok) throw new Error(await parseError(response));
-  return (await response.json()) as { tracked: string[] };
+  return putJson<{ tracked: string[] }>(`/api/seo-geo/competitors/${brandId}`, { domains });
 }
 
 export const seoTrackCompetitors = (brandId: string) =>
@@ -2109,9 +2141,7 @@ export const bwCommentBlock = (id: string, blockId: string, comment: string) =>
 export const bwPlanVisuals = (id: string) => postJson<BwRun>(`/api/blog/runs/${id}/visuals`, {});
 
 export async function bwExport(id: string, format: BwExportFormat): Promise<Blob> {
-  const response = await request(`/api/blog/runs/${id}/export?format=${format}`, { method: "GET" });
-  if (!response.ok) throw new Error(await parseError(response));
-  return response.blob();
+  return fetchBlob(`/api/blog/runs/${id}/export?format=${format}`, { method: "GET" });
 }
 
 /* --------------------------- SEO agent: Pages ------------------------------ */
@@ -2345,13 +2375,7 @@ export const geoGeneratePrompts = (brandId: string) =>
   );
 
 export async function geoSavePrompts(brandId: string, prompts: GeoPrompt[]): Promise<{ prompts: GeoPrompt[] }> {
-  const response = await request(`/api/geo/brands/${brandId}/prompts`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompts }),
-  });
-  if (!response.ok) throw new Error(await parseError(response));
-  return (await response.json()) as { prompts: GeoPrompt[] };
+  return putJson<{ prompts: GeoPrompt[] }>(`/api/geo/brands/${brandId}/prompts`, { prompts });
 }
 
 export const geoBrandConfig = (brandId: string) =>
@@ -2362,13 +2386,7 @@ export async function geoSaveBrandConfig(
   patch: Partial<Pick<GeoBrandConfig,
     "aliases" | "competitors" | "daily_cap" | "poll_interval_days" | "auto_poll">>,
 ): Promise<GeoBrandConfig> {
-  const response = await request(`/api/geo/brands/${brandId}/config`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(patch),
-  });
-  if (!response.ok) throw new Error(await parseError(response));
-  return (await response.json()) as GeoBrandConfig;
+  return putJson<GeoBrandConfig>(`/api/geo/brands/${brandId}/config`, patch);
 }
 
 export const geoPollStep = (
@@ -2625,13 +2643,10 @@ export const geoStrategyGenerate = (brandId: string) =>
 export async function geoStrategyActionStatus(
   brandId: string, actionId: string, status: GeoStrategyAction["status"],
 ): Promise<GeoStrategyDoc> {
-  const response = await request(`/api/geo/brands/${brandId}/strategy/actions/${actionId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status }),
-  });
-  if (!response.ok) throw new Error(await parseError(response));
-  return (await response.json()) as GeoStrategyDoc;
+  return putJson<GeoStrategyDoc>(
+    `/api/geo/brands/${brandId}/strategy/actions/${actionId}`,
+    { status },
+  );
 }
 
 /* ------------- GEO Content Optimizer (a10, Layers 1-6) ------------------- */
@@ -2800,9 +2815,7 @@ export const browserStatus = () => getJson<BrowserStatus>("/api/browser/status")
  * so a plain <a href> would just get a 401.
  */
 export async function browserExtensionBlob(): Promise<Blob> {
-  const response = await request("/api/browser/extension");
-  if (!response.ok) throw new Error(await parseError(response));
-  return await response.blob();
+  return fetchBlob("/api/browser/extension");
 }
 
 export const browserRuns = () => getJson<{ runs: BrowserRunRow[] }>("/api/browser/runs");
@@ -2862,8 +2875,7 @@ export interface BrowserSkill {
 export const browserSkills = () => getJson<{ skills: BrowserSkill[] }>("/api/browser/skills");
 
 export async function browserDeleteSkill(id: string): Promise<void> {
-  const response = await request(`/api/browser/skills/${id}`, { method: "DELETE" });
-  if (!response.ok) throw new Error(await parseError(response));
+  await deleteJson<{ deleted: string }>(`/api/browser/skills/${id}`);
 }
 
 export const browserDigests = () =>
@@ -2878,12 +2890,8 @@ export const browserConfig = () =>
 export async function browserSaveConfig(
   watchRules: BrowserWatchRule[],
 ): Promise<{ watch_rules: BrowserWatchRule[] }> {
-  const response = await request("/api/browser/config", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ watch_rules: watchRules }),
+  return putJson<{ watch_rules: BrowserWatchRule[] }>("/api/browser/config", {
+    watch_rules: watchRules,
   });
-  if (!response.ok) throw new Error(await parseError(response));
-  return (await response.json()) as { watch_rules: BrowserWatchRule[] };
 }
 
