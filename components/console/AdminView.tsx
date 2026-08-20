@@ -13,6 +13,7 @@ import {
   type AdminSettingsPatch,
 } from "@/lib/api";
 import { Icon, Button, Avatar } from "@/lib/kit-ui";
+import { describeFailure, useLoadSession } from "@/lib/load";
 import { GlyphTile } from "@/lib/glyph";
 import { useAuth } from "@/lib/auth";
 
@@ -48,22 +49,22 @@ export function AdminView({ onBack }: { onBack: () => void }) {
       });
     });
 
+  const session = useLoadSession();
+
   useEffect(() => {
-    let cancelled = false;
+    const attempt = session.begin("admin");
     Promise.all([getAdminUsers(), getAdminAnalytics()])
       .then(([u, a]) => {
-        if (cancelled) return;
+        if (!attempt.current()) return;
         setUsers(u.users);
         setAnalytics(a);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load");
+        const message = attempt.failure(err, "Couldn't load the admin data");
+        if (message) setError(message);
       });
     if (isCreator) loadSettings().catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [isCreator]);
+  }, [isCreator, session]);
 
   const saveSecrets = async () => {
     setSaving(true);
@@ -86,7 +87,7 @@ export function AdminView({ onBack }: { onBack: () => void }) {
       setGeoKeys({ perplexity_api_key: "", gemini_api_key: "", openai_api_key: "" });
       setSecretMsg({ kind: "ok", text: "Settings saved." });
     } catch (err) {
-      setSecretMsg({ kind: "err", text: err instanceof Error ? err.message : "Save failed" });
+      setSecretMsg({ kind: "err", text: describeFailure(err, "Save failed") });
     } finally {
       setSaving(false);
     }
@@ -101,7 +102,7 @@ export function AdminView({ onBack }: { onBack: () => void }) {
         text: `Key works${r.label ? ` (${r.label})` : ""}${r.is_free_tier ? " · free tier" : ""}.`,
       });
     } catch (err) {
-      setSecretMsg({ kind: "err", text: err instanceof Error ? err.message : "Test failed" });
+      setSecretMsg({ kind: "err", text: describeFailure(err, "Test failed") });
     }
   };
 

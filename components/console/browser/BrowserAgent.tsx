@@ -10,6 +10,7 @@ import {
   type BrowserSkill, type BrowserStatus, type BrowserWatchRule,
 } from "@/lib/api";
 import { Icon } from "@/lib/kit-ui";
+import { describeFailure, useLoadSession } from "@/lib/load";
 import { useReportWork } from "@/lib/work";
 
 /** Browser Agent (a11) — the console half of the Chrome-extension web copilot.
@@ -89,14 +90,21 @@ export function BrowserAgent({
   const [newRule, setNewRule] = useState("");
   const liveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const session = useLoadSession();
+
   useReportWork(busy);
 
+  /** Five endpoints into six pieces of state, with no guard of any kind: a
+   *  reply that landed after the panel closed wrote to a dead tree, and two
+   *  overlapping refreshes could interleave. One ticket covers the batch. */
   const refresh = useCallback(async () => {
+    const attempt = session.begin("browser");
     setBusy(true);
     try {
       const [info, list, digests, cfg, learned] = await Promise.all([
         browserStatus(), browserRuns(), browserDigests(), browserConfig(), browserSkills(),
       ]);
+      if (!attempt.current()) return;
       setStatus(info);
       setStatusError("");
       setRows(list.runs);
@@ -104,11 +112,12 @@ export function BrowserAgent({
       setRules(cfg.watch_rules);
       setSkills(learned.skills);
     } catch (err) {
-      setStatusError(err instanceof Error ? err.message : "Couldn't reach the backend.");
+      const message = attempt.failure(err, "Couldn't reach the backend.");
+      if (message) setStatusError(message);
     } finally {
-      setBusy(false);
+      if (attempt.current()) setBusy(false);
     }
-  }, []);
+  }, [session]);
 
   const saveRules = async (next: BrowserWatchRule[]) => {
     const previous = rules;
@@ -118,7 +127,7 @@ export function BrowserAgent({
       setRules(saved.watch_rules);
     } catch (err) {
       setRules(previous);
-      onToast(err instanceof Error ? err.message : "Couldn't save that.", "error");
+      onToast(describeFailure(err, "Couldn't save that."), "error");
     }
   };
 
@@ -129,7 +138,7 @@ export function BrowserAgent({
       await browserDeleteSkill(id);
     } catch (err) {
       setSkills(previous);
-      onToast(err instanceof Error ? err.message : "Couldn't forget that one.", "error");
+      onToast(describeFailure(err, "Couldn't forget that one."), "error");
     }
   };
 
@@ -147,9 +156,11 @@ export function BrowserAgent({
   // Follow a live run while it's open, then stop polling on its own.
   useEffect(() => {
     if (!openRun || !isLive(openRun.status)) return;
+    const attempt = session.begin("live-run");
     liveTimer.current = setTimeout(async () => {
       try {
         const fresh = await browserRun(openRun.id);
+        if (!attempt.current()) return; // panel closed, or another run opened
         setOpenRun(fresh);
         if (!isLive(fresh.status)) void refresh();
       } catch {
@@ -159,7 +170,7 @@ export function BrowserAgent({
     return () => {
       if (liveTimer.current) clearTimeout(liveTimer.current);
     };
-  }, [openRun, refresh]);
+  }, [openRun, refresh, session]);
 
   const downloadExtension = async () => {
     setBusy(true);
@@ -174,7 +185,7 @@ export function BrowserAgent({
       setShowInstall(true);
       onToast("Downloaded. Unzip it, then follow the steps below.");
     } catch (err) {
-      onToast(err instanceof Error ? err.message : "Couldn't download the extension.", "error");
+      onToast(describeFailure(err, "Couldn't download the extension."), "error");
     } finally {
       setBusy(false);
     }
@@ -195,24 +206,30 @@ export function BrowserAgent({
   };
 
   const openDetail = async (id: string) => {
+    const attempt = session.begin("run-detail");
     setBusy(true);
     try {
-      setOpenRun(await browserRun(id));
+      const run = await browserRun(id);
+      if (attempt.current()) setOpenRun(run);
     } catch (err) {
-      onToast(err instanceof Error ? err.message : "Couldn't load that run.", "error");
+      const message = attempt.failure(err, "Couldn't load that run.");
+      if (message) onToast(message, "error");
     } finally {
-      setBusy(false);
+      if (attempt.current()) setBusy(false);
     }
   };
 
   const openDigestDetail = async (id: string) => {
+    const attempt = session.begin("digest-detail");
     setBusy(true);
     try {
-      setOpenDigest(await browserDigest(id));
+      const digest = await browserDigest(id);
+      if (attempt.current()) setOpenDigest(digest);
     } catch (err) {
-      onToast(err instanceof Error ? err.message : "Couldn't load that digest.", "error");
+      const message = attempt.failure(err, "Couldn't load that digest.");
+      if (message) onToast(message, "error");
     } finally {
-      setBusy(false);
+      if (attempt.current()) setBusy(false);
     }
   };
 
@@ -223,7 +240,7 @@ export function BrowserAgent({
       if (openRun?.id === id) setOpenRun(await browserRun(id));
       void refresh();
     } catch (err) {
-      onToast(err instanceof Error ? err.message : "Couldn't stop that run.", "error");
+      onToast(describeFailure(err, "Couldn't stop that run."), "error");
     }
   };
 

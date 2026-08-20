@@ -9,6 +9,7 @@ import {
   type MrTabProfile, type MrTargets,
 } from "@/lib/api";
 import { Badge, Button, Icon } from "@/lib/kit-ui";
+import { describeFailure, useLoadSession } from "@/lib/load";
 import { fmtTime, sourceLabel } from "./shared";
 
 const CSV_PLATFORMS: { key: MrPlatform; label: string }[] = [
@@ -54,7 +55,9 @@ const GOAL_FIELDS: { key: string; label: string; pct?: boolean }[] = [
 ];
 
 function TargetsCard({ onToast }: { onToast: ToastFn }) {
+  const session = useLoadSession();
   const [targets, setTargets] = useState<MrTargets | null>(null);
+  const [targetsError, setTargetsError] = useState<string | null>(null);
   const [edit, setEdit] = useState(false);
   const [saving, setSaving] = useState(false);
   const [thr, setThr] = useState<Record<string, string>>({});
@@ -74,9 +77,25 @@ function TargetsCard({ onToast }: { onToast: ToastFn }) {
     ])));
   };
 
+  /** The failure branch set `targets` to the same `null` it already held, so
+   *  a failed read left the card reading "Loading targets…" for ever. */
   useEffect(() => {
-    mrGetTargets().then((t) => { setTargets(t); seed(t); }).catch(() => setTargets(null));
-  }, []);
+    const attempt = session.begin("targets");
+    mrGetTargets().then(
+      (t) => {
+        if (!attempt.current()) return;
+        setTargets(t);
+        setTargetsError(null);
+        seed(t);
+      },
+      (e: unknown) => {
+        const message = attempt.failure(e, "Couldn't load the targets");
+        if (!message) return;
+        setTargetsError(message);
+      },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
 
   async function save(reset = false) {
     setSaving(true);
@@ -107,7 +126,7 @@ function TargetsCard({ onToast }: { onToast: ToastFn }) {
       setEdit(false);
       onToast(reset ? "Targets reset to the 2026 defaults" : "Targets saved — flags and reports use them immediately");
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Saving targets failed", "error");
+      onToast(describeFailure(e, "Saving targets failed"), "error");
     } finally {
       setSaving(false);
     }
@@ -117,7 +136,9 @@ function TargetsCard({ onToast }: { onToast: ToastFn }) {
     return (
       <div className="mr-cfg__card">
         <h3 className="mr-section__title">Targets &amp; thresholds</h3>
-        <div className="mr-empty">Loading targets…</div>
+        <div className="mr-empty">
+          {targetsError ? `Couldn't load the targets — ${targetsError}` : "Loading targets…"}
+        </div>
       </div>
     );
   }

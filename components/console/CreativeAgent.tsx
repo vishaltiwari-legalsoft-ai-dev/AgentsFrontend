@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ToastFn } from "@/components/console/ConsoleApp";
 import {
   creativeAcknowledge,
@@ -23,6 +23,7 @@ import {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 import { Button, Icon } from "@/lib/kit-ui";
+import { useLoadSession } from "@/lib/load";
 import { useReportWork } from "@/lib/work";
 
 /* --------------------------------------------------------------------------
@@ -83,27 +84,28 @@ export function CreativeAgent({
   useReportWork(busy || generating);
   const [showWarning, setShowWarning] = useState(false);
   const [showLog, setShowLog] = useState(true);
-  const mounted = useRef(true);
+  const session = useLoadSession();
 
   useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
+    const attempt = session.begin("types");
     creativeTypes()
-      .then((d) =>
-        setMeta({ types: d.types, steps: d.steps, warning: d.autonomous_warning, engines: d.engines }),
-      )
-      .catch((e) => onToast((e as Error).message, "error"));
-  }, [onToast]);
+      .then((d) => {
+        if (!attempt.current()) return;
+        setMeta({ types: d.types, steps: d.steps, warning: d.autonomous_warning, engines: d.engines });
+      })
+      // Was `(e as Error).message`, which renders the word "undefined" for any
+      // rejection that is not an Error.
+      .catch((e: unknown) => {
+        const message = attempt.failure(e, "Couldn't load the creative types");
+        if (message) onToast(message, "error");
+      });
+  }, [onToast, session]);
 
   // Drive a long generation (manual generate OR autonomous) while polling the run
   // so slides appear as they finish instead of after one long blocking spinner.
   const runWithProgress = useCallback(
     async (runId: string, fire: () => Promise<CreativeRun>, doneToast: string) => {
+      const attempt = session.begin("generate");
       setGenerating(true);
       let active = true;
       const poll = async () => {
@@ -111,7 +113,7 @@ export function CreativeAgent({
           await sleep(2000);
           try {
             const r = await creativeGet(runId);
-            if (mounted.current) setRun(r);
+            if (attempt.current()) setRun(r);
             if (r.state === "DONE") active = false;
           } catch {
             /* transient — keep polling */
@@ -121,19 +123,19 @@ export function CreativeAgent({
       const polling = poll();
       try {
         const final = await fire();
-        if (mounted.current) {
-          setRun(final);
-          onToast(doneToast);
-        }
+        if (!attempt.current()) return;
+        setRun(final);
+        onToast(doneToast);
       } catch (e) {
-        if (mounted.current) onToast((e as Error).message, "error");
+        const message = attempt.failure(e, "The run failed");
+        if (message) onToast(message, "error");
       } finally {
         active = false;
         await polling;
-        if (mounted.current) setGenerating(false);
+        if (attempt.current()) setGenerating(false);
       }
     },
-    [onToast],
+    [onToast, session],
   );
 
   const typeMeta = meta?.types.find((t) => t.key === creativeType);
@@ -586,21 +588,22 @@ export function CreativeAgent({
    <img>, and revokes it on unmount. */
 function ArtifactThumb({ art }: { art: CreativeArtifact }) {
   const [src, setSrc] = useState<string | null>(null);
+  const session = useLoadSession();
   useEffect(() => {
     let url: string | null = null;
-    let alive = true;
+    const attempt = session.begin("thumb");
     creativeArtifactBlob(art.url)
       .then((u) => {
         url = u;
-        if (alive) setSrc(u);
+        // Hand the object URL over, or revoke it — never leak it.
+        if (attempt.current()) setSrc(u);
         else URL.revokeObjectURL(u);
       })
       .catch(() => {});
     return () => {
-      alive = false;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [art.url]);
+  }, [art.url, session]);
   return src ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img className="crea-thumb__img" src={src} alt={art.name} />

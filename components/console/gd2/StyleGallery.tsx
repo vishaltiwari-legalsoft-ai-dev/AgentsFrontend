@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { gdArtifactBlob, type GdAttempt } from "@/lib/api";
+import { useLoadSession } from "@/lib/load";
 import { styleBadge } from "./styleChoice";
 
 /* Text Optimizer 3-up gallery: one card per style attempt from a Stage-3
@@ -11,12 +12,15 @@ import { styleBadge } from "./styleChoice";
 
 function CardImage({ url, alt }: { url: string; alt: string }) {
   const [src, setSrc] = useState<string | null>(null);
+  const session = useLoadSession();
   useEffect(() => {
-    let alive = true;
     let obj: string | null = null;
+    const attempt = session.begin("thumb");
     gdArtifactBlob(url)
       .then((u) => {
-        if (alive) {
+        // The object URL is a real resource: hand it over, or revoke it. There
+        // is no third option, which is why this guard cannot just be dropped.
+        if (attempt.current()) {
           obj = u;
           setSrc(u);
         } else {
@@ -25,10 +29,9 @@ function CardImage({ url, alt }: { url: string; alt: string }) {
       })
       .catch(() => undefined);
     return () => {
-      alive = false;
       if (obj) URL.revokeObjectURL(obj);
     };
-  }, [url]);
+  }, [url, session]);
   if (!src) return <span className="gd2-stylecard-skeleton" aria-busy="true" />;
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={src} alt={alt} />;

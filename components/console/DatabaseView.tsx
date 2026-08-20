@@ -4,13 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getDbCollections,
   getDbCollection,
-  isAbortError,
   purgeTelemetry,
-  RequestSequence,
   type DbCollection,
   type DbCollectionData,
 } from "@/lib/api";
 import { Icon, Button } from "@/lib/kit-ui";
+import { describeFailure, useLoadSession } from "@/lib/load";
 import {
   cellText,
   cellKind,
@@ -82,7 +81,6 @@ export function DatabaseView({ onBack }: { onBack: () => void }) {
   // slower earlier response overwrite a faster later one, so collection A's
   // rows rendered under collection B's header — and A's `finally` cleared the
   // spinner while B was still loading.
-  const rowsSeq = useRef<RequestSequence | null>(null);
 
   // Column visibility / sort.
   const [visible, setVisible] = useState<string[]>([]);
@@ -90,17 +88,22 @@ export function DatabaseView({ onBack }: { onBack: () => void }) {
   const [colMenuOpen, setColMenuOpen] = useState(false);
   const [sort, setSort] = useState<Sort>(null);
 
+  const session = useLoadSession();
+
   const loadCollections = useCallback(() => {
+    const attempt = session.begin("collections");
     return getDbCollections()
       .then((res) => {
+        if (!attempt.current()) return;
         setCollections(res.collections);
         setConn({ connected: res.connected, database: res.database, project: res.project, consoleUrl: res.console_url });
         setActive((cur) => cur ?? (res.collections[0]?.name ?? null));
       })
       .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : "Failed to load");
+        const message = attempt.failure(err, "Couldn't load the collection list");
+        if (message) setError(message);
       });
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     loadCollections();
@@ -126,40 +129,37 @@ export function DatabaseView({ onBack }: { onBack: () => void }) {
         setError(`Cleaned up — ${summary}. Kept: ${res.kept}.`);
         return loadCollections();
       })
-      .catch((err: unknown) =>
-        setError(err instanceof Error ? err.message : "Purge failed"),
-      );
+      .catch((err: unknown) => setError(describeFailure(err, "Purge failed")));
   }, [loadCollections]);
 
   const load = useCallback((name: string, lim: number) => {
-    const seq = (rowsSeq.current ??= new RequestSequence());
-    const ticket = seq.start();
+    const attempt = session.begin("rows");
     setLoading(true);
     setLoadError(null);
     setSelected(null);
-    getDbCollection(name, lim, { signal: ticket.signal })
+    getDbCollection(name, lim, { signal: attempt.signal })
       .then((d) => {
-        if (seq.isCurrent(ticket)) setData(d);
+        if (attempt.current()) setData(d);
       })
       .catch((err: unknown) => {
         // Superseded by a newer collection — its load owns the UI now.
-        if (isAbortError(err) || !seq.isCurrent(ticket)) return;
+        const message = attempt.failure(err, "Couldn't read that collection");
+        if (!message) return;
         // Drop the previous collection's rows: leaving them up would show one
         // collection's data under another's name.
         setData(null);
-        setLoadError(err instanceof Error ? err.message : "Failed to load");
+        setLoadError(message);
       })
       .finally(() => {
-        if (seq.isCurrent(ticket)) setLoading(false);
+        if (attempt.current()) setLoading(false);
       });
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     if (active) load(active, limit);
   }, [active, limit, load]);
 
   // Leaving the view must not leave a request writing into dead state.
-  useEffect(() => () => rowsSeq.current?.cancel(), []);
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
   const allColumns = useMemo(() => data?.columns ?? [], [data]);

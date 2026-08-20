@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { mrLeadAnalysis, type MrLeadAnalysis } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
+import { loadPending, useLoadSession, type Load } from "@/lib/load";
 import { fmtMoney, fmtMonth, fmtNum } from "./shared";
 
 const withPct = (n: number, rate: number | null) =>
@@ -12,34 +13,23 @@ const withPct = (n: number, rate: number | null) =>
    picture for the latest month. Story line first, red only for real flags —
    the flag messages carry the fix direction (lead quality vs booking vs offer). */
 export function LeadQuality({ slug }: { slug: string }) {
-  const [data, setData] = useState<MrLeadAnalysis | null>(null);
-  /** Kept apart from `data`. Collapsing a failure into `null` made this card
-   *  disappear exactly as it does when the vendor genuinely has no lead rows,
-   *  so a dead lead-analysis read looked like "no lead data" — the one reading
-   *  that stops the user asking why. */
-  const [error, setError] = useState<string | null>(null);
-  /** Bumped by "Try again" to re-run the load. */
-  const [retry, setRetry] = useState(0);
+  const session = useLoadSession();
+  /** This card got the distinction right by hand — a failure kept apart from
+   *  `data`, because collapsing it into `null` made the card disappear exactly
+   *  as it does when the vendor genuinely has no lead rows. That is `Load<T>`,
+   *  three fields and a retry counter at a time; it is now one type. */
+  const [analysis, setAnalysis] = useState<Load<MrLeadAnalysis>>(loadPending);
 
-  useEffect(() => {
-    // `mrLeadAnalysis` takes no signal, so an unmounted card is guarded here
-    // rather than by aborting the request.
-    let live = true;
-    setError(null);
-    mrLeadAnalysis().then(
-      (d) => {
-        if (!live) return;
-        setData(d);
-        setError(null);
-      },
-      (e: unknown) => {
-        if (!live) return;
-        setData(null);
-        setError(e instanceof Error && e.message.trim() ? e.message : "Lead analysis failed to load");
-      },
-    );
-    return () => { live = false; };
-  }, [retry]);
+  const load = useCallback(() => {
+    setAnalysis(loadPending);
+    void session.run("lead-analysis", () => mrLeadAnalysis(), setAnalysis,
+      "Lead analysis failed to load");
+  }, [session]);
+
+  useEffect(load, [load]);
+
+  const data = analysis.data;
+  const error = analysis.phase === "failed" ? analysis.error : null;
 
   if (error) {
     return (
@@ -51,7 +41,7 @@ export function LeadQuality({ slug }: { slug: string }) {
         </p>
         <p className="mr-lead__note">{error}</p>
         <div style={{ marginTop: 8 }}>
-          <Button size="sm" variant="secondary" onClick={() => setRetry((n) => n + 1)}
+          <Button size="sm" variant="secondary" onClick={load}
             iconLeft={<Icon name="refresh-cw" size={13} />}>
             Try again
           </Button>

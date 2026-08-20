@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  isAbortError, RequestSequence,
   seoAnalyzeSite, seoBrandDetail, seoDeleteBrand, seoOauthDisconnect, seoOauthStart, seoOverview,
   seoPages, seoPagesRefresh, seoRunBrand, seoSaveBrand, seoSetTodoStatus,
   type SeoBrand, type SeoGa, type SeoGscStatus, type SeoOverview, type SeoPagesDoc, type SeoPlanItem,
@@ -11,6 +10,7 @@ import {
 import type { ToastFn } from "@/components/console/ConsoleApp";
 import { useAuth } from "@/lib/auth";
 import { Icon } from "@/lib/kit-ui";
+import { describeFailure, useLoadSession } from "@/lib/load";
 import { AskView, AuditView, BriefsView, CompetitorsView, KeywordsView, UpdatePlanButton } from "./labs";
 
 type SeoTool = "ask" | "keywords" | "briefs" | "audit";
@@ -328,7 +328,7 @@ function AddBrandForm({ onSaved, onToast }: { onSaved: () => void; onToast: Toas
       setName(""); setDomain(""); setSeeds("");
       onSaved();
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not save brand", "error");
+      onToast(describeFailure(e, "Could not save brand"), "error");
     } finally {
       setBusy(false);
     }
@@ -376,34 +376,38 @@ export function SeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
   const [showAllTodos, setShowAllTodos] = useState(false);
   const [showAvoided, setShowAvoided] = useState(false);
 
+  const session = useLoadSession();
+
   const refreshOverview = useCallback(async () => {
+    const attempt = session.begin("overview");
     try {
-      setOverview(await seoOverview());
+      const next = await seoOverview();
+      if (attempt.current()) setOverview(next);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Failed to load", "error");
+      const message = attempt.failure(e, "Couldn't load the SEO overview");
+      if (message) onToast(message, "error");
     }
-  }, [onToast]);
+  }, [onToast, session]);
 
   useEffect(() => { void refreshOverview(); }, [refreshOverview]);
 
-  /** One in-flight slot for "open a brand". Two chained requests write into
-   *  seven pieces of shared state, so without this a slower brand A lands after
-   *  the user has opened brand B and every panel below B's name is A's data. */
-  const brandSeq = useRef<RequestSequence | null>(null);
   /** The brand actually on screen. A ref, not the `brand` state: these handlers
    *  resume after an await and their captured `brand` is whatever it was when
    *  the click happened, which is exactly the value that must not be trusted. */
   const shownBrandId = useRef<string | null>(null);
   useEffect(() => { shownBrandId.current = brand?.id ?? null; }, [brand]);
-  useEffect(() => () => brandSeq.current?.cancel(), []);
 
+  /** Two chained requests write into seven pieces of shared state, so without a
+   *  ticket a slower brand A lands after the user has opened brand B and every
+   *  panel below B's name is A's data. This was one of only three modules that
+   *  got that right by hand; the slot is the same discipline, minus the
+   *  `RequestSequence` ref and the unmount cleanup it needed. */
   async function openBrand(id: string) {
-    const seq = (brandSeq.current ??= new RequestSequence());
-    const ticket = seq.start();
+    const attempt = session.begin("brand");
     setOpening(id);
     try {
-      const detail = await seoBrandDetail(id, { signal: ticket.signal });
-      if (!seq.isCurrent(ticket)) return; // a newer brand owns the screen
+      const detail = await seoBrandDetail(id, { signal: attempt.signal });
+      if (!attempt.current()) return; // a newer brand owns the screen
       setBrand(detail.brand);
       setRun(detail.run);
       setGsc(detail.gsc ?? null);
@@ -414,21 +418,21 @@ export function SeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
       setPagesDoc(null);
       setPagesError(null);
       try {
-        const pagesRes = await seoPages(id, { signal: ticket.signal });
-        if (!seq.isCurrent(ticket)) return;
+        const pagesRes = await seoPages(id, { signal: attempt.signal });
+        if (!attempt.current()) return;
         setPagesDoc(pagesRes.pages);
       } catch (e) {
-        if (isAbortError(e) || !seq.isCurrent(ticket)) return;
+        const msg = attempt.failure(e, "Could not load pages");
+        if (!msg) return;
         setPagesDoc(null);
-        const msg = e instanceof Error ? e.message : "Could not load pages";
         setPagesError(msg);
         onToast(msg, "error");
       }
     } catch (e) {
-      if (isAbortError(e) || !seq.isCurrent(ticket)) return;
-      onToast(e instanceof Error ? e.message : "Failed to load brand", "error");
+      const msg = attempt.failure(e, "Failed to load brand");
+      if (msg) onToast(msg, "error");
     } finally {
-      if (seq.isCurrent(ticket)) setOpening(null);
+      if (attempt.current()) setOpening(null);
     }
   }
 
@@ -442,7 +446,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
       onToast(`Pages refreshed — ${fmt(doc.pages.length)} page(s)`);
     } catch (e) {
       if (shownBrandId.current !== id) return;
-      const msg = e instanceof Error ? e.message : "Could not refresh pages";
+      const msg = describeFailure(e, "Could not refresh pages");
       setPagesError(msg);
       onToast(msg, "error");
     } finally {
@@ -475,7 +479,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
         onToast("Done — see the brand card for data status");
       }
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Analysis failed", "error");
+      onToast(describeFailure(e, "Analysis failed"), "error");
     } finally {
       setBusy(false);
     }
@@ -495,7 +499,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
       setPlan(detail.plan ?? []);
       onToast(`Site review done — ${review.issues.length} finding(s) added to the fix list`);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Site analysis failed", "error");
+      onToast(describeFailure(e, "Site analysis failed"), "error");
     } finally {
       setSiteBusy(false);
     }
@@ -507,7 +511,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
       window.open(url, "_blank", "width=540,height=680");
       onToast("Choose the Google account that owns the site's Search Console, press Allow, then hit Refresh data here.");
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not start the Google connect", "error");
+      onToast(describeFailure(e, "Could not start the Google connect"), "error");
     }
   }
 
@@ -518,7 +522,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
       setGsc({ connected: false, property: null });
       onToast("Search Console disconnected");
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Disconnect failed", "error");
+      onToast(describeFailure(e, "Disconnect failed"), "error");
     }
   }
 
@@ -530,7 +534,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
       setBrand(null); setRun(null);
       await refreshOverview();
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Remove failed", "error");
+      onToast(describeFailure(e, "Remove failed"), "error");
     }
   }
 
@@ -540,7 +544,7 @@ export function SeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
     try {
       await seoSetTodoStatus(brand.id, todoId, status);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not save status", "error");
+      onToast(describeFailure(e, "Could not save status"), "error");
     }
   }
 

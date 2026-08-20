@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ToastFn } from "@/components/console/ConsoleApp";
 import { mrAsk, type MrAskAnswer } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
+import { describeFailure } from "@/lib/load";
 import { Prose } from "./Prose";
 import { splitAnswer } from "./shared";
 
@@ -37,7 +38,7 @@ export function AskView({ seed, onSeedConsumed, onToast }: {
       setThread((t) => t.map((e, i) => (i === t.length - 1 ? { ...e, answer: a } : e)));
     } catch (e) {
       setThread((t) => t.slice(0, -1));
-      onToast(e instanceof Error ? e.message : "Ask failed", "error");
+      onToast(describeFailure(e, "Ask failed"), "error");
     } finally {
       setAsking(false);
     }

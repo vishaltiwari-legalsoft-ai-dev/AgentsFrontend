@@ -9,6 +9,7 @@ import {
   type BwRun as BwRunDoc, type BwRunSummary, type BwVoice as BwVoiceDoc,
 } from "@/lib/api";
 import { Icon } from "@/lib/kit-ui";
+import { describeFailure, useLoadSession } from "@/lib/load";
 import { useReportWork } from "@/lib/work";
 
 /** Blog Writer (a9) — brand catalogue → blog inventory → deep-research writing desk. */
@@ -105,20 +106,27 @@ export function BlogWriter({ onToast, onBack }: { onToast: ToastFn; onBack: () =
   const autoRef = useRef(false);
   useReportWork(!!busy);
 
+  const session = useLoadSession();
+
+  /** Was a fourth private copy of the same two lines. The shared classifier
+   *  keeps `RequestTimeoutError`'s own sentence, which none of the copies did. */
   const fail = useCallback(
-    (e: unknown, fallback: string) => onToast(e instanceof Error ? e.message : fallback, "error"),
+    (e: unknown, fallback: string) => onToast(describeFailure(e, fallback), "error"),
     [onToast],
   );
 
   const refresh = useCallback(async () => {
+    const attempt = session.begin("desk");
     try {
       const [b, r] = await Promise.all([bwBrands(), bwRuns()]);
+      if (!attempt.current()) return;
       setBrands(b.brands);
       setRuns(r.runs);
     } catch (e) {
-      fail(e, "Could not load the Blog Writer");
+      const message = attempt.failure(e, "Could not load the Blog Writer");
+      if (message) onToast(message, "error");
     }
-  }, [fail]);
+  }, [session, onToast]);
 
   useEffect(() => {
     void refresh();
@@ -133,15 +141,15 @@ export function BlogWriter({ onToast, onBack }: { onToast: ToastFn; onBack: () =
   useEffect(() => {
     const savedId = typeof window !== "undefined" ? localStorage.getItem(OPEN_RUN_KEY) : null;
     if (!savedId) return;
-    let cancelled = false;
+    const attempt = session.begin("restore");
     (async () => {
       try {
         const full = await bwRun(savedId);
-        if (cancelled) return;
+        if (!attempt.current()) return;
         setRun(full);
         try {
           const b = await bwBrands();
-          if (cancelled) return;
+          if (!attempt.current()) return;
           const owner = b.brands.find((x) => x.id === full.brand_id) ?? null;
           setBrand(owner);
           if (owner) {
@@ -154,7 +162,7 @@ export function BlogWriter({ onToast, onBack }: { onToast: ToastFn; onBack: () =
         } catch {
           /* brand context is cosmetic here; the run view stands alone */
         }
-        if (!cancelled && full.status === "research") {
+        if (attempt.current() && full.status === "research") {
           setBusy("research");
           void researchLoop(full);
         }
@@ -162,9 +170,6 @@ export function BlogWriter({ onToast, onBack }: { onToast: ToastFn; onBack: () =
         localStorage.removeItem(OPEN_RUN_KEY); // run gone — forget it
       }
     })();
-    return () => {
-      cancelled = true;
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

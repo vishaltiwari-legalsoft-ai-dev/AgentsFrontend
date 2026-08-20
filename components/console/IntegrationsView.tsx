@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ToastFn } from "@/components/console/ConsoleApp";
 import { Button, Badge } from "@/lib/kit-ui";
+import { describeFailure } from "@/lib/load";
 import { gdRefSyncDrive } from "@/lib/api";
 
 interface Integration {
@@ -53,7 +54,7 @@ export function IntegrationsView({ onToast }: { onToast?: ToastFn }) {
           (r.skipped_folders.length ? `. Skipped: ${r.skipped_folders.join(", ")}` : ""),
       );
     } catch (e) {
-      onToast?.(`Drive sync failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+      onToast?.(`Drive sync failed: ${describeFailure(e, String(e))}`, "error");
     } finally {
       setSyncing(false);
     }

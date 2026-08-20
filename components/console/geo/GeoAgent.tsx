@@ -9,6 +9,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Icon } from "@/lib/kit-ui";
+import { describeFailure, useLoadSession } from "@/lib/load";
 import { useReportWork } from "@/lib/work";
 import type { ToastFn } from "@/components/console/ConsoleApp";
 import { AnswerText } from "./AnswerText";
@@ -108,25 +109,39 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
   const [newCompetitor, setNewCompetitor] = useState("");
   const [newPrompt, setNewPrompt] = useState("");
   const stopPoll = useRef(false);
-  const mounted = useRef(true);
+  /** Which brand the screen is currently showing. Every brand-scoped reply
+   *  checks it before writing: the slot ticket stops a *second* call to the
+   *  same loader landing under the first, and this stops one loader's reply
+   *  landing under a brand the user has since moved on from. */
+  const openBrandId = useRef<string | null>(null);
+  const session = useLoadSession();
 
   useReportWork(busy || polling);
 
   const refresh = useCallback(async () => {
+    const attempt = session.begin("brands");
     try {
       const [cfg, list] = await Promise.all([geoConfig(), geoBrands()]);
+      if (!attempt.current()) return;
       setGlobalCfg(cfg);
       setBrands(list.brands);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Failed to load", "error");
+      const message = attempt.failure(e, "Couldn't load the brands");
+      if (message) onToast(message, "error");
     }
-  }, [onToast]);
+  }, [onToast, session]);
 
   useEffect(() => { void refresh(); }, [refresh]);
-  useEffect(() => () => { mounted.current = false; stopPoll.current = true; }, []);
+  useEffect(() => () => { stopPoll.current = true; }, []);
 
+  /** Four endpoints into five pieces of shared state. Open brand A, then brand
+   *  B before A lands, and A's report used to render under B's name — the exact
+   *  race `RequestSequence` was written for, at the one call site that most
+   *  needed it. One ticket covers all four, so a superseded open writes nothing
+   *  and says nothing; B set the loading flag and B is the one that clears it. */
   async function openBrand(row: GeoBrandRow) {
     setBrand(row);
+    openBrandId.current = row.id;
     setTab("insights");
     setReport(null);
     setProgress(null);
@@ -134,6 +149,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
     setAnswers([]);
     setSchedule(null);
     setLoadingBrand(true);
+    const attempt = session.begin("brand");
     try {
       const [p, r, c, s] = await Promise.all([
         geoPrompts(row.id), geoReport(row.id), geoBrandConfig(row.id),
@@ -141,22 +157,30 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
         // opens, it just cannot say when its next sweep is
         geoPollStatus(row.id).catch(() => null),
       ]);
+      if (!attempt.current()) return;
       setPrompts(p.prompts ?? []);
       setReport(r);
       setBrandCfg(c);
       setSchedule(s);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Failed to load brand", "error");
+      const message = attempt.failure(e, "Failed to load brand");
+      if (message) onToast(message, "error");
     } finally {
-      setLoadingBrand(false);
+      if (attempt.current()) setLoadingBrand(false);
     }
   }
 
   async function reloadReport(brandId: string) {
+    const attempt = session.begin("report");
     try {
-      setReport(await geoReport(brandId));
+      const next = await geoReport(brandId);
+      // A poll runs for minutes; the user may well have opened another brand
+      // by the time it finishes.
+      if (!attempt.current() || openBrandId.current !== brandId) return;
+      setReport(next);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not load the report", "error");
+      const message = attempt.failure(e, "Could not load the report");
+      if (message) onToast(message, "error");
     }
   }
 
@@ -170,7 +194,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
       setTab("prompts");
       onToast(`Drafted ${doc.prompts.length} prompts — review and edit them, then poll.`);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Prompt generation failed", "error");
+      onToast(describeFailure(e, "Prompt generation failed"), "error");
     } finally {
       setBusy(false);
     }
@@ -183,7 +207,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
       await geoSavePrompts(brand.id, prompts);
       onToast("Prompts saved");
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Save failed", "error");
+      onToast(describeFailure(e, "Save failed"), "error");
     } finally {
       setBusy(false);
     }
@@ -208,10 +232,14 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
     stopPoll.current = false;
     onToast("Polling engines — each prompt runs multiple times so the numbers carry a variance band…");
     let state: PollLoopState = initialPollState();
+    // Not a load, but it has the same question to answer between steps: is
+    // anyone still looking? `close()` on unmount makes this false, which is
+    // what `mounted = useRef(true)` was hand-rolling.
+    const attempt = session.begin("poll");
     try {
       for (;;) {
         const p = await geoPollStep(brand.id, {});
-        if (!mounted.current) return;
+        if (!attempt.current()) return;
         setProgress(p);
 
         const step = pollDecision(state, p, { stopRequested: stopPoll.current });
@@ -223,7 +251,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
         }
 
         await sleepUnlessStopped(step.decision.delayMs, stopPoll);
-        if (!mounted.current) return;
+        if (!attempt.current()) return;
         // asked to stop during the gap — do not buy another batch to find out
         if (stopPoll.current) {
           const bail = pollStoppedByUser(p);
@@ -235,13 +263,13 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
       await reloadReport(brand.id);
       await refresh();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Polling failed";
-      if (mounted.current) {
+      const msg = attempt.failure(e, "Polling failed");
+      if (msg) {
         onToast(msg, "error");
         setPollNote({ text: `Poll stopped — ${msg}`, warn: true });
       }
     } finally {
-      if (mounted.current) {
+      if (attempt.current()) {
         setPolling(false);
         setStopRequested(false);
       }
@@ -250,16 +278,20 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
 
   async function loadAnswers(engine: string) {
     if (!brand) return;
+    const brandId = brand.id;
     setAnswerEngine(engine);
     setOpenAnswer(null);
     setLoadingAnswers(true);
+    const attempt = session.begin("answers");
     try {
-      const res = await geoAnswers(brand.id, engine ? { engine } : {});
+      const res = await geoAnswers(brandId, engine ? { engine } : {});
+      if (!attempt.current() || openBrandId.current !== brandId) return;
       setAnswers(res.answers);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not load answers", "error");
+      const message = attempt.failure(e, "Could not load answers");
+      if (message) onToast(message, "error");
     } finally {
-      setLoadingAnswers(false);
+      if (attempt.current()) setLoadingAnswers(false);
     }
   }
 
@@ -272,7 +304,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
       setNewPrompt("");
       onToast("Added — your question survives every regeneration.");
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not add the question", "error");
+      onToast(describeFailure(e, "Could not add the question"), "error");
     } finally {
       setBusy(false);
     }
@@ -299,7 +331,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
           : `${name} tracked. Not named in any stored answer yet; future polls measure them.`,
       );
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not save competitor", "error");
+      onToast(describeFailure(e, "Could not save competitor"), "error");
     }
   }
 
@@ -319,7 +351,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
       setSchedule(await geoPollStatus(brand.id).catch(() => null));
       onToast("Schedule saved — the next cron run honours it.");
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not save the schedule", "error");
+      onToast(describeFailure(e, "Could not save the schedule"), "error");
     }
   }
 

@@ -7,6 +7,7 @@ import {
   type MrReport, type MrReportKind, type MrReportPeriods, type MrRunSummary,
 } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
+import { describeFailure, useLoadSession } from "@/lib/load";
 import { REPORT_META } from "./reportMeta";
 import { MrReportDoc } from "./MrReportDoc";
 import { fmtTime } from "./shared";
@@ -41,6 +42,7 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
   const [report, setReport] = useState<MrReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const session = useLoadSession();
   const [picker, setPicker] = useState<MrReportKind | null>(null);
   const [periods, setPeriods] = useState<MrReportPeriods | null>(null);
   const [periodsLoading, setPeriodsLoading] = useState(false);
@@ -77,7 +79,7 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "PDF download failed", "error");
+      onToast(describeFailure(e, "PDF download failed"), "error");
     } finally {
       setDownloading(false);
     }
@@ -91,14 +93,17 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
     setPicker(kind);
     if (!periods && !periodsLoading) {
       setPeriodsLoading(true);
+      const attempt = session.begin("periods");
       try {
-        setPeriods(await mrReportPeriods());
+        const list = await mrReportPeriods();
+        if (attempt.current()) setPeriods(list);
       } catch (e) {
         // Not cached: the next open retries, and the menu falls back to the
         // default entry meanwhile.
-        onToast(e instanceof Error ? e.message : "Couldn't load available months", "error");
+        const message = attempt.failure(e, "Couldn't load available months");
+        if (message) onToast(message, "error");
       } finally {
-        setPeriodsLoading(false);
+        if (attempt.current()) setPeriodsLoading(false);
       }
     }
   }
@@ -110,7 +115,7 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
       setReport(await mrBuildReport(kind, period));
       await onRunsChanged();
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Report failed", "error");
+      onToast(describeFailure(e, "Report failed"), "error");
     } finally {
       setBusy(false);
     }
@@ -120,7 +125,7 @@ export function ReportsView({ runs, onRunsChanged, onToast }: {
     try {
       setReport(await mrGetRun(id));
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Failed to open report", "error");
+      onToast(describeFailure(e, "Failed to open report"), "error");
     }
   }
 

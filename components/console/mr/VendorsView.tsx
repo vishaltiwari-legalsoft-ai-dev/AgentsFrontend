@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { isAbortError, mrPortfolio, mrVendorDetail, mrVendorPdfUrl, type MrPortfolio, type MrSnapshotMeta, type MrVendorDetail } from "@/lib/api";
+import { mrPortfolio, mrVendorDetail, mrVendorPdfUrl, type MrPortfolio, type MrSnapshotMeta, type MrVendorDetail } from "@/lib/api";
+import { describeFailure, useLoadSession } from "@/lib/load";
 import type { ToastFn } from "@/components/console/ConsoleApp";
 import { Button, Icon } from "@/lib/kit-ui";
 import { LeadQuality } from "./LeadQuality";
@@ -152,7 +153,7 @@ function DownloadDossier({ slug, date, vendor, onToast }: {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : `PDF download failed for ${vendor}`, "error");
+      onToast(describeFailure(e, `PDF download failed for ${vendor}`), "error");
     } finally {
       setBusy(false);
     }
@@ -291,23 +292,26 @@ export function VendorsView({ snapshots, onToast }: {
   const toast = useRef(onToast);
   useEffect(() => { toast.current = onToast; }, [onToast]);
 
+  const session = useLoadSession();
+
   useEffect(() => {
-    const ctrl = new AbortController();
-    mrPortfolio({ signal: ctrl.signal })
+    const attempt = session.begin("portfolio");
+    mrPortfolio({ signal: attempt.signal })
       .then((p) => {
+        if (!attempt.current()) return;
         setPortfolioData(p);
         setPortfolioError(null);
       })
       .catch((e: unknown) => {
-        if (isAbortError(e)) return;
         // Was swallowed into `null`, which the UI then read as "no snapshot
         // yet". Keep the reason so the benchmarks row and the copy button can
         // say what actually happened.
+        const message = attempt.failure(e, "Portfolio totals failed to load");
+        if (!message) return;
         setPortfolioData(null);
-        setPortfolioError(e instanceof Error ? e.message : "Portfolio totals failed to load");
+        setPortfolioError(message);
       });
-    return () => ctrl.abort();
-  }, []);
+  }, [session]);
 
   const active = slug ?? vendors[0]?.slug ?? null;
 
@@ -318,19 +322,21 @@ export function VendorsView({ snapshots, onToast }: {
     // and renders A's spend and lead figures under B's heading — silent
     // misattribution, no error, nothing to report. Aborting on switch stops
     // the stale response arriving at all.
-    const ctrl = new AbortController();
+    // `begin` supersedes the vendor before it: the abort stops us paying for a
+    // reply we no longer want, and the ticket stops one that already arrived
+    // from landing under the new vendor's name.
+    const attempt = session.begin("vendor-detail");
     setDetail(null);
     setDetailError(null);
-    mrVendorDetail(active, date ?? undefined, { signal: ctrl.signal })
-      .then(setDetail)
+    mrVendorDetail(active, date ?? undefined, { signal: attempt.signal })
+      .then((d) => { if (attempt.current()) setDetail(d); })
       .catch((e: unknown) => {
-        if (isAbortError(e)) return; // superseded by a newer vendor
-        const msg = e instanceof Error ? e.message : "Failed to load vendor";
+        const msg = attempt.failure(e, "Failed to load vendor");
+        if (!msg) return; // superseded by a newer vendor, or the panel is gone
         setDetailError(msg);
         toast.current(msg, "error");
       });
-    return () => ctrl.abort();
-  }, [active, date, retry]);
+  }, [active, date, retry, session]);
 
   if (vendors.length === 0) {
     return (

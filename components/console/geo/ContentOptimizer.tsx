@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ToastFn } from "@/components/console/ConsoleApp";
 import {
   geoOptimizerAnalyses, geoOptimizerAnalysis, geoOptimizerAnalyze, geoOptimizerRescore,
   type OptimizerAnalysis, type OptimizerIndexRow, type OptimizerReport,
 } from "@/lib/api";
 import { Icon } from "@/lib/kit-ui";
+import { describeFailure, loadPending, useLoadSession, type Load } from "@/lib/load";
 import { useReportWork } from "@/lib/work";
 
 /** Content Optimizer — score a draft against what actually ranks today.
@@ -35,13 +36,25 @@ export function ContentOptimizer({ ownDomain, onToast }: { ownDomain?: string; o
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [doc, setDoc] = useState<OptimizerAnalysis | null>(null);
-  const [history, setHistory] = useState<OptimizerIndexRow[]>([]);
+  const [history, setHistory] = useState<Load<OptimizerIndexRow[]>>(loadPending);
 
+  const session = useLoadSession();
   useReportWork(busy);
 
-  useEffect(() => {
-    geoOptimizerAnalyses().then((r) => setHistory(r.analyses)).catch(() => undefined);
-  }, []);
+  /** Was `.catch(() => undefined)`: a failed read left `history` at `[]` and
+   *  the list below simply did not render, so a user whose past analyses were
+   *  unreachable was shown a screen that says they have none — and the only way
+   *  out of it is to pay for a fresh SERP sweep. */
+  const loadHistory = useCallback(() => {
+    void session.run(
+      "history",
+      async () => (await geoOptimizerAnalyses()).analyses,
+      setHistory,
+      "Couldn't load your past analyses",
+    );
+  }, [session]);
+
+  useEffect(loadHistory, [loadHistory]);
 
   async function analyze() {
     if (!keyword.trim() || busy) return;
@@ -51,10 +64,9 @@ export function ContentOptimizer({ ownDomain, onToast }: { ownDomain?: string; o
         keyword: keyword.trim(), draft, own_domain: ownDomain ?? "",
       });
       setDoc(res);
-      const r = await geoOptimizerAnalyses();
-      setHistory(r.analyses);
+      loadHistory();
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Analysis failed", "error");
+      onToast(describeFailure(e, "Analysis failed"), "error");
     } finally {
       setBusy(false);
     }
@@ -68,22 +80,25 @@ export function ContentOptimizer({ ownDomain, onToast }: { ownDomain?: string; o
       setDoc({ ...doc, last_report: report });
       onToast("Re-scored against the same snapshot — same corpus, honest comparison.");
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Re-score failed", "error");
+      onToast(describeFailure(e, "Re-score failed"), "error");
     } finally {
       setBusy(false);
     }
   }
 
   async function openHistory(id: string) {
+    const attempt = session.begin("analysis");
     setBusy(true);
     try {
       const res = await geoOptimizerAnalysis(id);
+      if (!attempt.current()) return; // a newer chip owns the panel
       setDoc(res);
       setKeyword(res.meta.keyword);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not load analysis", "error");
+      const message = attempt.failure(e, "Could not load analysis");
+      if (message) onToast(message, "error");
     } finally {
-      setBusy(false);
+      if (attempt.current()) setBusy(false);
     }
   }
 
@@ -132,16 +147,30 @@ export function ContentOptimizer({ ownDomain, onToast }: { ownDomain?: string; o
         <div className="geo-progress">Reading the top results for this keyword — usually under a minute…</div>
       )}
 
-      {history.length > 0 && !doc && (
+      {!doc && (history.data?.length ?? 0) > 0 && (
         <div className="mr-section">
           <h3 className="mr-section__title">Recent analyses</h3>
           <div className="geo-competitors">
-            {history.slice(0, 8).map((h) => (
+            {(history.data ?? []).slice(0, 8).map((h) => (
               <button key={h.id} className="seo-chip opt-history" onClick={() => void openHistory(h.id)}>
                 {h.keyword}{h.score !== null ? ` · ${h.score}/100` : ""}
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Not "you have no past analyses" — a failed read, said out loud, with
+          the retry that costs nothing next to the Analyze button that costs a
+          SERP sweep. */}
+      {!doc && history.phase === "failed" && !history.data && (
+        <div className="mr-section">
+          <h3 className="mr-section__title">Recent analyses</h3>
+          <p className="geo-note">
+            Couldn&apos;t load your past analyses — {history.error}. They still exist; this is a
+            failed read, so a fresh analysis is not the fix.{" "}
+            <button className="seo-btn" onClick={loadHistory}>Try again</button>
+          </p>
         </div>
       )}
 

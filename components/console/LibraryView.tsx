@@ -3,24 +3,23 @@
 import { useEffect, useState } from "react";
 import { loadLibrary, type GalleryItem, type LibraryBrand } from "@/lib/api";
 import { Icon, Button } from "@/lib/kit-ui";
+import { useLoadSession } from "@/lib/load";
 
 export function LibraryView({ onBack }: { onBack: () => void }) {
   const [brands, setBrands] = useState<LibraryBrand[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const session = useLoadSession();
+
   useEffect(() => {
-    let cancelled = false;
+    const attempt = session.begin("library");
     loadLibrary()
-      .then((result) => {
-        if (!cancelled) setBrands(result);
-      })
+      .then((result) => { if (attempt.current()) setBrands(result); })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load library");
+        const message = attempt.failure(err, "Failed to load library");
+        if (message) setError(message);
       });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [session]);
 
   return (
     <div className="cview" style={{ maxWidth: "100%" }}>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getImageLibrary, imageLibraryBlob, type ImageLibraryItem } from "@/lib/api";
 import { Icon, Button } from "@/lib/kit-ui";
+import { useLoadSession } from "@/lib/load";
 
 function formatDate(iso: string): string {
   if (!iso) return "—";
@@ -21,19 +22,17 @@ export function ImageLibraryView({ onBack }: { onBack: () => void }) {
   const [items, setItems] = useState<ImageLibraryItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const session = useLoadSession();
+
   useEffect(() => {
-    let cancelled = false;
+    const attempt = session.begin("image-library");
     getImageLibrary()
-      .then((r) => {
-        if (!cancelled) setItems(r.items);
-      })
+      .then((r) => { if (attempt.current()) setItems(r.items); })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load the image library");
+        const message = attempt.failure(err, "Failed to load the image library");
+        if (message) setError(message);
       });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [session]);
 
   return (
     <div className="cview" style={{ maxWidth: "100%" }}>
@@ -84,25 +83,27 @@ function GalleryCard({ item }: { item: ImageLibraryItem }) {
   const isProxy = item.view_url.startsWith("/api/");
   const [src, setSrc] = useState<string | null>(isProxy ? null : item.view_url);
   const [broken, setBroken] = useState(false);
+  const session = useLoadSession();
 
   useEffect(() => {
     if (!isProxy) return;
     let objectUrl: string | null = null;
-    let cancelled = false;
+    const attempt = session.begin("thumb");
     imageLibraryBlob(item.view_url)
       .then((url) => {
         objectUrl = url;
-        if (!cancelled) setSrc(url);
+        // The URL is a real resource, so a thumbnail that arrives after the
+        // tile has gone is revoked rather than leaked.
+        if (attempt.current()) setSrc(url);
         else URL.revokeObjectURL(url);
       })
-      .catch(() => {
-        if (!cancelled) setBroken(true);
+      .catch((err: unknown) => {
+        if (attempt.failure(err, "thumbnail failed")) setBroken(true);
       });
     return () => {
-      cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [isProxy, item.view_url]);
+  }, [isProxy, item.view_url, session]);
 
   const download = () => {
     if (!src) return;

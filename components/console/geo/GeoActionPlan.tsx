@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ToastFn } from "@/components/console/ConsoleApp";
 import {
   geoStrategyActionStatus, geoStrategyGenerate, geoStrategyGet,
@@ -8,6 +8,7 @@ import {
   type GeoStrategyVenue,
 } from "@/lib/api";
 import { Icon } from "@/lib/kit-ui";
+import { describeFailure, loadPending, loadReady, useLoadSession, type Load } from "@/lib/load";
 import { useReportWork } from "@/lib/work";
 
 /** Action Plan — the strategy the data asked for, with its own scoreboard.
@@ -71,23 +72,32 @@ function VenueLine({ venue }: { venue: GeoStrategyVenue | null }) {
 
 
 export function GeoActionPlan({ brand, report, isCreator, onToast }: Props) {
-  const [doc, setDoc] = useState<GeoStrategyDoc | null>(null);
+  const [doc, setDoc] = useState<Load<GeoStrategyDoc>>(loadPending);
   const [busy, setBusy] = useState(false);
 
+  const session = useLoadSession();
   useReportWork(busy);
 
-  useEffect(() => {
-    geoStrategyGet(brand.id).then(setDoc).catch(() => undefined);
-  }, [brand.id]);
+  /** Was `.catch(() => undefined)`, which left `doc` null — and null is what
+   *  "this brand has no plan yet" looks like. So a failed read rendered the
+   *  "No plan yet · Generate the plan" hero, whose button is a model call. The
+   *  failure now has its own phase and its own screen, and the free retry is
+   *  the one on offer. */
+  const load = useCallback(() => {
+    setDoc((prev) => (prev.data === null ? loadPending : prev));
+    void session.run("plan", () => geoStrategyGet(brand.id), setDoc, "Couldn't load the action plan");
+  }, [brand.id, session]);
+
+  useEffect(load, [load]);
 
   async function generate() {
     if (busy) return;
     setBusy(true);
     try {
-      setDoc(await geoStrategyGenerate(brand.id));
+      setDoc(loadReady(await geoStrategyGenerate(brand.id)));
       onToast("Plan drafted from this week's measured numbers.");
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not generate the plan", "error");
+      onToast(describeFailure(e, "Could not generate the plan"), "error");
     } finally {
       setBusy(false);
     }
@@ -95,21 +105,21 @@ export function GeoActionPlan({ brand, report, isCreator, onToast }: Props) {
 
   async function cycleStatus(action: GeoStrategyAction) {
     try {
-      setDoc(await geoStrategyActionStatus(brand.id, action.id, STATUS_CYCLE[action.status]));
+      setDoc(loadReady(await geoStrategyActionStatus(brand.id, action.id, STATUS_CYCLE[action.status])));
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not update the action", "error");
+      onToast(describeFailure(e, "Could not update the action"), "error");
     }
   }
 
   async function skip(action: GeoStrategyAction) {
     try {
-      setDoc(await geoStrategyActionStatus(brand.id, action.id, "skipped"));
+      setDoc(loadReady(await geoStrategyActionStatus(brand.id, action.id, "skipped")));
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not update the action", "error");
+      onToast(describeFailure(e, "Could not update the action"), "error");
     }
   }
 
-  const plan = doc?.current;
+  const plan = doc.data?.current;
 
   // live "current" values computed with the SAME formulas as the baseline —
   // a kpi with no honest live twin simply shows baseline → target
@@ -124,6 +134,33 @@ export function GeoActionPlan({ brand, report, isCreator, onToast }: Props) {
 
   const fmt = (kpi: string, v: number | undefined) =>
     v === undefined ? "—" : kpi.endsWith("_count") ? String(Math.round(v)) : pct(v);
+
+  // "No plan yet" is a claim about the brand. Only make it once the read has
+  // actually come back; otherwise the CTA under it spends a model call trying
+  // to fix a Firestore read that failed.
+  if (doc.phase === "failed" && !doc.data) {
+    return (
+      <div className="mr-panel">
+        <div className="geo-hero">
+          <div className="geo-hero__big geo-hero__big--muted">Couldn&apos;t load the action plan</div>
+          <p className="geo-hero__empty">{doc.error}</p>
+          <p className="geo-note">
+            If a plan was generated for this brand it is still stored — this is a failed read, not
+            an empty brand, so generating a new one would only overwrite it.
+          </p>
+          <button className="seo-btn" onClick={load}>Try again</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (doc.phase === "loading") {
+    return (
+      <div className="mr-panel">
+        <div className="seo-empty">Loading the action plan…</div>
+      </div>
+    );
+  }
 
   if (!plan) {
     return (

@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  useCallback, useEffect, useMemo, useRef, useState,
-  type Dispatch, type SetStateAction,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   mrAddSource, mrConfig, mrConnectors, mrDatasets, mrDeleteDataset, mrDeleteSource,
   mrIngest, mrIngestPdf, mrIngestSheet, mrListRuns, mrOverview, mrSnapshots,
@@ -13,6 +10,10 @@ import {
   type MrTabProfile,
 } from "@/lib/api";
 import type { ToastFn } from "@/components/console/ConsoleApp";
+import {
+  describeFailure, failuresOf, LIVE_REFRESH_MS, loadJob, loadPending, loadReady,
+  useLoadSession, type Load, type LoadJob,
+} from "@/lib/load";
 import { Button, Icon, Tabs } from "@/lib/kit-ui";
 import { AskView } from "./AskView";
 import { DataView } from "./DataView";
@@ -23,125 +24,14 @@ import { VendorsView } from "./VendorsView";
 
 export type MrView = "overview" | "leads" | "ask" | "reports" | "vendors" | "data";
 
-/* ------------------------------- Load state -------------------------------
+/* The load-state module that used to live here is now `lib/load.ts`.
  *
- *  Every load in this screen used to end in `.catch(() => {})`, which leaves
- *  the state at the empty value it started with. A child then has no way to
- *  tell "the server answered and there is nothing" from "we never found out",
- *  so it renders its empty state — and a failed snapshot read told the user
- *  "No vendor snapshots yet — hit Snapshot now", sending them into a second
- *  action that fails exactly the same way.
- *
- *  `phase` is the fix: `failed` is a third answer that neither an empty array
- *  nor `null` can express. The transitions and the wording of the failure are
- *  decisions rather than I/O, so they are pure functions at module scope and
- *  testable without a component, the same way `lib/requestPolicy.ts` and
- *  `geo/pollLoop.ts` keep their rules provable.
+ *  It was pure, dependency-free and exported — and imported by exactly nothing
+ *  outside this folder, because reaching it meant importing a 545-line `.tsx`
+ *  and dragging React and six child components in with it. Twenty modules
+ *  hand-rolled a worse version instead. The code did not need rewriting; it
+ *  needed to be reachable.
  */
-
-export type LoadPhase = "loading" | "ready" | "failed";
-
-export interface Load<T> {
-  readonly phase: LoadPhase;
-  /** The last value actually received. Survives a later failure so a working
-   *  screen does not blank out when a refresh fails. */
-  readonly data: T | null;
-  /** Why the last attempt failed. Non-null only while `phase === "failed"`. */
-  readonly error: string | null;
-}
-
-/** Shared because it is immutable — every load starts here. */
-export const loadPending: Load<never> = { phase: "loading", data: null, error: null };
-
-export const loadReady = <T,>(data: T): Load<T> => ({ phase: "ready", data, error: null });
-
-/** The message a user sees. `fallback` covers a rejection that is not an
- *  `Error` (or an `Error` with an empty message) — never show them "[object
- *  Object]" or a blank line where the reason should be. */
-export const loadMessage = (e: unknown, fallback: string): string =>
-  e instanceof Error && e.message.trim() ? e.message : fallback;
-
-/** `keepStale` is for unattended refreshes only: numbers already on screen
- *  really were received, so a missed 3-minute poll should leave them alone
- *  rather than replace true data with an error. With nothing on screen there is
- *  nothing to protect and the failure must show, or the poll silently restores
- *  the false-empty this whole module exists to remove. */
-export function loadFailed<T>(
-  prev: Load<T>,
-  message: string,
-  opts: { keepStale?: boolean } = {},
-): Load<T> {
-  if (opts.keepStale && prev.data !== null) return prev;
-  return { phase: "failed", data: prev.data, error: message };
-}
-
-/** The failed loads out of a set, in the order given, ready to render. */
-export function failuresOf(
-  entries: readonly { label: string; load: Load<unknown> }[],
-): { label: string; error: string }[] {
-  return entries
-    .filter((e) => e.load.phase === "failed")
-    .map((e) => ({ label: e.label, error: e.load.error ?? "the load failed" }));
-}
-
-/** One line for a batch of failures, or null when nothing failed. Error toasts
- *  never auto-dismiss and stack only four deep, so a dead backend must produce
- *  one sentence the user can act on instead of five that bury each other. */
-export function loadFailureToast(
-  failures: readonly { label: string; message: string }[],
-): string | null {
-  const first = failures[0];
-  if (!first) return null;
-  if (failures.length === 1) return `${first.label} didn't load — ${first.message}`;
-  const labels = failures.map((f) => f.label).join(", ");
-  return `${failures.length} parts of Marketing Research didn't load (${labels}) — ${first.message}`;
-}
-
-/** Run one load and record the outcome. Resolves to the failure message, or
- *  null on success, so the caller announces the batch rather than each call. */
-export function runLoad<T>(
-  fetchIt: () => Promise<T>,
-  set: Dispatch<SetStateAction<Load<T>>>,
-  fallback: string,
-  keepStale = false,
-): Promise<string | null> {
-  return fetchIt().then(
-    (value) => {
-      set(loadReady(value));
-      return null;
-    },
-    (e: unknown) => {
-      const message = loadMessage(e, fallback);
-      set((prev) => loadFailed(prev, message, { keepStale }));
-      return message;
-    },
-  );
-}
-
-export interface LoadJob {
-  /** How this load is named to the user when it fails. */
-  readonly label: string;
-  readonly load: (keepStale: boolean) => Promise<string | null>;
-}
-
-/** Run a batch together and report its failures once. A background run stays
- *  silent — the user did not ask for it and the next attempt is 3 minutes
- *  away — but it still records the failure in state, so a screen with nothing
- *  on it says so instead of reverting to a false empty. */
-export async function runGroup(
-  jobs: readonly LoadJob[],
-  opts: { background?: boolean; toast?: ToastFn } = {},
-): Promise<void> {
-  const background = opts.background === true;
-  const results = await Promise.all(jobs.map((j) => j.load(background)));
-  if (background) return;
-  const failures: { label: string; message: string }[] = [];
-  results.forEach((message, i) => {
-    if (message) failures.push({ label: jobs[i].label, message });
-  });
-  const line = loadFailureToast(failures);
-  if (line) opts.toast?.(line, "error");
-}
 
 /* ------------------------------ Failure views ----------------------------- */
 
@@ -222,65 +112,44 @@ export function MarketingResearch({ onToast, onBack }: { onToast: ToastFn; onBac
   useEffect(() => { toast.current = onToast; }, [onToast]);
   const announce = useCallback<ToastFn>((msg, tone) => toast.current(msg, tone), []);
 
+  const session = useLoadSession();
+
   /** `useState` setters are stable, so these are built once. */
   const jobs = useMemo(() => ({
-    overview: {
-      label: "Dashboard",
-      load: (k: boolean) => runLoad(mrOverview, setOverview, "Couldn't load the dashboard", k),
-    },
-    datasets: {
-      label: "Files",
-      load: (k: boolean) => runLoad(mrDatasets, setDatasets, "Couldn't load the file list", k),
-    },
-    runs: {
-      label: "Report history",
-      load: (k: boolean) => runLoad(mrListRuns, setRuns, "Couldn't load the report history", k),
-    },
-    snapshots: {
-      label: "Vendor snapshots",
-      load: (k: boolean) => runLoad(mrSnapshots, setSnapshots, "Couldn't load the vendor snapshots", k),
-    },
-    connectors: {
-      label: "Connectors",
-      load: (k: boolean) => runLoad(mrConnectors, setConnectors, "Couldn't load the connectors", k),
-    },
-    config: {
-      label: "Settings",
-      load: (k: boolean) => runLoad(
-        async () => {
-          const c = await mrConfig();
-          setYear((y) => y ?? c.year);
-          return c;
-        },
-        setConfig, "Couldn't load the configuration", k,
-      ),
-    },
-    catalog: {
-      label: "Workbook tabs",
-      load: (k: boolean) => runLoad(
-        async () => (await mrWorkbook()).tabs,
-        setCatalog, "Couldn't read the workbook", k,
-      ),
-    },
-    sources: {
-      label: "Connected sheets",
-      load: (k: boolean) => runLoad(mrSources, setSheetSources, "Couldn't load the connected sheets", k),
-    },
+    overview: loadJob("Dashboard", mrOverview, setOverview, "Couldn't load the dashboard"),
+    datasets: loadJob("Files", mrDatasets, setDatasets, "Couldn't load the file list"),
+    runs: loadJob("Report history", mrListRuns, setRuns, "Couldn't load the report history"),
+    snapshots: loadJob("Vendor snapshots", mrSnapshots, setSnapshots, "Couldn't load the vendor snapshots"),
+    connectors: loadJob("Connectors", mrConnectors, setConnectors, "Couldn't load the connectors"),
+    config: loadJob("Settings", async () => {
+      const c = await mrConfig();
+      setYear((y) => y ?? c.year);
+      return c;
+    }, setConfig, "Couldn't load the configuration"),
+    catalog: loadJob("Workbook tabs", async () => (await mrWorkbook()).tabs,
+      setCatalog, "Couldn't read the workbook"),
+    sources: loadJob("Connected sheets", mrSources, setSheetSources, "Couldn't load the connected sheets"),
   }), []);
+
+  /** Each group is one slot, so its own repeat supersedes it — the 3-minute
+   *  poll firing while the last one is still in flight no longer has two
+   *  answers racing into the same four states. */
+  const group = useCallback((slot: string, batch: readonly LoadJob[],
+                             opts: { background?: boolean } = {}) =>
+    session.runGroup(slot, batch, { ...opts, toast: announce, subject: "Marketing Research" }),
+    [session, announce]);
 
   /** The numbers the dashboard is made of. */
   const loadCore = useCallback((opts: { background?: boolean } = {}) =>
-    runGroup([jobs.overview, jobs.datasets, jobs.runs, jobs.snapshots],
-      { ...opts, toast: announce }), [jobs, announce]);
+    group("core", [jobs.overview, jobs.datasets, jobs.runs, jobs.snapshots], opts), [group, jobs]);
 
   /** What the Data tab is made of — connectors, settings, workbook, sources. */
   const loadSetup = useCallback((opts: { background?: boolean } = {}) =>
-    runGroup([jobs.connectors, jobs.config, jobs.catalog, jobs.sources],
-      { ...opts, toast: announce }), [jobs, announce]);
+    group("setup", [jobs.connectors, jobs.config, jobs.catalog, jobs.sources], opts), [group, jobs]);
 
   /** Re-read what a connect/disconnect just changed. */
   const loadSheets = useCallback(() =>
-    runGroup([jobs.sources, jobs.catalog], { toast: announce }), [jobs, announce]);
+    group("sheets", [jobs.sources, jobs.catalog]), [group, jobs]);
 
   const refresh = useCallback(() => loadCore(), [loadCore]);
   const retryAll = useCallback(() => { void loadCore(); void loadSetup(); }, [loadCore, loadSetup]);
@@ -296,7 +165,7 @@ export function MarketingResearch({ onToast, onBack }: { onToast: ToastFn; onBac
   // they are still recorded, so a poll can never turn a failed load back into
   // an innocent-looking empty screen.
   useEffect(() => {
-    const id = window.setInterval(() => { void loadCore({ background: true }); }, 180_000);
+    const id = window.setInterval(() => { void loadCore({ background: true }); }, LIVE_REFRESH_MS);
     return () => window.clearInterval(id);
   }, [loadCore]);
 
@@ -316,7 +185,7 @@ export function MarketingResearch({ onToast, onBack }: { onToast: ToastFn; onBac
       else onToast(`Pulled ${total} monthly rows from the live tracker`);
       await refresh();
     } catch (e) {
-      onToast(loadMessage(e, "Sheet pull failed"), "error");
+      onToast(describeFailure(e, "Sheet pull failed"), "error");
     } finally {
       setBusy(false);
     }
@@ -330,7 +199,7 @@ export function MarketingResearch({ onToast, onBack }: { onToast: ToastFn; onBac
       else onToast(`Ingested ${res.metrics} rows / ${res.leads} leads`);
       await refresh();
     } catch (e) {
-      onToast(loadMessage(e, "Upload failed"), "error");
+      onToast(describeFailure(e, "Upload failed"), "error");
     } finally {
       setBusy(false);
     }
@@ -344,7 +213,7 @@ export function MarketingResearch({ onToast, onBack }: { onToast: ToastFn; onBac
       else onToast(`Parsed ${res.metrics} metric rows from the PDF`);
       await refresh();
     } catch (e) {
-      onToast(loadMessage(e, "PDF upload failed"), "error");
+      onToast(describeFailure(e, "PDF upload failed"), "error");
     } finally {
       setBusy(false);
     }
@@ -358,7 +227,7 @@ export function MarketingResearch({ onToast, onBack }: { onToast: ToastFn; onBac
       onToast("File removed");
       await refresh();
     } catch (e) {
-      onToast(loadMessage(e, "Remove failed"), "error");
+      onToast(describeFailure(e, "Remove failed"), "error");
     } finally {
       setBusy(false);
     }
@@ -374,7 +243,7 @@ export function MarketingResearch({ onToast, onBack }: { onToast: ToastFn; onBac
       // is stale, and `loadSheets` says so rather than showing it as gospel.
       await loadSheets();
     } catch (e) {
-      onToast(loadMessage(e, "Could not connect that sheet"), "error");
+      onToast(describeFailure(e, "Could not connect that sheet"), "error");
     } finally {
       setBusy(false);
     }
@@ -388,7 +257,7 @@ export function MarketingResearch({ onToast, onBack }: { onToast: ToastFn; onBac
       onToast("Sheet disconnected");
       await loadSheets();
     } catch (e) {
-      onToast(loadMessage(e, "Disconnect failed"), "error");
+      onToast(describeFailure(e, "Disconnect failed"), "error");
     } finally {
       setBusy(false);
     }
@@ -405,7 +274,7 @@ export function MarketingResearch({ onToast, onBack }: { onToast: ToastFn; onBac
       // The catalog already on screen came from a good `mrWorkbook()` read and
       // is still true, so the load is not marked failed — only the scan failed,
       // and the toast is what says so.
-      onToast(loadMessage(e, "Scan failed"), "error");
+      onToast(describeFailure(e, "Scan failed"), "error");
     } finally {
       setBusy(false);
     }

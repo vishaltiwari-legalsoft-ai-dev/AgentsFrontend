@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { ToastFn } from "@/components/console/ConsoleApp";
 import { mrSnapshotCapture, mrSnapshotDeltas, type MrVendorDelta } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
+import { describeFailure, loadPending, useLoadSession, type Load } from "@/lib/load";
 import { fmtMoney, fmtNum } from "./shared";
 
 const HEADLINE: { path: string; label: string; money: boolean }[] = [
@@ -22,14 +23,22 @@ function sign(n: number | null, money: boolean): string {
 }
 
 export function DailyMovement({ onToast }: { onToast: ToastFn }) {
-  const [deltas, setDeltas] = useState<MrVendorDelta[] | null>(null);
+  const session = useLoadSession();
+  /** `.catch(() => setDeltas([]))` turned a failed read into an empty list, and
+   *  the empty list renders "No snapshots yet — hit Snapshot now". So the one
+   *  action offered for a broken read was to take a snapshot, which does not
+   *  fix a broken read. */
+  const [movement, setMovement] = useState<Load<MrVendorDelta[]>>(loadPending);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
   const load = useCallback(() => {
-    mrSnapshotDeltas().then(setDeltas).catch(() => setDeltas([]));
-  }, []);
-  useEffect(() => { load(); }, [load]);
+    void session.run("deltas", () => mrSnapshotDeltas(), setMovement,
+      "Couldn't read the snapshot history");
+  }, [session]);
+  useEffect(load, [load]);
+
+  const deltas = movement.data;
 
   async function snapshotNow() {
     setBusy(true);
@@ -41,7 +50,7 @@ export function DailyMovement({ onToast }: { onToast: ToastFn }) {
       onToast(errs ? `Captured ${ok} tabs · ${errs} error(s)` : `Captured ${ok} vendor tabs for ${res.date}`);
       load();
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Snapshot failed", "error");
+      onToast(describeFailure(e, "Snapshot failed"), "error");
     } finally {
       setBusy(false);
     }
@@ -60,7 +69,22 @@ export function DailyMovement({ onToast }: { onToast: ToastFn }) {
         </Button>
       </div>
 
-      {deltas === null ? (
+      {movement.phase === "failed" && !deltas ? (
+        <div className="mr-empty">
+          <strong>Couldn&rsquo;t read the snapshot history.</strong>
+          <div>{movement.error}</div>
+          <div style={{ marginTop: 6 }}>
+            Taking a new snapshot won&rsquo;t help — this is a failed read, and yesterday&rsquo;s
+            snapshots are still stored.
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <Button size="sm" variant="secondary" onClick={load}
+              iconLeft={<Icon name="refresh-cw" size={13} />}>
+              Try again
+            </Button>
+          </div>
+        </div>
+      ) : deltas === null ? (
         <div className="mr-empty">Reading snapshots…</div>
       ) : deltas.length === 0 ? (
         <div className="mr-empty">No snapshots yet — hit &ldquo;Snapshot now&rdquo; after today&apos;s sheet update to start the daily history.</div>

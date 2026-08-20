@@ -12,6 +12,7 @@ import {
   type ModelOption,
 } from "@/lib/api";
 import { Icon, Button } from "@/lib/kit-ui";
+import { describeFailure, useLoadSession } from "@/lib/load";
 import { NEWS_UPDATED_EVENT } from "@/components/console/Chrome";
 import { GlyphTile, CATEGORY_GLYPH } from "@/lib/glyph";
 import { useAuth } from "@/lib/auth";
@@ -82,23 +83,28 @@ function NewsEditor() {
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const session = useLoadSession();
 
+  /** This was the most expensive false empty in the tree. `.catch(() => …)`
+   *  followed by `setLoaded(true)` left the textarea empty and the Publish
+   *  button live, so a failed read of the current bulletin looked exactly like
+   *  "there is no bulletin" — and one Publish would have cleared the real one
+   *  for every signed-in user. A failed read now stays unsaveable. */
   useEffect(() => {
-    let cancelled = false;
+    const attempt = session.begin("news");
     getNews()
       .then((n) => {
-        if (cancelled) return;
+        if (!attempt.current()) return;
         setText(n.text);
         setSaved(n.text);
+        setLoaded(true);
       })
-      .catch(() => undefined)
-      .finally(() => {
-        if (!cancelled) setLoaded(true);
+      .catch((err: unknown) => {
+        const message = attempt.failure(err, "Couldn't read the current bulletin");
+        if (!message) return;
+        setMsg({ kind: "err", text: `${message} — not editable until it loads.` });
       });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [session]);
 
   const dirty = text.trim() !== saved.trim();
 
@@ -113,7 +119,7 @@ function NewsEditor() {
       window.dispatchEvent(new Event(NEWS_UPDATED_EVENT));
       setMsg({ kind: "ok", text: next.text ? "Published." : "Cleared." });
     } catch (err) {
-      setMsg({ kind: "err", text: err instanceof Error ? err.message : "Save failed" });
+      setMsg({ kind: "err", text: describeFailure(err, "Save failed") });
     } finally {
       setSaving(false);
     }
@@ -218,7 +224,7 @@ function AgentCard({
       onSaved(next);
       setMsg({ kind: "ok", text: "Saved." });
     } catch (err) {
-      setMsg({ kind: "err", text: err instanceof Error ? err.message : "Save failed" });
+      setMsg({ kind: "err", text: describeFailure(err, "Save failed") });
     } finally {
       setSaving(false);
     }
@@ -322,19 +328,17 @@ export function AgentConfigView({ onBack }: { onBack: () => void }) {
   const [data, setData] = useState<AgentConfigResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const session = useLoadSession();
+
   useEffect(() => {
-    let cancelled = false;
+    const attempt = session.begin("agent-config");
     getAgentConfig()
-      .then((d) => {
-        if (!cancelled) setData(d);
-      })
+      .then((d) => { if (attempt.current()) setData(d); })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load");
+        const message = attempt.failure(err, "Couldn't load the agent configuration");
+        if (message) setError(message);
       });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [session]);
 
   // Defensive: this view is only routed for creators, but guard anyway.
   if (!user?.is_creator) {

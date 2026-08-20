@@ -6,6 +6,7 @@ import {
   geoComparison, geoRescan, type GeoBrandRow, type GeoComparison, type GeoComparisonRow,
   type GeoCompetitor, type GeoUntrackedDomain,
 } from "@/lib/api";
+import { describeFailure, loadPending, useLoadSession, type Load } from "@/lib/load";
 import { Icon } from "@/lib/kit-ui";
 import {
   citationCell, headline, losingQuestions, matchNames, pct, positionCell, scoreboard,
@@ -34,21 +35,31 @@ type Props = {
 };
 
 export function GeoCompare({ brand, competitors, isCreator, onTrack, onToast, goPrompts }: Props) {
-  const [doc, setDoc] = useState<GeoComparison | null>(null);
-  const [loading, setLoading] = useState(true);
+  const session = useLoadSession();
+  const [comparison, setComparison] = useState<Load<GeoComparison>>(loadPending);
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
   const [saving, setSaving] = useState(false);
   const [extraFor, setExtraFor] = useState<string>("");
   const [extraName, setExtraName] = useState("");
 
+  /** This ran with no mount guard at all: switch brand or leave the tab while
+   *  the read is in flight and the reply still wrote state — into a component
+   *  that had gone, or under the wrong brand's name. The session's slot does
+   *  both jobs, and a superseded read now says nothing rather than toasting
+   *  about a load the user themselves replaced. */
   const load = useCallback(() => {
-    setLoading(true);
-    geoComparison(brand.id)
-      .then(setDoc)
-      .catch((e) => onToast(e instanceof Error ? e.message : "Could not load the comparison", "error"))
-      .finally(() => setLoading(false));
-  }, [brand.id, onToast]);
+    // A retry with nothing on screen goes back to "loading" rather than sitting
+    // on the old error while the new read is in flight.
+    setComparison((prev) => (prev.data === null ? loadPending : prev));
+    void session.run(
+      "comparison",
+      () => geoComparison(brand.id),
+      setComparison,
+      "Could not load the comparison",
+      { toast: onToast },
+    );
+  }, [brand.id, onToast, session]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -79,7 +90,7 @@ export function GeoCompare({ brand, competitors, isCreator, onTrack, onToast, go
       );
       load();
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not save the competitor", "error");
+      onToast(describeFailure(e, "Could not save the competitor"), "error");
     } finally {
       setSaving(false);
     }
@@ -108,7 +119,7 @@ export function GeoCompare({ brand, competitors, isCreator, onTrack, onToast, go
       );
       load();
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not add the name", "error");
+      onToast(describeFailure(e, "Could not add the name"), "error");
     } finally {
       setSaving(false);
     }
@@ -124,16 +135,33 @@ export function GeoCompare({ brand, competitors, isCreator, onTrack, onToast, go
       );
       load();
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "Could not re-read the stored answers", "error");
+      onToast(describeFailure(e, "Could not re-read the stored answers"), "error");
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading && !doc) {
+  const doc = comparison.data;
+  if (!doc) {
+    // A failed read used to render nothing at all — a blank tab under a live
+    // toast, which reads as "there is nothing to compare".
+    if (comparison.phase === "failed") {
+      return (
+        <div className="mr-panel">
+          <div className="geo-hero">
+            <div className="geo-hero__big geo-hero__big--muted">Couldn&apos;t load the comparison</div>
+            <p className="geo-hero__empty">{comparison.error}</p>
+            <p className="geo-note">
+              This is a failed read, not an empty scoreboard — the rivals you track are still
+              tracked, and their stored answers are still on disk.
+            </p>
+            <button className="seo-btn" onClick={load}>Try again</button>
+          </div>
+        </div>
+      );
+    }
     return <div className="mr-panel"><div className="seo-empty">Loading the comparison…</div></div>;
   }
-  if (!doc) return null;
 
   const losing = losingQuestions(doc.questions);
   const rivals = (doc.rows ?? []).filter((r) => !r.is_self);

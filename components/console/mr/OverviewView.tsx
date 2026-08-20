@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { ToastFn } from "@/components/console/ConsoleApp";
 import { mrPortfolio, mrTrends, type MrOverview, type MrPortfolio, type MrTrends } from "@/lib/api";
+import { LIVE_REFRESH_MS, loadPending, useLoadSession, type Load } from "@/lib/load";
 import { Button, Icon } from "@/lib/kit-ui";
 import { ChannelCard, Dot, fmtMoney, fmtMonth, fmtNum, fmtTime, sourceLabel } from "./shared";
 import { DailyMovement } from "./DailyMovement";
@@ -15,7 +16,14 @@ import { vendorSummaryRows } from "./vendorSummary";
    benchmarks. Sourced from the vendor snapshots (portfolio); falls back to the
    pulled tracker totals when no snapshot exists yet. Row-building, the status
    rules and which cells the tracker cannot fill live in ./vendorSummary. */
-function OfficialLedger({ p, t }: { p: MrPortfolio | null; t: MrOverview["totals"] }) {
+function OfficialLedger({ p, t, error }: {
+  p: MrPortfolio | null;
+  t: MrOverview["totals"];
+  /** Set only when the portfolio read actually failed. Without it this panel
+   *  says "needs a vendor snapshot" for a read that never came back, and the
+   *  desk goes and takes a snapshot that changes nothing. */
+  error: string | null;
+}) {
   const rows = vendorSummaryRows(p, t);
   if (!rows.length) return null;
   return (
@@ -25,6 +33,11 @@ function OfficialLedger({ p, t }: { p: MrPortfolio | null; t: MrOverview["totals
         {p ? (
           <span className="mr-led__meta">
             {p.vendors} vendors · {p.month} MTD · as of {p.date}
+          </span>
+        ) : error ? (
+          <span className="mr-led__meta">
+            From the pulled tracker · the vendor snapshots didn&apos;t load ({error}), so this is
+            not a missing snapshot — it is a failed read
           </span>
         ) : (
           <span className="mr-led__meta">
@@ -121,20 +134,30 @@ export function OverviewView({ overview, busy, onPull, onGotoData, onToast }: {
   onGotoData: () => void;
   onToast: ToastFn;
 }) {
-  const [trends, setTrends] = useState<MrTrends | null>(null);
-  const [portfolio, setPortfolio] = useState<MrPortfolio | null>(null);
+  const session = useLoadSession();
+  const [trends, setTrends] = useState<Load<MrTrends>>(loadPending);
+  const [portfolio, setPortfolio] = useState<Load<MrPortfolio>>(loadPending);
   const [showSources, setShowSources] = useState(false);
 
+  /** Two defects lived in this effect. There was no mount guard, so a reply
+   *  that landed after the user left wrote state into a dead tree. And
+   *  `.catch(() => setTrends(null))` meant one failed 3-minute poll replaced
+   *  numbers that had genuinely been received with an empty board — the
+   *  refresh was strictly more destructive than not refreshing at all.
+   *  `keepStale` on the background runs is the fix: an unattended failure
+   *  leaves the last good read alone and only records the phase. */
   useEffect(() => {
-    const load = () => {
-      mrTrends().then(setTrends).catch(() => setTrends(null));
-      mrPortfolio().then(setPortfolio).catch(() => setPortfolio(null));
+    const load = (background: boolean) => {
+      void session.run("trends", () => mrTrends(), setTrends,
+        "Couldn't load the trend history", { keepStale: background });
+      void session.run("portfolio", (signal) => mrPortfolio({ signal }), setPortfolio,
+        "Couldn't load the vendor snapshots", { keepStale: background });
     };
-    load();
+    load(false);
     // Matches the 3-minute cloud pull, so the board tracks the sheet live.
-    const id = window.setInterval(load, 180_000);
+    const id = window.setInterval(() => load(true), LIVE_REFRESH_MS);
     return () => window.clearInterval(id);
-  }, []);
+  }, [session]);
 
   if (!overview) {
     return <div className="mr-panel"><div className="mr-empty">Reading the agent&apos;s data…</div></div>;
@@ -217,7 +240,7 @@ export function OverviewView({ overview, busy, onPull, onGotoData, onToast }: {
       {t && (
         <div className="mr-kpis mr-kpis--hero">
           {KPIS.map((k) => {
-            const series = trends?.monthly.map((m) =>
+            const series = trends.data?.monthly.map((m) =>
               k.key === "spend" ? m.spend
               : k.key === "leads" ? m.leads
               : k.key === "qualified_leads" ? m.qualified_leads
@@ -237,9 +260,13 @@ export function OverviewView({ overview, busy, onPull, onGotoData, onToast }: {
         </div>
       )}
 
-      <OfficialLedger p={portfolio} t={t} />
+      <OfficialLedger
+        p={portfolio.data}
+        t={t}
+        error={portfolio.phase === "failed" && !portfolio.data ? portfolio.error : null}
+      />
 
-      <DeskBoard trends={trends} redLine={portfolio?.benchmarks.cpql_red ?? null} />
+      <DeskBoard trends={trends.data} redLine={portfolio.data?.benchmarks.cpql_red ?? null} />
 
       <DailyMovement onToast={onToast} />
 

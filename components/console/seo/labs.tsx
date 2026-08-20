@@ -11,11 +11,15 @@ import {
 } from "@/lib/api";
 import type { ToastFn } from "@/components/console/ConsoleApp";
 import { Icon } from "@/lib/kit-ui";
+import { describeFailure } from "@/lib/load";
 
 /** Researcher-layer tabs for the SEO agent: Keywords, Competitors, Briefs, Audit. */
 
 const fmt = (n: number) => n.toLocaleString("en-US");
-const errMsg = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
+/** Was a local re-implementation of the same two lines every other file had.
+ *  The shared one adds the part none of them had: a timeout keeps
+ *  `RequestTimeoutError`'s own message instead of the fallback. */
+const errMsg = describeFailure;
 
 /** Every load in this file used to end in `.catch(() => {})`, so a failure was
  *  indistinguishable from "you have no data yet" — and the empty state then

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { ToastFn } from "@/components/console/ConsoleApp";
 import { mrLeadAnalysis, mrLeadsPdfUrl, type MrLeadAnalysis, type MrLeadVendor } from "@/lib/api";
 import { Button, Icon } from "@/lib/kit-ui";
+import { describeFailure, LIVE_REFRESH_MS, loadPending, useLoadSession, type Load } from "@/lib/load";
 import { fmtMoney, fmtMonth, fmtNum, fmtTime } from "./shared";
 
 const cellTxt = (n: number, rate: number | null) =>
@@ -97,7 +98,7 @@ function DownloadLeads({ month, onToast }: { month: string; onToast: ToastFn }) 
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
     } catch (e) {
-      onToast(e instanceof Error ? e.message : "PDF download failed", "error");
+      onToast(describeFailure(e, "PDF download failed"), "error");
     } finally {
       setBusy(false);
     }
@@ -113,24 +114,44 @@ function DownloadLeads({ month, onToast }: { month: string; onToast: ToastFn }) 
 /* The Leads panel: the lead sheet's whole per-vendor Meeting Outcome / Deal
    Stage picture in one place. Story first, red only where a rule tripped. */
 export function LeadsView({ onGotoData, onToast }: { onGotoData: () => void; onToast: ToastFn }) {
-  const [data, setData] = useState<MrLeadAnalysis | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const session = useLoadSession();
+  const [analysis, setAnalysis] = useState<Load<MrLeadAnalysis>>(loadPending);
   const [month, setMonth] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
 
+  /** `loaded` was a boolean that went true on success *and* on failure, so a
+   *  dead read fell straight through to "No lead-analysis data yet" with a
+   *  button into the Data tab — a whole wrong errand. The phase tells the two
+   *  apart, and `keepStale` keeps the poll from undoing a good read. */
   useEffect(() => {
-    let alive = true;
-    const load = () =>
-      mrLeadAnalysis()
-        .then((d) => { if (alive) { setData(d); setLoaded(true); } })
-        .catch(() => { if (alive) setLoaded(true); });
-    load();
-    const id = window.setInterval(load, 180_000); // same cadence as the cloud pull
-    return () => { alive = false; window.clearInterval(id); };
-  }, []);
+    const load = (background: boolean) => {
+      void session.run("leads", () => mrLeadAnalysis(), setAnalysis,
+        "Couldn't load the lead analysis", { keepStale: background });
+    };
+    load(false);
+    const id = window.setInterval(() => load(true), LIVE_REFRESH_MS);
+    return () => window.clearInterval(id);
+  }, [session]);
 
-  if (!loaded) {
+  const data = analysis.data;
+
+  if (analysis.phase === "loading" && !data) {
     return <div className="mr-panel"><div className="mr-empty">Loading lead analysis…</div></div>;
+  }
+
+  if (analysis.phase === "failed" && !data) {
+    return (
+      <div className="mr-panel">
+        <div className="mr-empty">
+          <strong>Couldn&rsquo;t load the lead analysis.</strong>
+          <div>{analysis.error}</div>
+          <div style={{ marginTop: 6 }}>
+            This is a failed read, not an empty sheet — the lead rows are still there, so
+            connecting more data will not fix it.
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const months = data?.months ? Object.keys(data.months).sort().reverse() : [];

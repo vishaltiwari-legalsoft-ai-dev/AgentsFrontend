@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ToastFn } from "@/components/console/ConsoleApp";
 import { geoHistory, type GeoBrandRow, type GeoHistory, type GeoHistoryPoint } from "@/lib/api";
 import { Icon } from "@/lib/kit-ui";
+import { loadPending, useLoadSession, type Load } from "@/lib/load";
 import {
   availableSeries, dayLabel, linePath, moveLabel, plot, scoreBand, scoreRange,
   segments, seriesValue,
@@ -40,20 +41,25 @@ const CHART = { width: 640, height: 190, padLeft: 34, padRight: 12, padTop: 12, 
 
 export function GeoDashboard({ brand, onToast }: Props) {
   const [days, setDays] = useState(90);
-  const [doc, setDoc] = useState<GeoHistory | null>(null);
-  const [loading, setLoading] = useState(true);
+  const session = useLoadSession();
+  const [history, setHistory] = useState<Load<GeoHistory>>(loadPending);
   const [active, setActive] = useState<string[]>(["score"]);
 
+  // The `live` flag guarded the two writes but not the `.catch`, so a window
+  // switch or a leave still produced a toast for a read nobody was waiting on.
+  // The slot covers all three, and a superseded read is silent by definition.
   useEffect(() => {
-    let live = true;
-    setLoading(true);
-    geoHistory(brand.id, days)
-      .then((body) => { if (live) setDoc(body); })
-      .catch((e) => onToast(e instanceof Error ? e.message : "Could not load the score history", "error"))
-      .finally(() => { if (live) setLoading(false); });
-    return () => { live = false; };
-  }, [brand.id, days, onToast]);
+    setHistory((prev) => (prev.data === null ? loadPending : prev));
+    void session.run(
+      "history",
+      () => geoHistory(brand.id, days),
+      setHistory,
+      "Could not load the score history",
+      { toast: onToast },
+    );
+  }, [brand.id, days, onToast, session]);
 
+  const doc = history.data;
   const points = doc?.points ?? [];
   const series = useMemo(() => availableSeries(points, doc?.names ?? {}), [points, doc?.names]);
   const shown = series.filter((s) => active.includes(s.key));
@@ -82,7 +88,23 @@ export function GeoDashboard({ brand, onToast }: Props) {
     );
   }
 
-  if (loading && !doc) {
+  if (!doc) {
+    // A failed read used to fall through into the main panel, which then drew
+    // its chrome around nothing.
+    if (history.phase === "failed") {
+      return (
+        <div className="mr-panel">
+          <div className="geo-hero">
+            <div className="geo-hero__big geo-hero__big--muted">Couldn&apos;t load the score history</div>
+            <p className="geo-hero__empty">{history.error}</p>
+            <p className="geo-note">
+              Every banked sweep is still stored — this is a failed read, so the history has not
+              been lost and nothing needs re-polling.
+            </p>
+          </div>
+        </div>
+      );
+    }
     return <div className="mr-panel"><div className="seo-empty">Loading the score history…</div></div>;
   }
 
