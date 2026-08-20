@@ -38,9 +38,17 @@ export function AdminView({ onBack }: { onBack: () => void }) {
   const [saving, setSaving] = useState(false);
   const [secretMsg, setSecretMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
+  /** Non-null only when this read FAILED. `cfg` stays null either way, and
+   *  `cfg` is what gates Save — because `models` starts as four empty strings
+   *  and saveSecrets sends all four unconditionally, so saving over a failed
+   *  read would write empty model ids into the platform-wide config for every
+   *  agent. An unread config must never be a saveable one. */
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+
   const loadSettings = () =>
     getAdminSettings().then((s) => {
       setCfg(s);
+      setSettingsError(null);
       setModels({
         model: s.openrouter.model,
         fast_model: s.openrouter.fast_model,
@@ -63,7 +71,11 @@ export function AdminView({ onBack }: { onBack: () => void }) {
         const message = attempt.failure(err, "Couldn't load the admin data");
         if (message) setError(message);
       });
-    if (isCreator) loadSettings().catch(() => undefined);
+    if (isCreator) {
+      loadSettings().catch((err: unknown) => {
+        setSettingsError(describeFailure(err, "Couldn't load the platform settings"));
+      });
+    }
   }, [isCreator, session]);
 
   const saveSecrets = async () => {
@@ -173,6 +185,22 @@ export function AdminView({ onBack }: { onBack: () => void }) {
           server-side; the key is never shown again after saving.
         </p>
 
+        {settingsError && (
+          <div style={{ marginBottom: 16, padding: "10px 12px", borderRadius: "var(--radius-lg)", border: "1px solid var(--danger, #dc2626)", background: "var(--surface)", fontSize: 12.5, color: "var(--text-secondary)" }}>
+            <strong style={{ color: "var(--danger, #dc2626)" }}>Couldn&apos;t read the current settings.</strong> {settingsError}
+            <div style={{ marginTop: 4 }}>
+              The saved keys and models are still there — the fields below are blank because the read
+              failed, not because nothing is configured. Saving is disabled until a read succeeds, so
+              this cannot overwrite them with blanks.
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <Button variant="secondary" size="sm" onClick={() => { void loadSettings().catch((err: unknown) => setSettingsError(describeFailure(err, "Couldn't load the platform settings"))); }}>
+                Try again
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* OpenRouter API key */}
         <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
           OpenRouter API key
@@ -267,7 +295,7 @@ export function AdminView({ onBack }: { onBack: () => void }) {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Button size="sm" onClick={saveSecrets} disabled={saving}>
+          <Button size="sm" onClick={saveSecrets} disabled={saving || !cfg}>
             {saving ? "Saving…" : "Save settings"}
           </Button>
           {secretMsg && (
