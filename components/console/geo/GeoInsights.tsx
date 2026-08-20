@@ -17,6 +17,10 @@ type Props = {
   connected: string[];
   engineStatus: Record<string, GeoEngineStatus>;
   isCreator: boolean;
+  /** the brand's report is still in flight. Without this the panel renders a
+   *  confident "Not measured yet" over data that is merely slow to arrive —
+   *  which reads as "my data is gone". */
+  loading: boolean;
   onGenerate: () => void;
   onPoll: () => void;
   goTab: (tab: "prompts" | "answers" | "sources" | "optimizer") => void;
@@ -37,7 +41,7 @@ function visibilityLabel(rate: number): string {
 
 type Step = { icon: string; title: string; detail: string; cta?: { label: string; run: () => void } };
 
-export function GeoInsights({ brand, report, promptCount, connected, engineStatus, isCreator, onGenerate, onPoll, goTab }: Props) {
+export function GeoInsights({ brand, report, promptCount, connected, engineStatus, isCreator, loading, onGenerate, onPoll, goTab }: Props) {
   const blended = report?.blended;
   const n = blended?.mention.n_answers ?? 0;
   const hasData = n > 0;
@@ -146,6 +150,20 @@ export function GeoInsights({ brand, report, promptCount, connected, engineStatu
         detail: "AI engines learn who to recommend from reviews, “best X” lists, Reddit and YouTube — much more than from your own website. Directory profiles and editorial round-ups are what move this number.",
       });
     }
+  }
+
+  if (loading && !hasData) {
+    return (
+      <div className="mr-panel">
+        <div className="geo-hero">
+          <div className="geo-hero__big geo-hero__big--muted">Reading your answers…</div>
+          <p className="geo-hero__story">
+            Pulling this week&apos;s stored engine answers for {brand.name}. Nothing is being
+            re-asked and nothing is being spent — this is the data we already have.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (

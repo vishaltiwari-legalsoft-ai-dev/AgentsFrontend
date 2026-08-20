@@ -96,6 +96,10 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
   const [openAnswer, setOpenAnswer] = useState<number | null>(null);
   const [tab, setTab] = useState<GeoTab>("insights");
   const [busy, setBusy] = useState(false);
+  // the brand's first load is several stored-answer reads; every panel must
+  // say "loading" during it rather than "you have no data"
+  const [loadingBrand, setLoadingBrand] = useState(false);
+  const [loadingAnswers, setLoadingAnswers] = useState(false);
   const [polling, setPolling] = useState(false);
   const [stopRequested, setStopRequested] = useState(false);
   const [progress, setProgress] = useState<GeoPollProgress | null>(null);
@@ -129,6 +133,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
     setPollNote(null);
     setAnswers([]);
     setSchedule(null);
+    setLoadingBrand(true);
     try {
       const [p, r, c, s] = await Promise.all([
         geoPrompts(row.id), geoReport(row.id), geoBrandConfig(row.id),
@@ -142,6 +147,8 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
       setSchedule(s);
     } catch (e) {
       onToast(e instanceof Error ? e.message : "Failed to load brand", "error");
+    } finally {
+      setLoadingBrand(false);
     }
   }
 
@@ -245,11 +252,14 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
     if (!brand) return;
     setAnswerEngine(engine);
     setOpenAnswer(null);
+    setLoadingAnswers(true);
     try {
       const res = await geoAnswers(brand.id, engine ? { engine } : {});
       setAnswers(res.answers);
     } catch (e) {
       onToast(e instanceof Error ? e.message : "Could not load answers", "error");
+    } finally {
+      setLoadingAnswers(false);
     }
   }
 
@@ -515,7 +525,10 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
 
             {tab === "overview" && (
               <div className="mr-panel">
-                {!hasData && <div className="seo-empty">Run a poll first — every number here comes from real engine answers.</div>}
+                {loadingBrand && !hasData && <div className="seo-empty">Reading stored answers…</div>}
+                {!loadingBrand && !hasData && (
+                  <div className="seo-empty">Run a poll first — every number here comes from real engine answers.</div>
+                )}
                 {hasData && report && (
                   <>
                     <div className="geo-enginecards">
@@ -662,7 +675,10 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
                     {Object.keys(ENGINE_LABELS).map((e) => <option key={e} value={e}>{ENGINE_LABELS[e]}</option>)}
                   </select>
                 </div>
-                {answers.length === 0 && <div className="seo-empty">No stored answers for this window.</div>}
+                {loadingAnswers && <div className="seo-empty">Reading stored answers…</div>}
+                {!loadingAnswers && answers.length === 0 && (
+                  <div className="seo-empty">No stored answers for this window.</div>
+                )}
                 {answers.map((a, i) => (
                   <div key={`${a.prompt_id}-${a.engine}-${a.run}-${i}`} className="geo-answer">
                     <button className="geo-answer__head" onClick={() => setOpenAnswer(openAnswer === i ? null : i)}>
@@ -715,7 +731,10 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
                   <h2 className="mr-panel__title">Source gap — where to earn presence</h2>
                   <span className="mr-panel__sub">Domains the engines cite on your prompts in answers where you're absent.</span>
                 </div>
-                {!report?.source_gap.length && <div className="seo-empty">No gap data yet — run a poll first.</div>}
+                {loadingBrand && !report && <div className="seo-empty">Reading stored answers…</div>}
+                {!loadingBrand && !report?.source_gap.length && (
+                  <div className="seo-empty">No gap data yet — run a poll first.</div>
+                )}
                 {!!report?.source_gap.length && (
                   <table className="geo-table">
                     <thead>
@@ -759,6 +778,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
                 promptCount={prompts.length}
                 connected={connected}
                 isCreator={!!user?.is_creator}
+                loading={loadingBrand}
                 onGenerate={() => void generate()}
                 onPoll={() => void runPoll()}
                 engineStatus={engineStatus}

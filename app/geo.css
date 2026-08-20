@@ -367,3 +367,6 @@
 .geo-linkbtn{ border:0; background:transparent; padding:0; cursor:pointer;
   font:inherit; color:var(--brand); text-decoration:underline; }
 .geo-compare__rescan{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:10px; }
+/* Loading headline — same weight as the real number so the panel does not
+   jump, but visibly not a measurement. */
+.geo-hero__big--muted{ color:var(--text-tertiary); font-size:30px; }
