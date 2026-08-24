@@ -25,7 +25,6 @@ const FIELD_LABEL: Record<AgentModelField, string> = {
   openrouter_fast_model: "Fast / parsing model",
   openrouter_vision_model: "Vision model",
   gd_planner_model: "Planner model",
-  browser_planner_model: "Planner model",
 };
 /** A field missing from this list is filtered out below and never renders,
  *  however happily the backend serves it. Add new AgentModelField values here
@@ -37,7 +36,6 @@ const FIELD_ORDER: AgentModelField[] = [
   "openrouter_fast_model",
   "openrouter_vision_model",
   "gd_planner_model",
-  "browser_planner_model",
 ];
 /** Per-agent label overrides where the generic field name would mislead. */
 const AGENT_FIELD_LABEL: Record<string, Partial<Record<AgentModelField, string>>> = {};

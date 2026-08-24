@@ -19,8 +19,6 @@ export const SEO_AGENT_ID = "a2";
 export const BLOG_AGENT_ID = "a9";
 /** GEO — AI answer visibility (backed by /api/geo). */
 export const GEO_AGENT_ID = "a10";
-/** Browser Agent — Chrome-extension web copilot (backed by /api/browser). */
-export const BROWSER_AGENT_ID = "a11";
 /** Agents wired to a live backend, mapped to the console nav key they open. */
 export const LIVE_AGENTS: Record<string, string> = {
   [LIVE_AGENT_ID]: "studio",
@@ -28,7 +26,6 @@ export const LIVE_AGENTS: Record<string, string> = {
   [SEO_AGENT_ID]: "seo",
   [BLOG_AGENT_ID]: "blog",
   [GEO_AGENT_ID]: "geo",
-  [BROWSER_AGENT_ID]: "browser",
 };
 
 export function isAgentLive(id: string): boolean {
@@ -65,7 +62,6 @@ export const agents: AgentItem[] = [
   { id: "a8", name: "Brand Strategist", role: "Positioning & messaging", category: "design", glyph: "compass", description: "Shapes positioning, tone, and messaging pillars for campaigns." },
   { id: "a9", name: "Blog Writer", role: "Deep-research blog drafts", category: "copy", glyph: "pen-line", description: "Researches a topic in depth and drafts evidence-backed, citation-rich blog posts for each brand." },
   { id: "a10", name: "GEO", role: "AI answer visibility", category: "seo", glyph: "telescope", description: "Measures how often AI engines like ChatGPT and Perplexity name and cite your brand, and finds the gaps to fix." },
-  { id: "a11", name: "Browser Agent", role: "Web copilot in your Chrome", category: "data", glyph: "globe", description: "Works inside your own browser: watches your tabs and handles multi-step web tasks a step at a time, pausing for your OK on anything consequential." },
 ];
 
 export const graphicDesignerAgent = agents.find((a) => a.id === LIVE_AGENT_ID)!;

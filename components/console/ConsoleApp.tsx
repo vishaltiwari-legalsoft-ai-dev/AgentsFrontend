@@ -11,7 +11,6 @@ import { MarketingResearch } from "@/components/console/mr/MarketingResearch";
 import { SeoAgent } from "@/components/console/seo/SeoAgent";
 import { BlogWriter } from "@/components/console/blogwriter/BlogWriter";
 import { GeoAgent } from "@/components/console/geo/GeoAgent";
-import { BrowserAgent } from "@/components/console/browser/BrowserAgent";
 import { LibraryView } from "@/components/console/LibraryView";
 import { AdminView } from "@/components/console/AdminView";
 import { DatabaseView } from "@/components/console/DatabaseView";
@@ -40,7 +39,6 @@ const NAV_VIEWS = [
   "seo",
   "blog",
   "geo",
-  "browser",
   "library",
   "imagelib",
   "admin",
@@ -240,7 +238,6 @@ export default function ConsoleApp() {
           {nav === "seo" && <SeoAgent onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "blog" && <BlogWriter onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "geo" && <GeoAgent onToast={fire} onBack={() => setNav("agents")} />}
-          {nav === "browser" && <BrowserAgent onToast={fire} onBack={() => setNav("agents")} />}
           {nav === "library" && <LibraryView onBack={() => setNav("home")} />}
           {nav === "imagelib" && user.is_admin && <ImageLibraryView onBack={() => setNav("home")} />}
           {nav === "admin" && user.is_admin && <AdminView onBack={() => setNav("home")} />}

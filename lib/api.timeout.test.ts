@@ -10,7 +10,6 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  browserSaveConfig,
   gdArtifactBlob,
   getDbCollections,
   isAbortError,
@@ -19,6 +18,7 @@ import {
   RequestTimeoutError,
   seoAnalyzeSite,
   seoBrandDetail,
+  seoSetCompetitors,
   setUnauthorizedHandler,
 } from "./api";
 import { DEFAULT_TIMEOUT_MS, SLOW_TIMEOUT_MS } from "./requestPolicy";
@@ -211,7 +211,7 @@ describe("PUT", () => {
 
     // The hand-rolled version of this call cleared the deadline before reading
     // the body, so this promise never settled and the panel stayed "Saving…".
-    const pending = browserSaveConfig([]);
+    const pending = seoSetCompetitors("legalsoft", []);
     const settled = expect(pending).rejects.toBeInstanceOf(RequestTimeoutError);
 
     await vi.advanceTimersByTimeAsync(DEFAULT_TIMEOUT_MS);
@@ -221,11 +221,11 @@ describe("PUT", () => {
   it("still sends PUT with a JSON body and returns the parsed reply", async () => {
     const fetchMock = vi.fn(
       async (_url: string, _init?: RequestInit) =>
-        new Response(JSON.stringify({ watch_rules: [] }), { status: 200 }),
+        new Response(JSON.stringify({ tracked: [] }), { status: 200 }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(browserSaveConfig([])).resolves.toEqual({ watch_rules: [] });
+    await expect(seoSetCompetitors("legalsoft", [])).resolves.toEqual({ tracked: [] });
 
     const init = fetchMock.mock.calls[0][1];
     expect(init?.method).toBe("PUT");

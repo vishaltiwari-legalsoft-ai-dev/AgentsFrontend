@@ -86,8 +86,6 @@ export const DEADLINE_RULES: readonly DeadlineRule[] = [
   { pattern: /^\/api\/mr\/(snapshots\/capture|workbook\/scan)$/, ms: SLOW_TIMEOUT_MS },
   { pattern: /^\/api\/mr\/reports\//, ms: SLOW_TIMEOUT_MS },
   { pattern: /\/pdf$/, ms: SLOW_TIMEOUT_MS },
-  // Browser agent: a run drives a real browser for minutes.
-  { pattern: /^\/api\/browser\/runs$/, methods: ["POST"], ms: SLOW_TIMEOUT_MS },
   // Bulk / external-service admin work.
   { pattern: /^\/api\/ref-library\/sync-drive/, ms: SLOW_TIMEOUT_MS },
   { pattern: /^\/api\/admin\/(db\/purge-telemetry|settings\/test)$/, ms: SLOW_TIMEOUT_MS },

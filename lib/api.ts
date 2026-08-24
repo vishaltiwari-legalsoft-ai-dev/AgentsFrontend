@@ -444,16 +444,14 @@ export interface ModelOption {
 /** Must stay in step with AGENT_OVERRIDE_FIELDS in the backend's
  *  app/services/runtime_config.py. A field the backend serves but this union
  *  omits is dropped silently by AgentConfigView's FIELD_ORDER filter, so the
- *  control simply never renders — which is how browser_planner_model went
- *  live without ever appearing in the panel. */
+ *  control simply never renders — add new fields to both. */
 export type AgentModelField =
   | "openrouter_model"
   | "openrouter_fast_model"
   | "openrouter_image_model"
   | "openrouter_vision_model"
   | "gd_planner_model"
-  | "gd_polish_image_model"
-  | "browser_planner_model";
+  | "gd_polish_image_model";
 
 export interface AgentConfigItem {
   id: string;
@@ -2747,158 +2745,3 @@ export const geoOptimizerAnalyses = () =>
 
 export const geoOptimizerAnalysis = (id: string) =>
   getJson<OptimizerAnalysis>(`/api/geo/optimizer/analyses/${id}`);
-
-/* ---------------------- Browser Agent (a11) ------------------------------ */
-
-export interface BrowserRunRow {
-  id: string;
-  goal: string;
-  mode: "act" | "monitor";
-  status: string;
-  steps_used: number;
-  step_cap: number;
-  user: string;
-  created_at: string;
-  updated_at: string;
-  summary?: string;
-}
-
-export interface BrowserSubtask {
-  id: string;
-  title: string;
-  goal: string;
-  rail?: "data" | "browser" | "think";
-  steps: string[];
-  edge_cases: { risk: string; handle: string }[];
-  done_when: string;
-  status: "pending" | "done";
-}
-
-export interface BrowserPlan {
-  subtasks: BrowserSubtask[];
-  notes: string;
-  planned: boolean;
-  plan_error?: string;
-}
-
-export interface BrowserStep {
-  seq: number;
-  at: string;
-  sensitive: boolean;
-  /** The model was shown a screenshot for this step. */
-  saw_page?: boolean;
-  /** Which sub-task of the plan this step belongs to. */
-  subtask?: string;
-  /** How the work was done: an API, the browser, or plain reasoning. */
-  rail?: "data" | "browser" | "think";
-  tools?: { tool: string; ok: boolean; error?: string | null }[];
-  action: { kind: string; why?: string; url?: string; summary?: string; reason?: string };
-  result: { ok: boolean; error?: string | null } | null;
-}
-
-export interface BrowserRun extends BrowserRunRow {
-  steps: BrowserStep[];
-  findings: string[];
-  fail_reason?: string;
-  extracted?: unknown;
-  plan?: BrowserPlan;
-}
-
-export interface BrowserStatus {
-  ok: boolean;
-  email: string;
-  protocol: number;
-  step_cap: number;
-  allowed: string[];
-  blocked: string[];
-  can_download: boolean;
-  extension_version: string;
-}
-
-export const browserStatus = () => getJson<BrowserStatus>("/api/browser/status");
-
-/**
- * Fetch the extension bundle as a blob — the endpoint needs the Bearer token,
- * so a plain <a href> would just get a 401.
- */
-export async function browserExtensionBlob(): Promise<Blob> {
-  return fetchBlob("/api/browser/extension");
-}
-
-export const browserRuns = () => getJson<{ runs: BrowserRunRow[] }>("/api/browser/runs");
-
-export const browserRun = (runId: string) =>
-  getJson<BrowserRun>(`/api/browser/runs/${runId}`);
-
-export const browserStopRun = (runId: string) =>
-  postJson<{ status: string }>(`/api/browser/runs/${runId}/stop`, {});
-
-/**
- * Pairing code for the Chrome extension: base64 of the backend URL + the JWT
- * already held by this session. The extension stores it locally; nothing is
- * baked into the extension build.
- */
-export function browserPairingCode(token: string, email?: string): string {
-  return btoa(JSON.stringify({ backend_url: API_URL, token, email }));
-}
-
-export interface BrowserWatchRule {
-  id?: string;
-  text: string;
-  enabled: boolean;
-}
-
-export interface BrowserDigestRow {
-  id: string;
-  at: string;
-  headline: string;
-  pages_seen: number;
-  alerts: number;
-}
-
-export interface BrowserDigest {
-  id: string;
-  at: string;
-  headline: string;
-  themes: { title: string; detail: string }[];
-  open_loops: string[];
-  alerts: { rule: string; count: number; pages: { title: string; url: string }[] }[];
-  pages_seen: number;
-  tabs_open: number;
-}
-
-export interface BrowserSkill {
-  id: string;
-  name: string;
-  goal: string;
-  host: string;
-  steps: number;
-  source: "run" | "recording";
-  created_at: string;
-  uses: number;
-  last_ok: boolean | null;
-}
-
-export const browserSkills = () => getJson<{ skills: BrowserSkill[] }>("/api/browser/skills");
-
-export async function browserDeleteSkill(id: string): Promise<void> {
-  await deleteJson<{ deleted: string }>(`/api/browser/skills/${id}`);
-}
-
-export const browserDigests = () =>
-  getJson<{ digests: BrowserDigestRow[] }>("/api/browser/digests");
-
-export const browserDigest = (id: string) =>
-  getJson<BrowserDigest>(`/api/browser/digests/${id}`);
-
-export const browserConfig = () =>
-  getJson<{ watch_rules: BrowserWatchRule[] }>("/api/browser/config");
-
-export async function browserSaveConfig(
-  watchRules: BrowserWatchRule[],
-): Promise<{ watch_rules: BrowserWatchRule[] }> {
-  return putJson<{ watch_rules: BrowserWatchRule[] }>("/api/browser/config", {
-    watch_rules: watchRules,
-  });
-}
-
