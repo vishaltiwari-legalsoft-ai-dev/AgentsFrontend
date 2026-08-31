@@ -61,6 +61,7 @@ export function GeoQuestions({ data, onToast }: { data: GeoData; onToast: ToastF
   const [bulkOut, setBulkOut] = useState<{ added: number; skipped: { text: string; reason: string }[] } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<"add" | "regen" | "save" | "personas" | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
   // The personas disclosure's own form and its row-level remove confirmation.
   const [pLabel, setPLabel] = useState("");
   const [pDesc, setPDesc] = useState("");
@@ -188,6 +189,27 @@ export function GeoQuestions({ data, onToast }: { data: GeoData; onToast: ToastF
       onToast(e instanceof Error ? e.message : "That change did not save.", "error");
     } finally {
       setBusy(null);
+    }
+  };
+
+  const remove = async (id: string) => {
+    const u = uni.data;
+    if (!u) return;
+    if (u.prompts.length <= 1) {
+      onToast("At least one question must remain — add a replacement first.", "error");
+      setRemoving(null);
+      return;
+    }
+    setBusy("save");
+    try {
+      const r = await geoSavePrompts(data.brandId, u.prompts.filter((p) => p.id !== id));
+      ready(r);
+      onToast("Question deleted. Answers it already collected stay in reports until they age out.", "ok");
+    } catch (e: unknown) {
+      onToast(e instanceof Error ? e.message : "The question could not be deleted.", "error");
+    } finally {
+      setBusy(null);
+      setRemoving(null);
     }
   };
 
@@ -482,7 +504,7 @@ export function GeoQuestions({ data, onToast }: { data: GeoData; onToast: ToastF
       <section className="band">
         <RuleHead
           title="In the current set"
-          note="An unchecked question is skipped on the next check. Nothing already stored is deleted."
+          note="An unchecked question is skipped on the next check; Delete removes it from the set for good. Either way, answers already measured stay in reports until they age out of the window."
           aside={
             mayEdit
               ? (
@@ -539,6 +561,30 @@ export function GeoQuestions({ data, onToast }: { data: GeoData; onToast: ToastF
                       {hit === 0 ? "never named" : `named by ${hit}`}
                     </span>
                   )}
+                  {mayEdit && (removing === p.id ? (
+                    <>
+                      <button
+                        type="button" className="btn btn--quiet btn--sm"
+                        onClick={() => void remove(p.id)} disabled={busy === "save"}
+                      >
+                        {busy === "save" ? "Deleting…" : "Yes, delete"}
+                      </button>
+                      <button
+                        type="button" className="btn btn--quiet btn--sm"
+                        onClick={() => setRemoving(null)} disabled={busy === "save"}
+                      >
+                        Keep
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button" className="btn btn--quiet btn--sm"
+                      aria-label={`Delete "${p.text}"`}
+                      onClick={() => setRemoving(p.id)} disabled={busy === "save"}
+                    >
+                      Delete
+                    </button>
+                  ))}
                 </li>
               );
             })}
