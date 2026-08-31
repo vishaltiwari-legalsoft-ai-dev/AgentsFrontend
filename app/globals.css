@@ -1,3 +1,23 @@
+/* The console's stylesheet, mid-revamp.
+ *
+ * Two design systems are loaded at once, on purpose and temporarily. The old one
+ * (`styles.css` and the six panel sheets under it) still dresses the screens
+ * that have not been rebuilt yet; `agenthub.css` is the new one, carried over
+ * from the prototype byte for byte so a rule changed there can be pasted
+ * straight back over it.
+ *
+ * They share exactly one custom property name, `--surface`, and no class names
+ * at all — checked, not assumed. `agenthub.css` is imported last so the new
+ * system wins globally, and `hub-live.css` pins the old value of `--surface`
+ * back inside `.legacy`, which is the wrapper every not-yet-ported panel renders
+ * in. When the last panel is ported, the first block of imports and that pin go
+ * together.
+ */
+
+/* Archivo, worked across its width axis — the new system's only typeface. */
+@import url("https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,400..800;1,62..125,400..800&display=swap");
+
+/* --- the old system, for the panels still on it -------------------------- */
 @import url("../styles.css");
 @import url("./kit-ui.css");
 @import url("./console.css");
@@ -7,6 +27,13 @@
 @import url("./seo.css");
 @import url("./blogwriter.css");
 @import url("./geo.css");
+
+/* --- the new one -------------------------------------------------------- */
+@import url("./agenthub.css");
+/* After agenthub.css on purpose: it carries the dark palette that replaces the
+   prototype's, and fills three tokens agenthub.css uses but never defines. */
+@import url("./hub-theme.css");
+@import url("./hub-live.css");
 
 @keyframes spin {
   to {

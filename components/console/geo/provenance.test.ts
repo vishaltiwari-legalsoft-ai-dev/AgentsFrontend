@@ -11,7 +11,8 @@
 import { describe, expect, it } from "vitest";
 import type { GeoEngineStatus } from "../../../lib/api";
 import {
-  comparableEngines, engineCards, modeSuffix, proxyEngines, statusOf, type EngineRow,
+  blankReason, comparableEngines, engineCards, modeSuffix, proxyEngines, statusOf,
+  type EngineRow,
 } from "./provenance";
 
 const row = (engine: string, mode: EngineRow["mode"], rate = 0.2): EngineRow =>
@@ -25,7 +26,9 @@ describe("proxyEngines", () => {
   });
 
   it("is empty when everything is measured natively", () => {
-    expect(proxyEngines([row("gemini", "native"), row("aio", "serpapi")])).toEqual([]);
+    expect(proxyEngines([
+      row("gemini", "native"), row("aio", "serpapi"), row("ai_mode", "dataforseo"),
+    ])).toEqual([]);
   });
 });
 
@@ -42,6 +45,18 @@ describe("comparableEngines", () => {
     const rows = [row("gemini", "native", 0.4), row("aio", "serpapi", 0.1), row("chatgpt", "proxy", 0.9)];
 
     expect(comparableEngines(rows).map((r) => r.engine)).toEqual(["gemini", "aio"]);
+  });
+
+  it("ranks a dataforseo-measured engine beside a native one — it IS the consumer surface", () => {
+    const rows = [row("gemini", "native", 0.4), row("ai_mode", "dataforseo", 0.1), row("chatgpt", "proxy", 0.9)];
+
+    expect(comparableEngines(rows).map((r) => r.engine)).toEqual(["gemini", "ai_mode"]);
+  });
+
+  it("ranks the two SERP vendors against each other — same surface, different fetcher", () => {
+    const rows = [row("aio", "serpapi", 0.2), row("ai_mode", "dataforseo", 0.1)];
+
+    expect(comparableEngines(rows).map((r) => r.engine)).toEqual(["aio", "ai_mode"]);
   });
 
   it("will not rank a lone native engine against itself", () => {
@@ -76,20 +91,23 @@ describe("statusOf", () => {
 
 describe("modeSuffix", () => {
   it("marks only the surfaces that are not the real product", () => {
-    expect(modeSuffix("proxy")).toBe(" (proxy)");
+    expect(modeSuffix("proxy")).toBe(" (similar model)");
     expect(modeSuffix("unknown")).toBe(" (surface unknown)");
     expect(modeSuffix("native")).toBe("");
     expect(modeSuffix("serpapi")).toBe("");
+    // DataForSEO fetches the live SERP — it IS the product, so no suffix
+    expect(modeSuffix("dataforseo")).toBe("");
   });
 });
 
 describe("engineCards", () => {
-  const KNOWN = ["perplexity", "gemini", "chatgpt", "aio"];
+  const KNOWN = ["perplexity", "gemini", "chatgpt", "aio", "ai_mode"];
   const STATUS: Record<string, GeoEngineStatus> = {
     perplexity: { connected: true, mode: "proxy", model: "perplexity/sonar", means: "" },
     gemini: { connected: true, mode: "native", model: "gemini-flash-latest", means: "" },
     chatgpt: { connected: true, mode: "proxy", model: "openai/gpt-5-mini", means: "" },
-    aio: { connected: true, mode: "serpapi", model: "google_ai_overview", means: "" },
+    aio: { connected: true, mode: "serpapi", model: "google-ai-overview", means: "" },
+    ai_mode: { connected: true, mode: "dataforseo", model: "google-ai-mode", means: "" },
   };
   const block = (over = {}) =>
     ({ mention: { rate: 0.3 }, n_answers: 40, n_measured: 40, n_no_aio: 0, ...over });
@@ -137,7 +155,7 @@ describe("engineCards", () => {
       { gemini: block({ mention: { rate: 0.1 } }), perplexity: block({ mention: { rate: 0.5 } }) },
       { aio: "2026-08-11T04:00:00Z" }, STATUS, KNOWN);
 
-    expect(cards.map((c) => c.engine)).toEqual(["perplexity", "gemini", "aio", "chatgpt"]);
+    expect(cards.map((c) => c.engine)).toEqual(["perplexity", "gemini", "aio", "ai_mode", "chatgpt"]);
   });
 
   it("falls back to n_answers when a backend predates n_measured", () => {
@@ -145,5 +163,80 @@ describe("engineCards", () => {
       { gemini: { mention: { rate: 0.3 }, n_answers: 12 } }, {}, STATUS, KNOWN);
 
     expect(cards.find((c) => c.engine === "gemini")!.measured).toBe(12);
+  });
+});
+
+describe("blankReason", () => {
+  it("calls a dead engine dead", () => {
+    expect(blankReason({ errors: 41, emptySlots: 0 })).toBe("errors");
+  });
+
+  it("calls an empty AIO slot empty", () => {
+    expect(blankReason({ errors: 0, emptySlots: 38 })).toBe("no_answer_published");
+  });
+
+  it("keeps the two apart when both happened", () => {
+    expect(blankReason({ errors: 3, emptySlots: 38 })).toBe("mixed");
+  });
+
+  it("names the degenerate case instead of inventing one", () => {
+    expect(blankReason({ errors: 0, emptySlots: 0 })).toBe("nothing_stored");
+  });
+});
+
+describe("engineCards — failure is not an observation", () => {
+  const KNOWN = ["perplexity", "gemini", "chatgpt", "aio", "ai_mode"];
+  const STATUS: Record<string, GeoEngineStatus> = {
+    aio: { connected: true, mode: "serpapi", model: "google-ai-overview", means: "" },
+  };
+
+  it("reports an engine whose every call failed as failed, not as 'no AI Overview'", () => {
+    // production, 29 Aug: the SerpAPI monthly cap was spent, so all 41 AIO
+    // calls errored. The card read "nothing to appear in: 0 of 0 queries
+    // returned no AI Overview" — Google publishing nothing and our own key
+    // being dead are opposite facts, and the panel printed the flattering one.
+    const cards = engineCards(
+      { aio: { mention: { rate: null }, n_answers: 41, n_measured: 0, n_errors: 41, n_no_aio: 0 } },
+      {}, STATUS, KNOWN);
+
+    const aio = cards.find((c) => c.engine === "aio")!;
+    expect(aio.state).toBe("measured");
+    expect(aio.rate).toBeNull();
+    expect(aio.errors).toBe(41);
+    expect(aio.attempted).toBe(41);
+    expect(blankReason(aio)).toBe("errors");
+    expect(blankReason(aio)).not.toBe("no_answer_published");
+  });
+
+  it("keeps the empty-slot denominator on rows stored, not on empty slots", () => {
+    // "38 of 38" was printed from emptySlots twice; with 2 errors in the same
+    // window the honest denominator is every row stored.
+    const cards = engineCards(
+      { aio: { mention: { rate: null }, n_answers: 40, n_measured: 0, n_errors: 2, n_no_aio: 38 } },
+      {}, STATUS, KNOWN);
+
+    const aio = cards.find((c) => c.engine === "aio")!;
+    expect(aio.attempted).toBe(40);
+    expect(aio.emptySlots).toBe(38);
+    expect(blankReason(aio)).toBe("mixed");
+  });
+
+  it("still surfaces errors on an engine that DID produce a rate", () => {
+    // chatgpt showed "named in 30 answers" while 15 calls had failed silently
+    const cards = engineCards(
+      { chatgpt: { mention: { rate: 1 }, n_answers: 45, n_measured: 30, n_errors: 15 } },
+      {}, STATUS, KNOWN);
+
+    const chatgpt = cards.find((c) => c.engine === "chatgpt")!;
+    expect(chatgpt.measured).toBe(30);
+    expect(chatgpt.errors).toBe(15);
+    expect(chatgpt.attempted).toBe(45);
+  });
+
+  it("defaults errors to 0 for a backend that predates n_errors", () => {
+    const cards = engineCards(
+      { gemini: { mention: { rate: 0.3 }, n_answers: 12 } }, {}, STATUS, KNOWN);
+
+    expect(cards.find((c) => c.engine === "gemini")!.errors).toBe(0);
   });
 });

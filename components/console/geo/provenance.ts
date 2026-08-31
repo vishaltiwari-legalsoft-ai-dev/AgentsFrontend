@@ -46,16 +46,21 @@ export function proxyEngines(rows: EngineRow[]): EngineRow[] {
 }
 
 /** Rows that may legitimately be ranked against each other: same surface, and
- *  at least two of them — a single row has nothing to be "strongest" against. */
+ *  at least two of them — a single row has nothing to be "strongest" against.
+ *  `serpapi` and `dataforseo` both count: each fetches the real consumer
+ *  Google surface, only the vendor differs. */
 export function comparableEngines(rows: EngineRow[]): EngineRow[] {
-  const native = rows.filter((r) => r.mode === "native" || r.mode === "serpapi");
+  const native = rows.filter(
+    (r) => r.mode === "native" || r.mode === "serpapi" || r.mode === "dataforseo",
+  );
   return native.length >= 2 ? native : [];
 }
 
-/** Suffix appended to an engine's display name. Only proxy earns one: native
- *  and serpapi ARE the product, and "off" engines are never rendered as data. */
+/** Suffix appended to an engine's display name. Only proxy earns one: native,
+ *  serpapi and dataforseo ARE the product, and "off" engines are never
+ *  rendered as data. */
 export function modeSuffix(mode: GeoEngineMode): string {
-  return mode === "proxy" ? " (proxy)" : mode === "unknown" ? " (surface unknown)" : "";
+  return mode === "proxy" ? " (similar model)" : mode === "unknown" ? " (surface unknown)" : "";
 }
 
 // ---------------------------------------------------------------- engine cards
@@ -80,14 +85,36 @@ export type EngineCard = {
   measured: number;
   /** answers where the engine published nothing to appear in (AIO) */
   emptySlots: number;
+  /** calls that failed outright — a dead key, an exhausted quota, an outage */
+  errors: number;
+  /** every row stored for this engine in this window */
+  attempted: number;
   lastSeen: string | null;
   model: string;
 };
+
+/** Why an engine that HAS rows in the window still carries no rate.
+ *
+ *  "Google published no AI Overview" and "our own call failed" are opposite
+ *  facts, and the panel printed the flattering one for both: an AIO engine
+ *  whose every call errored rendered as "nothing to appear in: 0 of 0 queries
+ *  returned no AI Overview". Nobody reading that would go check the key. The
+ *  reason is decided here so a component cannot re-mix them.
+ */
+export type BlankReason = "errors" | "no_answer_published" | "mixed" | "nothing_stored";
+
+export function blankReason(card: Pick<EngineCard, "errors" | "emptySlots">): BlankReason {
+  if (card.errors > 0 && card.emptySlots > 0) return "mixed";
+  if (card.errors > 0) return "errors";
+  if (card.emptySlots > 0) return "no_answer_published";
+  return "nothing_stored";
+}
 
 type BlockLike = {
   mention: { rate: number | null };
   n_answers: number;
   n_measured?: number;
+  n_errors?: number;
   n_no_aio?: number;
 };
 
@@ -119,6 +146,8 @@ export function engineCards(
       rate: inWindow ? block!.mention.rate : null,
       measured,
       emptySlots: block?.n_no_aio ?? 0,
+      errors: block?.n_errors ?? 0,
+      attempted: block?.n_answers ?? 0,
       lastSeen: seen,
       model: st.model,
     };

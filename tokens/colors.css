@@ -38,6 +38,12 @@
   --blue-800: #6516d9;
   --blue-900: #2d0a66;
 
+  /* ---- Logo constant ----
+     The volt diamond in the mark is fixed identity, not a themed accent:
+     it is the same swatch on cloud and on ink, so it is declared once here
+     and deliberately NOT overridden in the dark block below. ---- */
+  --volt: #c8ff00;
+
   /* ---- Accent ramp (royal blue) ---- */
   --accent-50:  #035ade08;
   --accent-100: #035ade14;

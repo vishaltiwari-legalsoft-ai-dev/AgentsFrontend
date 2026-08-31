@@ -7,6 +7,36 @@ import { GlyphTile, CATEGORY_GLYPH } from "@/lib/glyph";
 const cx = (...parts: Array<string | false | null | undefined>) =>
   parts.filter((p): p is string => Boolean(p)).join(" ");
 
+/** The LegalSoft mark — "Breakaway": the L with its corner square broken off.
+ *
+ *  Geometry is traced from docs/logo-concepts-agentic/a8-breakaway.png, normalised
+ *  into a 40x40 box. The gap between the L and the diamond is the whole idea, so
+ *  never close it to make the mark denser at small sizes.
+ *
+ *  The L is painted in --text-primary rather than a fixed ink, which is what makes
+ *  one component serve both themes: ink on cloud, cloud on ink — exactly the two
+ *  concept sheets. The diamond stays volt in both. Decorative by default; pass a
+ *  `title` where the mark is the only thing naming the product (e.g. sign-in).
+ */
+export function BrandMark({ size = 30, title }: { size?: number; title?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 40 40"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role={title ? "img" : undefined}
+      aria-label={title}
+      aria-hidden={title ? undefined : true}
+      style={{ flex: "none" }}
+    >
+      <path d="M0.1 6.1 H17.4 V22.5 H34 V40 H0.1 Z" fill="var(--text-primary)" />
+      <path d="M30.3 0 L39.9 9.7 L30.3 19.4 L20.7 9.7 Z" fill="var(--volt)" />
+    </svg>
+  );
+}
+
 export function Button({
   variant = "primary",
   size = "md",

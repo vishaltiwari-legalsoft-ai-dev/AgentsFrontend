@@ -268,9 +268,10 @@ export async function googleLogin(
 
 /* ------------------------------ Library / data --------------------------- */
 
-export async function loadLibrary(perBrand = 24): Promise<LibraryBrand[]> {
+export async function loadLibrary(perBrand = 24, opts?: RequestOptions): Promise<LibraryBrand[]> {
   const data = await getJson<{ brands: LibraryBrand[] }>(
     `/api/library?per_brand=${perBrand}`,
+    opts,
   );
   return data.brands;
 }
@@ -410,6 +411,87 @@ export function purgeTelemetry(
   return postJson("/api/admin/db/purge-telemetry", { confirm });
 }
 
+/* ------------------------------ The record ------------------------------- */
+/* Every run the signed-in caller has filed, across every agent. Backed by
+   GET /api/runs, which reads the `runs` collection scoped to their user id.
+
+   Two fields are absent on purpose and the console must not invent them: a run
+   carries no token count and no cost, because the activity trail was never
+   asked to record either. `took_seconds` is null for an append-only row, which
+   is stamped once — a duration of zero would read as an instant run.          */
+
+export type RunState = "done" | "running" | "queued" | "failed";
+
+export interface RunRow {
+  id: string;
+  run_id: string;
+  agent_id: string;
+  agent_name: string;
+  brand: string | null;
+  brand_id: string | null;
+  action: string;
+  title: string;
+  state: RunState;
+  /** Exactly what the backend stored, for the opened row. */
+  status_raw: string;
+  created_at: string;
+  updated_at: string;
+  day: string;
+  took_seconds: number | null;
+  /** The picture the run made, when it made one. */
+  image: string | null;
+  user: string;
+}
+
+export interface RunsPage {
+  runs: RunRow[];
+  /** Every run this caller has ever filed. `null` when the count could not be
+   *  read — never rendered as 0, which would claim they had never run one. */
+  total: number | null;
+  /** How many of the newest rows the filter and the facets looked at. */
+  scanned: number;
+  scan_limit: number;
+  /** False when the read hit its cap, so the panel can say its counts are of a
+   *  window rather than of the whole record. */
+  window_complete: boolean;
+  facets: {
+    agents: { id: string; name: string; count: number }[];
+    brands: { name: string; count: number }[];
+    states: Partial<Record<RunState, number>>;
+  };
+  /** One seven-day window, shared by every figure that says "this week" — so a
+   *  headline can never disagree with the list beneath it. */
+  week: {
+    from: string;
+    done: number;
+    running: number;
+    queued: number;
+    failed: number;
+    total: number;
+    by_agent: { id: string; name: string; count: number }[];
+  };
+  live: { running: number; queued: number };
+}
+
+export interface RunsQuery {
+  limit?: number;
+  agent?: string;
+  state?: string;
+  brand?: string;
+  q?: string;
+}
+
+export function listRuns(query: RunsQuery = {}, opts?: RequestOptions): Promise<RunsPage> {
+  const qs = new URLSearchParams();
+  if (query.limit) qs.set("limit", String(query.limit));
+  if (query.agent && query.agent !== "all") qs.set("agent", query.agent);
+  if (query.state && query.state !== "all") qs.set("state", query.state);
+  if (query.brand && query.brand !== "all") qs.set("brand", query.brand);
+  if (query.q) qs.set("q", query.q);
+  const tail = qs.toString();
+  return getJson<RunsPage>(`/api/runs${tail ? `?${tail}` : ""}`, opts);
+}
+
 /* ---------------------------- News banner -------------------------------- */
 /* A single announcement set by the creator; shown to every signed-in user.   */
 
@@ -478,8 +560,8 @@ export interface AgentConfigResponse {
 
 export type AgentConfigPatch = Partial<Record<AgentModelField, string>>;
 
-export function getAgentConfig(): Promise<AgentConfigResponse> {
-  return getJson("/api/admin/agents");
+export function getAgentConfig(opts?: RequestOptions): Promise<AgentConfigResponse> {
+  return getJson("/api/admin/agents", opts);
 }
 
 export function updateAgentConfig(
@@ -888,8 +970,8 @@ export interface GdIngestedBrand {
   source?: string | null;
 }
 
-export const gdIngestedBrands = () =>
-  getJson<{ brands: GdIngestedBrand[] }>("/api/gd/ingested-brands");
+export const gdIngestedBrands = (opts?: RequestOptions) =>
+  getJson<{ brands: GdIngestedBrand[] }>("/api/gd/ingested-brands", opts);
 
 const _brandQuery = (brand?: string | null) =>
   brand ? `?brand=${encodeURIComponent(brand)}` : "";
@@ -1546,7 +1628,8 @@ export async function mrIngestPdf(file: File): Promise<MrIngestResult> {
   return sendForm<MrIngestResult>("/api/mr/ingest-pdf", form);
 }
 
-export const mrConnectors = () => getJson<MrConnector[]>("/api/mr/connectors");
+export const mrConnectors = (opts?: RequestOptions) =>
+  getJson<MrConnector[]>("/api/mr/connectors", opts);
 
 export const mrConfig = () => getJson<MrConfig>("/api/mr/config");
 
@@ -1764,7 +1847,8 @@ export interface SeoRun {
   ga?: SeoGa | null;
 }
 
-export const seoOverview = () => getJson<SeoOverview>("/api/seo-geo/overview");
+export const seoOverview = (opts?: RequestOptions) =>
+  getJson<SeoOverview>("/api/seo-geo/overview", opts);
 
 export interface SeoGscStatus {
   connected: boolean;
@@ -2193,25 +2277,31 @@ export const seoPagesRefresh = (id: string) =>
 
 /* ---- GEO agent (a10): AI answer visibility ---- */
 
-export type GeoEngineId = "perplexity" | "gemini" | "chatgpt";
+export type GeoEngineId = "perplexity" | "gemini" | "chatgpt" | "aio" | "ai_mode";
 
 /** How an engine's answers are actually obtained. `proxy` means an OpenRouter
  *  stand-in model answered — NOT the consumer product whose name is on the
- *  chip. The panel must never render proxy and native identically. */
-export type GeoEngineMode = "native" | "proxy" | "serpapi" | "off" | "unknown";
+ *  chip. The panel must never render proxy and native identically. `serpapi`
+ *  and `dataforseo` are both the real consumer Google surface, fetched by
+ *  different vendors. */
+export type GeoEngineMode = "native" | "proxy" | "serpapi" | "dataforseo" | "off" | "unknown";
 
 export interface GeoEngineStatus {
   connected: boolean;
   mode: GeoEngineMode;
-  model: string;
+  model: string;   // e.g. "google-ai-overview" / "google-ai-mode" for the SERP engines
   means: string;   // plain-language sentence, rendered verbatim as the tooltip
 }
 
 export interface GeoGlobalConfig {
   engines: Record<GeoEngineId, boolean>;
   engine_status?: Record<string, GeoEngineStatus>;
+  /** engine id -> display label, from the backend's own spec table */
+  engine_labels?: Record<string, string>;
   default_runs: number;
   default_daily_cap: number;
+  /** joint monthly ceiling for the billed SERP engines (AIO + AI Mode) */
+  default_aio_monthly_cap?: number;
 }
 
 export interface GeoBrandRow {
@@ -2231,10 +2321,52 @@ export interface GeoPrompt {
   stage: "awareness" | "consideration" | "purchase";
   enabled: boolean;
   source?: "ai" | "custom";   // custom = team-written, survives regeneration
+  /** buyer-persona key; "" or absent = untagged (prompts saved before personas existed) */
+  persona?: string;
+}
+
+/** A buyer persona the prompt universe is segmented by. */
+export interface GeoPersona {
+  key: string;
+  label: string;
+  description: string;
+}
+
+/** The prompt-universe document, as every prompts endpoint returns it.
+ *  `personas` is optional on the wire — a backend from before personas existed
+ *  simply does not send it. */
+export interface GeoPromptUniverse {
+  brand_id: string;
+  prompts: GeoPrompt[];
+  personas?: GeoPersona[];
+  updated_at?: string;
 }
 
 export const geoAddCustomPrompt = (brandId: string, text: string) =>
-  postJson<{ prompts: GeoPrompt[] }>(`/api/geo/brands/${brandId}/prompts/custom`, { text });
+  postJson<GeoPromptUniverse>(`/api/geo/brands/${brandId}/prompts/custom`, { text });
+
+/** One pasted list, one prompt per line. Partial acceptance is the NORMAL
+ *  outcome and answers 200: `skipped` carries the per-line reasons, and
+ *  `total` is the universe size after the paste, not the number added. */
+export interface GeoPromptsBulkResult {
+  added: GeoPrompt[];
+  skipped: { text: string; reason: string }[];
+  total: number;
+  universe: GeoPromptUniverse;
+}
+
+export const geoAddPromptsBulk = (
+  brandId: string,
+  body: { text: string; persona?: string; intent?: string; stage?: string },
+) => postJson<GeoPromptsBulkResult>(`/api/geo/brands/${brandId}/prompts/bulk`, body);
+
+/** Replace the persona list; an empty list clears it. Prompts tagged with a
+ *  persona that disappears here are untagged in the same write. Omitting `key`
+ *  lets the store slug one from the label. */
+export const geoSavePersonas = (
+  brandId: string,
+  body: { personas: { key?: string; label: string; description?: string }[] },
+) => putJson<GeoPromptUniverse>(`/api/geo/brands/${brandId}/personas`, body);
 
 export interface GeoCompetitor {
   key: string;
@@ -2251,6 +2383,9 @@ export interface GeoBrandConfig {
   aliases: Record<string, string[]>;
   competitors: GeoCompetitor[];
   daily_cap: number;
+  /** spend ceiling for the per-call SERP engines (AIO + AI Mode), joint across
+   *  both, per calendar month */
+  aio_monthly_cap?: number;
   /** days between scheduled sweeps (cron fires daily and honours this) */
   poll_interval_days?: number;
   auto_poll?: boolean;
@@ -2306,11 +2441,24 @@ export interface GeoPromptRollup {
   prompt_id: string;
   text: string;
   intent: string;
+  /** persona key the prompt is tagged with; "" or absent = untagged */
+  persona?: string;
   n: number;
   self_rate: number;
   cited_rate: number;
   rivals: { key: string; count: number }[];
   engines_hit: string[];
+}
+
+/** Per buyer persona: how often the brand is named and cited on that persona's
+ *  questions. The `""` persona is the unassigned bucket — answers polled before
+ *  prompts carried a persona — and stays visible on purpose. */
+export interface GeoPersonaRollup {
+  persona: string;
+  n_prompts: number;
+  n_answers: number;
+  mention_rate: number | null;
+  cited_rate: number | null;
 }
 
 export interface GeoReport {
@@ -2325,6 +2473,8 @@ export interface GeoReport {
    *  outside this report's window */
   engine_last_seen?: Record<string, string>;
   prompt_rollup?: GeoPromptRollup[];
+  /** optional per deploy-skew law: absent from a backend that predates personas */
+  persona_rollup?: GeoPersonaRollup[];
 }
 
 export interface GeoAnswer {
@@ -2344,8 +2494,10 @@ export interface GeoAnswer {
   brand_position?: number | null;
   brand_cited?: boolean;
   sentiment?: "positive" | "neutral" | "negative" | null;
-  via?: string;       // "native" | "openrouter" | "serpapi" — the surface measured
+  via?: string;       // "native" | "openrouter" | "serpapi" | "dataforseo" — the surface measured
   no_aio?: boolean;   // Google showed no AI Overview for this query (excluded from rates)
+  /** persona key of the prompt at poll time; "" or absent = untagged */
+  persona?: string;
 }
 
 /** Where the brand's sweep stands when nobody is watching a progress bar.
@@ -2364,23 +2516,29 @@ export interface GeoPollStatus {
   due_reason: string;
 }
 
-export const geoPollStatus = (brandId: string) =>
-  getJson<GeoPollStatus>(`/api/geo/brands/${brandId}/poll/status`);
+export const geoPollStatus = (brandId: string, req?: RequestOptions) =>
+  getJson<GeoPollStatus>(`/api/geo/brands/${brandId}/poll/status`, req);
 
-export const geoConfig = () => getJson<GeoGlobalConfig>("/api/geo/config");
+export const geoConfig = (opts?: RequestOptions) =>
+  getJson<GeoGlobalConfig>("/api/geo/config", opts);
 
-export const geoBrands = () => getJson<{ brands: GeoBrandRow[] }>("/api/geo/brands");
+export const geoBrands = (req?: RequestOptions) =>
+  getJson<{ brands: GeoBrandRow[] }>("/api/geo/brands", req);
 
-export const geoPrompts = (brandId: string) =>
-  getJson<{ brand_id: string; prompts: GeoPrompt[] }>(`/api/geo/brands/${brandId}/prompts`);
+export const geoPrompts = (brandId: string, req?: RequestOptions) =>
+  getJson<GeoPromptUniverse>(`/api/geo/brands/${brandId}/prompts`, req);
 
 export const geoGeneratePrompts = (brandId: string) =>
-  postJson<{ brand_id: string; prompts: GeoPrompt[] }>(
+  postJson<GeoPromptUniverse>(
     `/api/geo/brands/${brandId}/prompts/generate`, {},
   );
 
-export async function geoSavePrompts(brandId: string, prompts: GeoPrompt[]): Promise<{ prompts: GeoPrompt[] }> {
-  return putJson<{ prompts: GeoPrompt[] }>(`/api/geo/brands/${brandId}/prompts`, { prompts });
+/** Replace the universe whole. A prompt whose `persona` key is ABSENT keeps
+ *  whatever persona the store already has for it (an editor built before
+ *  personas existed must not untag the universe by round-tripping it);
+ *  `persona: ""` untags explicitly. */
+export async function geoSavePrompts(brandId: string, prompts: GeoPrompt[]): Promise<GeoPromptUniverse> {
+  return putJson<GeoPromptUniverse>(`/api/geo/brands/${brandId}/prompts`, { prompts });
 }
 
 export const geoBrandConfig = (brandId: string) =>
@@ -2389,7 +2547,7 @@ export const geoBrandConfig = (brandId: string) =>
 export async function geoSaveBrandConfig(
   brandId: string,
   patch: Partial<Pick<GeoBrandConfig,
-    "aliases" | "competitors" | "daily_cap" | "poll_interval_days" | "auto_poll">>,
+    "aliases" | "competitors" | "daily_cap" | "aio_monthly_cap" | "poll_interval_days" | "auto_poll">>,
 ): Promise<GeoBrandConfig> {
   return putJson<GeoBrandConfig>(`/api/geo/brands/${brandId}/config`, patch);
 }
@@ -2399,10 +2557,14 @@ export const geoPollStep = (
   body: { engines?: string[]; runs?: number; batch_size?: number } = {},
 ) => postJson<GeoPollProgress>(`/api/geo/brands/${brandId}/poll/step`, body);
 
-export const geoReport = (brandId: string, days = 7) =>
-  getJson<GeoReport>(`/api/geo/brands/${brandId}/report?days=${days}`);
+export const geoReport = (brandId: string, days = 7, req?: RequestOptions) =>
+  getJson<GeoReport>(`/api/geo/brands/${brandId}/report?days=${days}`, req);
 
-export const geoAnswers = (brandId: string, opts: { prompt_id?: string; engine?: string; days?: number } = {}) => {
+export const geoAnswers = (
+  brandId: string,
+  opts: { prompt_id?: string; engine?: string; days?: number } = {},
+  req?: RequestOptions,
+) => {
   const p = new URLSearchParams();
   if (opts.prompt_id) p.set("prompt_id", opts.prompt_id);
   if (opts.engine) p.set("engine", opts.engine);
@@ -2410,6 +2572,7 @@ export const geoAnswers = (brandId: string, opts: { prompt_id?: string; engine?:
   const qs = p.toString();
   return getJson<{ answers: GeoAnswer[]; total: number }>(
     `/api/geo/brands/${brandId}/answers${qs ? `?${qs}` : ""}`,
+    req,
   );
 };
 
@@ -2469,6 +2632,8 @@ export interface GeoUntrackedDomain {
   domain: string;
   count: number;
   answers_you_absent: number;
+  /** distinct questions the domain was cited on (optional per deploy-skew law) */
+  n_questions?: number;
   example_prompt_ids: string[];
 }
 
@@ -2486,8 +2651,8 @@ export interface GeoComparison {
   tracked_competitors: number;
 }
 
-export const geoComparison = (brandId: string, days = 7) =>
-  getJson<GeoComparison>(`/api/geo/brands/${brandId}/comparison?days=${days}`);
+export const geoComparison = (brandId: string, days = 7, req?: RequestOptions) =>
+  getJson<GeoComparison>(`/api/geo/brands/${brandId}/comparison?days=${days}`, req);
 
 /** What a re-read of stored answers changed. Zero engine calls: nothing is
  *  re-asked, only re-parsed with the current competitor list. */
@@ -2521,9 +2686,19 @@ export interface GeoHistoryPoint {
   weights: Record<string, number>;
   missing: string[];
   mention_rate: number | null;
+  /** Measured over answers that carry citations AT ALL — a smaller population
+   *  than `n_measured`. It cannot be combined with `mention_rate` to derive how
+   *  many answers both named and linked you; use `n_named` / `n_named_cited`,
+   *  which are counted over one denominator. */
   citation_rate: number | null;
   sov_self: number | null;
   n_measured: number;
+  /** Answers that named you, out of `n_measured`. Absent on points stored
+   *  before the split was recorded — the panel must then draw no split rather
+   *  than invent one. */
+  n_named?: number;
+  /** Answers that named you AND linked your site, out of `n_measured`. */
+  n_named_cited?: number;
   n_answers: number;
   n_prompts: number;
   engines: Record<string, number | null>;
@@ -2537,10 +2712,59 @@ export interface GeoTrendMove {
   direction: "up" | "down" | "flat" | "unknown";
 }
 
+/** One ISO week of sweeps, derived on read from the per-sweep points. A week
+ *  with no sweep is ABSENT rather than drawn as zero, so `delta_score` is
+ *  against the previous week that actually has a score. */
+export interface GeoWeeklyPoint {
+  week: string;            // e.g. "2026-W35"
+  start: string;           // YYYYMMDD of that week's Monday
+  score: number | null;
+  mention_rate: number | null;
+  citation_rate: number | null;
+  n_sweeps: number;
+  /** every sweep that week was thin — the bar is provisional, not a cliff */
+  all_partial: boolean;
+  delta_score: number | null;
+}
+
+/** One sweep's own record: when it ran, what stopped it, which engines it
+ *  reached — what a human reads when a chart point looks wrong. */
+export interface GeoRunLogEntry {
+  id: string;
+  recorded_at: string;
+  day: string;             // YYYYMMDD
+  /** null when nothing in the sweep produced a timestamped record */
+  started_at: string | null;
+  finished_at: string;
+  duration_s: number | null;
+  trigger: string;         // "cron" | "manual" — who started it
+  steps: number;
+  done: number;
+  total: number;
+  completed: boolean;
+  /** "completed", or the terminal reason when the sweep stopped short */
+  stopped_because: string;
+  terminal_reason: string | null;
+  /** engines that produced at least one usable answer, in the panel's order */
+  engines: string[];
+  calls: number;
+  /** engine id -> calls that errored */
+  errors: Record<string, number>;
+  /** queries where Google published no AI answer at all (not an error) */
+  no_aio: number;
+  score: number | null;
+  /** where the Action Plan stood when this sweep ran; null = no plan yet */
+  plan_progress: { done: number; total: number } | null;
+}
+
 export interface GeoHistory {
   brand_id: string;
   days: number;
   points: GeoHistoryPoint[];
+  /** BOTH optional per the deploy-skew law: a backend from before the rollup
+   *  and run log existed simply does not send them. */
+  weekly?: GeoWeeklyPoint[];
+  runs?: GeoRunLogEntry[];
   trend: {
     current: GeoHistoryPoint | null;
     previous: GeoHistoryPoint | null;
@@ -2555,8 +2779,8 @@ export interface GeoHistory {
   backfill_days: number;
 }
 
-export const geoHistory = (brandId: string, days = 90) =>
-  getJson<GeoHistory>(`/api/geo/brands/${brandId}/history?days=${days}`);
+export const geoHistory = (brandId: string, days = 90, req?: RequestOptions) =>
+  getJson<GeoHistory>(`/api/geo/brands/${brandId}/history?days=${days}`, req);
 
 /* --------------------- GEO Action Plan (a10 strategy) -------------------- */
 
@@ -2584,10 +2808,18 @@ export interface GeoStrategyAction {
   effort: "low" | "medium" | "high";
   impact: "low" | "medium" | "high";
   kpi: string;
+  /** the model's KPI was off-list and was coerced to the nearest allowed one —
+   *  the target sentence may read slightly off its KPI */
+  kpi_coerced?: boolean;
   target: string;
+  /** what doing this is expected to move, in the plan's own words */
+  expected_impact?: string;
   why_evidence: string;
   status: "todo" | "in_progress" | "done" | "skipped";
   status_at?: string;
+  /** free text — a name, an email, "the agency"; "" or absent = unassigned */
+  assignee?: string;
+  assigned_at?: string;
 }
 
 /** A fortnight of work. Waves arrive calendar-ordered from the backend. */
@@ -2639,20 +2871,28 @@ export interface GeoStrategyDoc {
   history?: { generated_at: string; summary: string }[];
 }
 
-export const geoStrategyGet = (brandId: string) =>
-  getJson<GeoStrategyDoc>(`/api/geo/brands/${brandId}/strategy`);
+export const geoStrategyGet = (brandId: string, req?: RequestOptions) =>
+  getJson<GeoStrategyDoc>(`/api/geo/brands/${brandId}/strategy`, req);
 
 export const geoStrategyGenerate = (brandId: string) =>
   postJson<GeoStrategyDoc>(`/api/geo/brands/${brandId}/strategy/generate`, {});
 
-export async function geoStrategyActionStatus(
-  brandId: string, actionId: string, status: GeoStrategyAction["status"],
+/** Move an action and/or hand it to someone. Either field alone is a valid
+ *  request; `assignee: ""` clears the assignment. */
+export async function geoStrategyActionUpdate(
+  brandId: string, actionId: string,
+  body: { status?: GeoStrategyAction["status"]; assignee?: string },
 ): Promise<GeoStrategyDoc> {
   return putJson<GeoStrategyDoc>(
     `/api/geo/brands/${brandId}/strategy/actions/${actionId}`,
-    { status },
+    body,
   );
 }
+
+/** @deprecated Use `geoStrategyActionUpdate` — same endpoint, wider body. */
+export const geoStrategyActionStatus = (
+  brandId: string, actionId: string, status: GeoStrategyAction["status"],
+): Promise<GeoStrategyDoc> => geoStrategyActionUpdate(brandId, actionId, { status });
 
 /* ------------- GEO Content Optimizer (a10, Layers 1-6) ------------------- */
 
@@ -2696,6 +2936,9 @@ export interface OptimizerReport {
   winners_median: number | null;
   degraded: string[];
   gaps: OptimizerGap[];
+  /** the mirror of `gaps`: what the draft already does the way the winners do.
+   *  Optional per deploy-skew law — absent on reports scored before it existed. */
+  strengths?: { kind: string; message: string }[];
   draft_features: Record<string, number>;
   subtopic_coverage: OptimizerSubtopicCoverage[];
   draft_term_counts: Record<string, number>;
@@ -2731,17 +2974,108 @@ export interface OptimizerIndexRow {
   created_at: string;
   n_docs: number;
   score: number | null;
+  /** the page-check verdict label, when the analysis carries one. Optional AND
+   *  nullable: rows written before page checks existed do not send it. */
+  verdict?: string | null;
+  /** the checked page's URL; "" when a pasted draft was checked */
+  source_url?: string;
 }
 
-export const geoOptimizerAnalyze = (body: {
-  keyword: string; locale?: string; draft?: string; own_domain?: string; vertical?: string;
-}) => postJson<OptimizerAnalysis>("/api/geo/optimizer/analyze", body);
+/* ------------- GEO Page check (a10) -------------------------------------- */
 
-export const geoOptimizerRescore = (analysisId: string, draft: string) =>
-  postJson<OptimizerReport>("/api/geo/optimizer/rescore", { analysis_id: analysisId, draft });
+/** "Will publishing this page help or hurt?" — the whole read, brand-scoped.
+ *  Replaces the old un-scoped /api/geo/optimizer/* endpoints, which are
+ *  DELETED from the backend. */
 
-export const geoOptimizerAnalyses = () =>
-  getJson<{ analyses: OptimizerIndexRow[] }>("/api/geo/optimizer/analyses");
+export interface GeoPageCheckVerdict {
+  label: "likely helps" | "needs work" | "likely cannibalizes" | "cannot tell";
+  reasons: string[];
+  confidence: "high" | "medium" | "low";
+}
 
-export const geoOptimizerAnalysis = (id: string) =>
-  getJson<OptimizerAnalysis>(`/api/geo/optimizer/analyses/${id}`);
+export interface GeoPageCheckBlock {
+  /** "" when a pasted draft was checked rather than a live URL */
+  source_url: string;
+  target_query: string;
+  /** where the target query came from — "given" is the user's own keyword */
+  target_query_source: "given" | "page_title" | "draft_heading";
+  verdict: GeoPageCheckVerdict;
+  pros: { kind: string; message: string }[];
+  /** gaps plus unanswered People-Also-Ask questions; `priority` is present on
+   *  the gap-derived rows */
+  cons: { kind: string; priority?: number; message: string }[];
+  cannibalization: {
+    risk: "high" | "medium" | "low" | "unknown";
+    evidence: { kind: "serp" | "corpus" | "gsc"; url: string; detail: string }[];
+    note: string;
+  };
+  page_flags: string[];
+  checked_at: string;
+  disclaimer: string;
+}
+
+/** The full analysis document: the optimizer snapshot plus the page-check
+ *  block. `page_check` is optional — analyses stored by the old optimizer
+ *  never got one. */
+export interface GeoPageCheckDoc extends OptimizerAnalysis {
+  page_check?: GeoPageCheckBlock;
+}
+
+/** One page (URL) or one draft against today's winners for its target query,
+ *  plus a cannibalization read against the brand's own pages. Exactly one of
+ *  `url` / `draft`. Costs a SERP sweep; re-scoring against the pinned snapshot
+ *  (`geoPageCheckRescore`) never re-spends. */
+export const geoPageCheck = (
+  brandId: string,
+  body: { url?: string; draft?: string; keyword?: string; locale?: string },
+) => postJson<GeoPageCheckDoc>(`/api/geo/brands/${brandId}/page-check`, body);
+
+export const geoPageChecks = (brandId: string, req?: RequestOptions) =>
+  getJson<{ analyses: OptimizerIndexRow[] }>(`/api/geo/brands/${brandId}/page-checks`, req);
+
+export const geoPageCheckGet = (brandId: string, id: string) =>
+  getJson<GeoPageCheckDoc>(`/api/geo/brands/${brandId}/page-checks/${id}`);
+
+/** Deterministic re-score of an edited draft against the PINNED snapshot — no
+ *  new SERP call. Refresh = run `geoPageCheck` again explicitly. */
+export const geoPageCheckRescore = (brandId: string, id: string, body: { draft: string }) =>
+  postJson<OptimizerReport>(`/api/geo/brands/${brandId}/page-checks/${id}/rescore`, body);
+
+/* ------------- Issues (the console's own record of what is wrong) -------- */
+
+export interface IssueFix {
+  label: string;
+  /** workspace slug the fix lives in — "seo" | "geo" */
+  workspace: string;
+  /** the subject to open it on — a brand id */
+  subject: string;
+  /** a section id of that workspace */
+  section: string;
+}
+
+export interface Issue {
+  /** stable across reads — hash of (area, brand, code), so a row can be keyed */
+  id: string;
+  severity: "high" | "medium" | "low";
+  /** "seo" | "geo" | "runs" */
+  area: string;
+  brand_id: string;
+  brand: string;
+  code: string;
+  title: string;
+  detail: string;
+  /** where to go to fix it; null = nowhere specific to send anyone */
+  fix: IssueFix | null;
+  since: string | null;
+}
+
+/** Most severe first. A source that could not be read arrives as a
+ *  low-severity issue of its own — never as an empty, healthy-looking list. */
+export interface IssuesPayload {
+  issues: Issue[];
+  counts: { high: number; medium: number; low: number };
+  generated_at: string;
+}
+
+export const getIssues = (req?: RequestOptions) =>
+  getJson<IssuesPayload>("/api/issues", req);

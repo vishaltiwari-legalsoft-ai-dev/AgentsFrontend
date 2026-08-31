@@ -32,6 +32,18 @@ export function AnswerText({ text }: { text: string }) {
           {b.kind === "h" && <h4>{inline(b.text)}</h4>}
           {b.kind === "ul" && <ul>{b.items.map((it, j) => <li key={j}>{inline(it)}</li>)}</ul>}
           {b.kind === "ol" && <ol>{b.items.map((it, j) => <li key={j}>{inline(it)}</li>)}</ol>}
+          {b.kind === "table" && (
+            <div className="geo-md__tw">
+              <table className="geo-md__table">
+                <thead><tr>{b.head.map((c, j) => <th key={j}>{inline(c)}</th>)}</tr></thead>
+                <tbody>
+                  {b.rows.map((row, j) => (
+                    <tr key={j}>{row.map((c, k) => <td key={k}>{inline(c)}</td>)}</tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Fragment>
       ))}
     </div>

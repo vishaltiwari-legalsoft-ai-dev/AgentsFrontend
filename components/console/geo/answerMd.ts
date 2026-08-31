@@ -9,7 +9,8 @@ export type InlineToken =
 
 export type Block =
   | { kind: "p" | "h"; text: string }
-  | { kind: "ul" | "ol"; items: string[] };
+  | { kind: "ul" | "ol"; items: string[] }
+  | { kind: "table"; head: string[]; rows: string[][] };
 
 export function inlineTokens(text: string): InlineToken[] {
   // fresh regex per call — a shared global-flag regex has ONE lastIndex, and
@@ -31,11 +32,60 @@ export function inlineTokens(text: string): InlineToken[] {
   return out;
 }
 
+/* ------------------------------------------------------------------ tables --
+ *
+ * Engines answer comparison questions with a markdown table more often than
+ * with anything else, and until this existed those lines fell through to the
+ * paragraph branch — so the reader got `| Need | Best option |` and then
+ * `|---|---|` as two sentences. That is the answer's most structured content
+ * rendered as its least readable.
+ *
+ * Only the pipe form is handled, and only when a separator row follows the
+ * header, because that is the shape engines actually emit. Anything else stays
+ * a paragraph rather than being guessed at.
+ */
+
+const isTableLine = (line: string) => line.includes("|") && /^\|?.*\|.*$/.test(line);
+
+/** `|---|:--:|` and friends — the row that makes the line above it a header. */
+const isSeparator = (line: string) =>
+  /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(line);
+
+function cells(line: string): string[] {
+  let s = line.trim();
+  if (s.startsWith("|")) s = s.slice(1);
+  if (s.endsWith("|")) s = s.slice(0, -1);
+  return s.split("|").map((c) => c.trim());
+}
+
 export function blocks(text: string): Block[] {
   const out: Block[] = [];
-  for (const raw of text.split("\n")) {
-    const line = raw.trim();
+  const lines = text.split("\n");
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
     if (!line) continue;
+
+    // A table is the only construct here that needs to look ahead, so it is
+    // checked first: its header line is otherwise a perfectly good paragraph.
+    if (isTableLine(line) && i + 1 < lines.length && isSeparator(lines[i + 1].trim())) {
+      const head = cells(line);
+      const rows: string[][] = [];
+      let j = i + 2;
+      for (; j < lines.length; j++) {
+        const row = lines[j].trim();
+        if (!row || !isTableLine(row) || isSeparator(row)) break;
+        const got = cells(row);
+        // Pad or trim to the header's width so the rendered table can never
+        // have a ragged row that shifts the columns under it.
+        while (got.length < head.length) got.push("");
+        rows.push(got.slice(0, head.length));
+      }
+      out.push({ kind: "table", head, rows });
+      i = j - 1;
+      continue;
+    }
+
     const bullet = /^[-*•]\s+(.*)$/.exec(line);
     const numbered = /^\d+[.)]\s+(.*)$/.exec(line);
     const heading = /^#{1,4}\s+(.*)$/.exec(line);

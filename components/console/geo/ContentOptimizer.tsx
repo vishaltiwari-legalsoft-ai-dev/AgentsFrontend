@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ToastFn } from "@/components/console/ConsoleApp";
 import {
-  geoOptimizerAnalyses, geoOptimizerAnalysis, geoOptimizerAnalyze, geoOptimizerRescore,
+  geoPageCheck, geoPageCheckGet, geoPageCheckRescore, geoPageChecks,
   type OptimizerAnalysis, type OptimizerIndexRow, type OptimizerReport,
 } from "@/lib/api";
 import { Icon } from "@/lib/kit-ui";
@@ -31,7 +31,7 @@ const FEATURE_LABELS: Record<string, string> = {
 const fmt = (v: number | null | undefined) =>
   v === null || v === undefined ? "—" : Number.isInteger(v) ? String(v) : v.toFixed(1);
 
-export function ContentOptimizer({ ownDomain, onToast }: { ownDomain?: string; onToast: ToastFn }) {
+export function ContentOptimizer({ brandId, onToast }: { brandId: string; onToast: ToastFn }) {
   const [keyword, setKeyword] = useState("");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -48,11 +48,11 @@ export function ContentOptimizer({ ownDomain, onToast }: { ownDomain?: string; o
   const loadHistory = useCallback(() => {
     void session.run(
       "history",
-      async () => (await geoOptimizerAnalyses()).analyses,
+      async () => (await geoPageChecks(brandId)).analyses,
       setHistory,
       "Couldn't load your past analyses",
     );
-  }, [session]);
+  }, [session, brandId]);
 
   useEffect(loadHistory, [loadHistory]);
 
@@ -60,9 +60,7 @@ export function ContentOptimizer({ ownDomain, onToast }: { ownDomain?: string; o
     if (!keyword.trim() || busy) return;
     setBusy(true);
     try {
-      const res = await geoOptimizerAnalyze({
-        keyword: keyword.trim(), draft, own_domain: ownDomain ?? "",
-      });
+      const res = await geoPageCheck(brandId, { keyword: keyword.trim(), draft });
       setDoc(res);
       loadHistory();
     } catch (e) {
@@ -76,7 +74,7 @@ export function ContentOptimizer({ ownDomain, onToast }: { ownDomain?: string; o
     if (!doc || !draft.trim() || busy) return;
     setBusy(true);
     try {
-      const report = await geoOptimizerRescore(doc.meta.analysis_id, draft);
+      const report = await geoPageCheckRescore(brandId, doc.meta.analysis_id, { draft });
       setDoc({ ...doc, last_report: report });
       onToast("Re-scored against the same snapshot — same corpus, honest comparison.");
     } catch (e) {
@@ -90,7 +88,7 @@ export function ContentOptimizer({ ownDomain, onToast }: { ownDomain?: string; o
     const attempt = session.begin("analysis");
     setBusy(true);
     try {
-      const res = await geoOptimizerAnalysis(id);
+      const res = await geoPageCheckGet(brandId, id);
       if (!attempt.current()) return; // a newer chip owns the panel
       setDoc(res);
       setKeyword(res.meta.keyword);

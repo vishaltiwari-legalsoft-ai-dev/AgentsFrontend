@@ -120,7 +120,10 @@ export function MarketingResearch({ onToast, onBack }: { onToast: ToastFn; onBac
     datasets: loadJob("Files", mrDatasets, setDatasets, "Couldn't load the file list"),
     runs: loadJob("Report history", mrListRuns, setRuns, "Couldn't load the report history"),
     snapshots: loadJob("Vendor snapshots", mrSnapshots, setSnapshots, "Couldn't load the vendor snapshots"),
-    connectors: loadJob("Connectors", mrConnectors, setConnectors, "Couldn't load the connectors"),
+    // Passing the signal through rather than the bare function: `mrConnectors`
+    // now takes request options, and a job that ignores them cannot be aborted
+    // when the view is left.
+    connectors: loadJob("Connectors", (signal) => mrConnectors({ signal }), setConnectors, "Couldn't load the connectors"),
     config: loadJob("Settings", async () => {
       const c = await mrConfig();
       setYear((y) => y ?? c.year);

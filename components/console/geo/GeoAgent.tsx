@@ -745,8 +745,8 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
                         <span className="seo-chip">{ENGINE_LABELS[a.engine] ?? a.engine} · run {a.run}</span>
                         {a.via === "openrouter" && (
                           <span className="seo-chip seo-chip--warn"
-                                title={`Answered by ${a.model || "an OpenRouter stand-in model"} via OpenRouter — not the ${ENGINE_LABELS[a.engine] ?? a.engine} product itself.`}>
-                            proxy · {a.model || "openrouter"}
+                                title={`Measured with a similar AI model${a.model ? ` (${a.model})` : ""} via OpenRouter — add the official ${ENGINE_LABELS[a.engine] ?? a.engine} key in Settings → Secrets for exact readings.`}>
+                            similar model · {a.model || "openrouter"}
                           </span>
                         )}
                         {a.error ? (
@@ -862,7 +862,7 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
             )}
 
             {tab === "optimizer" && (
-              <ContentOptimizer ownDomain={brand.domain} onToast={onToast} />
+              <ContentOptimizer brandId={brand.id} onToast={onToast} />
             )}
           </>
         )}

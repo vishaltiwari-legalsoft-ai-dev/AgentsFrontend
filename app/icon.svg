@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40">
+  <!-- Favicon variant of the Breakaway mark. Browser chrome sits on either a light
+       or a dark toolbar and gives us no theme signal, so this one carries its own
+       ink tile: cloud L + volt diamond read on both. Keep in step with BrandMark
+       in lib/kit-ui.tsx — the mark is inset to 70% so the tile keeps a margin. -->
+  <rect width="40" height="40" rx="8" fill="#03080a"/>
+  <g transform="translate(6 6) scale(0.7)">
+    <path d="M0.1 6.1 H17.4 V22.5 H34 V40 H0.1 Z" fill="#fcfcfe"/>
+    <path d="M30.3 0 L39.9 9.7 L30.3 19.4 L20.7 9.7 Z" fill="#c8ff00"/>
+  </g>
+</svg>

@@ -2,23 +2,24 @@
 
 import { useAuth } from "@/lib/auth";
 import LoginScreen from "@/components/LoginScreen";
-import ConsoleApp from "@/components/console/ConsoleApp";
-import { Icon } from "@/lib/kit-ui";
+import HubApp from "@/components/hub/HubApp";
 
 export default function Page() {
   const { user, ready } = useAuth();
 
+  // Auth resolves from localStorage after mount, so there is a moment before
+  // either answer is known. Showing the sign-in screen during it would flash a
+  // login at somebody who is already signed in.
   if (!ready) {
     return (
-      <main className="capp" style={{ alignItems: "center", justifyContent: "center" }}>
-        <Icon name="loader-circle" size={28} style={{ color: "var(--brand)", animation: "spin 1s linear infinite" }} />
+      <main className="boot" aria-busy="true">
+        <span className="boot__spin" aria-hidden="true" />
+        <span className="sr">Opening AgentHub</span>
       </main>
     );
   }
 
-  if (!user) {
-    return <LoginScreen />;
-  }
+  if (!user) return <LoginScreen />;
 
-  return <ConsoleApp />;
+  return <HubApp />;
 }

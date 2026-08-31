@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { User } from "@/lib/api";
 import { getNews } from "@/lib/api";
-import { Icon, Avatar, IconButton } from "@/lib/kit-ui";
+import { Icon, Avatar, IconButton, BrandMark } from "@/lib/kit-ui";
 import { useCardsV2 } from "@/lib/ui-flags";
 
 /** Fired by the creator's config panel after saving, so open bars refresh live. */
@@ -24,14 +24,7 @@ const NAV2 = [
 function Logo() {
   return (
     <div className="cbrand">
-      <svg width="30" height="30" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="2" y="2" width="36" height="36" rx="9" fill="#7624f4" />
-        <rect x="11" y="22" width="4.5" height="7" rx="1.2" fill="#fff" opacity="0.55" />
-        <rect x="17.75" y="18" width="4.5" height="11" rx="1.2" fill="#fff" opacity="0.78" />
-        <rect x="24.5" y="14" width="4.5" height="15" rx="1.2" fill="#fff" />
-        <path d="M11 19.5 L18 15 L23 17.5 L30.5 11" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        <path d="M27 10.4 L31 10 L30.6 14 Z" fill="#fff" />
-      </svg>
+      <BrandMark size={30} />
       <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18, letterSpacing: "-0.01em", color: "var(--text-primary)" }}>
         Agent<span style={{ color: "var(--blue-600)" }}>Hub</span>
       </span>

@@ -2,7 +2,7 @@
 
 import type { GeoBrandRow, GeoEngineStatus, GeoPromptRollup, GeoReport } from "@/lib/api";
 import { Icon } from "@/lib/kit-ui";
-import { comparableEngines, engineCards, modeSuffix, proxyEngines, statusOf } from "./provenance";
+import { blankReason, comparableEngines, engineCards, modeSuffix, proxyEngines, statusOf } from "./provenance";
 import { shortDate } from "./schedule";
 
 /** Insights — the plain-language story of the brand's GEO condition.
@@ -97,8 +97,8 @@ export function GeoInsights({ brand, report, promptCount, connected, engineStatu
       .map(([e]) => ENGINE_LABELS[e]);
     steps.push({
       icon: "key",
-      title: `Measure ${names.join(" and ")} for real`,
-      detail: `Right now ${names.join(" and ")} ${names.length === 1 ? "is" : "are"} answered by a stand-in model through OpenRouter — close, but not the product your buyers actually use. Paste the native API key in Settings → Secrets and the next poll measures the real thing.`,
+      title: `Add the official ${names.join(" and ")} ${names.length === 1 ? "key" : "keys"}`,
+      detail: `${names.join(" and ")} ${names.length === 1 ? "is" : "are"} measured with ${names.length === 1 ? "a similar model" : "similar models"} right now. The readings track closely; add ${names.length === 1 ? "its" : "their"} official API ${names.length === 1 ? "key" : "keys"} in Settings → Secrets for exact numbers.`,
     });
   }
   if (promptCount === 0) {
@@ -197,11 +197,12 @@ export function GeoInsights({ brand, report, promptCount, connected, engineStatu
               {proxyRows.length > 0 && (
                 <>
                   {" "}
-                  <strong>Caveat:</strong> {proxyRows.map((e) => ENGINE_LABELS[e.engine]).join(" and ")}{" "}
-                  {proxyRows.length === 1 ? "was" : "were"} measured through an OpenRouter stand-in model
-                  ({proxyRows.map((e) => e.model).filter(Boolean).join(", ") || "openrouter"}), not the real
-                  product — treat {proxyRows.length === 1 ? "that number" : "those numbers"} as indicative.
-                  Add the native API key in Settings → Secrets to measure the real thing.
+                  <strong>Note:</strong> {proxyRows.map((e) => ENGINE_LABELS[e.engine]).join(" and ")}{" "}
+                  {proxyRows.length === 1 ? "was" : "were"} measured with{" "}
+                  {proxyRows.length === 1 ? "a similar AI model" : "similar AI models"}
+                  ({proxyRows.map((e) => e.model).filter(Boolean).join(", ") || "openrouter"}) — the
+                  readings track closely. Add the official API{" "}
+                  {proxyRows.length === 1 ? "key" : "keys"} in Settings → Secrets for exact numbers.
                 </>
               )}
             </p>
@@ -278,7 +279,9 @@ export function GeoInsights({ brand, report, promptCount, connected, engineStatu
           <div className="mr-section">
             <h3 className="mr-section__title">Engine by engine</h3>
             <div className="geo-inscards">
-              {cards.map((c) => (
+              {cards.map((c) => {
+                const blank = blankReason(c);
+                return (
                 <div key={c.engine} className={`geo-inscard geo-inscard--${c.state}`}>
                   <span className="geo-inscard__num">
                     {c.state === "measured" ? pct(c.rate) : "—"}
@@ -297,21 +300,35 @@ export function GeoInsights({ brand, report, promptCount, connected, engineStatu
                       <>not connected — add its key in Settings → Secrets</>
                     ) : c.state === "never" ? (
                       <>connected, but no answer collected yet</>
-                    ) : c.rate === null ? (
+                    ) : c.rate === null && blank === "errors" ? (
                       <>
-                        nothing to appear in: {c.emptySlots} of {c.emptySlots} queries returned
+                        every call failed — {c.errors} of {c.attempted}. Its key or quota needs
+                        checking in Settings → Secrets; nothing here was measured.
+                      </>
+                    ) : c.rate === null && blank === "mixed" ? (
+                      <>
+                        nothing measurable: {c.emptySlots} of {c.attempted} queries returned no AI
+                        Overview and {c.errors} calls failed.
+                      </>
+                    ) : c.rate === null && blank === "no_answer_published" ? (
+                      <>
+                        nothing to appear in: {c.emptySlots} of {c.attempted} queries returned
                         no AI Overview
                       </>
+                    ) : c.rate === null ? (
+                      <>no answer in this window could carry a mention</>
                     ) : (
                       <>
                         named in {c.measured} answers
                         {c.emptySlots > 0 && <> · {c.emptySlots} queries had no AI Overview</>}
-                        {c.mode === "proxy" && <> · via {c.model || "OpenRouter"}, not the real product</>}
+                        {c.errors > 0 && <> · {c.errors} calls failed</>}
+                        {c.mode === "proxy" && <> · via {c.model || "OpenRouter"} (similar model)</>}
                       </>
                     )}
                   </span>
                 </div>
-              ))}
+                );
+              })}
             </div>
             {cards.some((c) => c.emptySlots > 0) && (
               <p className="geo-note">
