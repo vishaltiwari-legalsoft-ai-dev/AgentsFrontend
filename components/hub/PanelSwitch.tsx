@@ -22,6 +22,7 @@ import { RunsView } from "./panels/RunsView";
 import { LibraryView } from "./panels/LibraryView";
 import { ModelsView } from "./panels/ModelsView";
 import { IntegrationsView } from "./panels/IntegrationsView";
+import { ScheduleView } from "./panels/ScheduleView";
 import { SettingsView } from "./panels/SettingsView";
 import { AdminView } from "./panels/AdminView";
 import { GeoWorkspace } from "./work/GeoWorkspace";
@@ -74,6 +75,7 @@ export function PanelSwitch({ route }: { route: Route }) {
     case "library": return <LibraryView />;
     case "models": return <ModelsView />;
     case "integrations": return <IntegrationsView />;
+    case "schedule": return <ScheduleView />;
     case "settings": return <SettingsView />;
     case "admin": return <AdminView />;
     default: return <HomeView />;

@@ -96,7 +96,7 @@ export const agentBySlug = (slug: string): HubAgent | undefined =>
 export type PanelId =
   | "home" | "issues" | "agents" | "runs"
   | "library"
-  | "models" | "integrations" | "settings" | "admin";
+  | "models" | "integrations" | "schedule" | "settings" | "admin";
 
 export interface Panel {
   id: PanelId;
@@ -116,6 +116,7 @@ export const PANELS: Panel[] = [
   { id: "library", label: "Library", icon: "library", group: "Assets", title: "Library", gate: null },
   { id: "models", label: "Models", icon: "models", group: "Setup", title: "Models", gate: "creator" },
   { id: "integrations", label: "Integrations", icon: "integrations", group: "Setup", title: "Integrations", gate: null },
+  { id: "schedule", label: "Schedule", icon: "plan", group: "Setup", title: "Schedule", gate: "creator" },
   { id: "settings", label: "Settings", icon: "settings", group: "Setup", title: "Settings", gate: null },
   { id: "admin", label: "Admin", icon: "admin", group: "Setup", title: "Admin", gate: "admin" },
 ];

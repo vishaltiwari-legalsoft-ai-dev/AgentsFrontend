@@ -3079,3 +3079,42 @@ export interface IssuesPayload {
 
 export const getIssues = (req?: RequestOptions) =>
   getJson<IssuesPayload>("/api/issues", req);
+
+/* ------------- Schedule (the cron jobs that drive the agents) ------------ */
+
+export interface CronSchedule { cron: string; timezone: string }
+export interface CronAttempt { time: string; ok: boolean }
+
+export interface CronJob {
+  id: string;
+  /** the registry's curated name; null on a job the registry does not know */
+  name: string | null;
+  agent_id: string | null;
+  agent_label: string | null;
+  /** "POST /api/geo/cron/poll" form */
+  endpoint: string;
+  purpose: string | null;
+  why_time: string | null;
+  schedule: CronSchedule | null;
+  state: "ENABLED" | "PAUSED" | null;
+  last_attempt: CronAttempt | null;
+  next_time: string | null;
+  /** "live_only" = firing in production with no registry entry (name, purpose
+   *  and why_time null); "registry_only" = expected by the backend but absent
+   *  from the scheduler — a dead cron — with `schedule` carrying the expected
+   *  values. When `scheduler_ok` is false EVERY row arrives "registry_only",
+   *  because expectations were all that could be read. */
+  origin: "live_registered" | "live_only" | "registry_only";
+}
+
+/** `scheduler_ok: false` is the honest-partial state: the rows are the
+ *  registry's expectations only, and every live field is null. */
+export interface CronJobsPayload {
+  generated_at: string;
+  scheduler_ok: boolean;
+  scheduler_error: string | null;
+  jobs: CronJob[];
+}
+
+export const getCronJobs = (req?: RequestOptions) =>
+  getJson<CronJobsPayload>("/api/cron/jobs", req);

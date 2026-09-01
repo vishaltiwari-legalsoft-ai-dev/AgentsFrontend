@@ -48,6 +48,23 @@ export function took(seconds: number | null): string | null {
   return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
 }
 
+/** How long until, in the words someone says out loud — `ago`'s future mirror.
+ *  A time already past (or right now) reads "any moment now": a next-run time
+ *  the clock has walked past means the job is due, not that anything broke. */
+export function until(iso: string, now = new Date()): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const secs = Math.round((d.getTime() - now.getTime()) / 1000);
+  if (secs < 60) return "any moment now";
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `in ${mins} minute${mins === 1 ? "" : "s"}`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `in ${hours} hour${hours === 1 ? "" : "s"}`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `in ${days} day${days === 1 ? "" : "s"}`;
+  return `on ${d.toLocaleDateString("en-US", { day: "numeric", month: "long" })}`;
+}
+
 /** How long ago, in the words someone says out loud. */
 export function ago(iso: string, now = new Date()): string {
   const d = new Date(iso);
