@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LINE_META, METRICS_WITHOUT_A_LINE, caughtBy, unattributed } from "./lineMap";
+import type { MrReportKind, MrReportPeriods } from "@/lib/api";
+import { REPORT_PERIOD_LIST, periodsFor, takesPeriod } from "../../../console/mr/reportMeta";
 
 /** The threshold keys `GET /api/mr/targets` returned on the live account.
  *  Pinned here so a key the backend adds — or renames — turns this red instead
@@ -111,5 +113,79 @@ describe("unattributed", () => {
 
   it("ignores a group with no metric at all", () => {
     expect(unattributed([{ metric: null, count: 3 }])).toEqual([]);
+  });
+});
+
+/* --------------------------------------------------------------------------
+   The Reports panel's period picker.
+   Lives here rather than in a file of its own: this is the MR work area's test
+   module, and the decision under test — which of the endpoint's two lists a
+   report kind reads — belongs to the panel next door.
+   -------------------------------------------------------------------------- */
+
+
+/** The exact shape `GET /api/mr/report-periods` answers with — two named
+ *  lists, never a map keyed by report kind. Pinned from
+ *  `reports.available_periods()`, so a backend that renames or drops a list
+ *  turns this red instead of quietly handing the picker nothing. */
+const LIVE_PERIODS: MrReportPeriods = {
+  months: [
+    { period: "2026-09", label: "September 2026", current: true },
+    { period: "2026-08", label: "August 2026", current: false },
+    { period: "2026-07", label: "July 2026", current: false },
+  ],
+  quarters: [
+    { period: "2026-Q3", label: "Q3 2026", current: true },
+    { period: "2026-Q2", label: "Q2 2026", current: false },
+  ],
+};
+
+/** The eight kinds `POST /api/mr/reports/{kind}` answers 422 for when a period
+ *  is sent — so the picker must never offer them one. */
+const KINDS_WITHOUT_A_PERIOD: MrReportKind[] = [
+  "daily_summary", "weekly_summary", "threshold_alert", "competitor_digest",
+  "opportunity_report", "utm_attribution", "icp_signal", "daily_movement",
+];
+
+describe("periodsFor", () => {
+  it("reads the monthly report's periods from the months list", () => {
+    expect(periodsFor("monthly_summary", LIVE_PERIODS).map((p) => p.period))
+      .toEqual(["2026-09", "2026-08", "2026-07"]);
+  });
+
+  it("reads the quarterly report's periods from the quarters list, so a specific quarter can be asked for", () => {
+    expect(periodsFor("quarterly_summary", LIVE_PERIODS).map((p) => p.period))
+      .toEqual(["2026-Q3", "2026-Q2"]);
+  });
+
+  it("never keys the payload by report kind — the regression that emptied the picker", () => {
+    // `periods["monthly_summary"]` is undefined for all ten kinds; only the two
+    // list names exist on the payload, and that is what the map must hold.
+    expect(Object.values(REPORT_PERIOD_LIST).every((list) => list in LIVE_PERIODS)).toBe(true);
+    expect(Object.keys(LIVE_PERIODS)).not.toContain("monthly_summary");
+  });
+
+  it("offers nothing for a kind the backend refuses a period on", () => {
+    for (const kind of KINDS_WITHOUT_A_PERIOD) {
+      expect(takesPeriod(kind)).toBe(false);
+      expect(periodsFor(kind, LIVE_PERIODS)).toEqual([]);
+    }
+    expect(takesPeriod("monthly_summary")).toBe(true);
+    expect(takesPeriod("quarterly_summary")).toBe(true);
+  });
+
+  it("returns a list, never undefined, while the periods are unread or the read failed", () => {
+    expect(periodsFor("monthly_summary", null)).toEqual([]);
+    expect(periodsFor("quarterly_summary", null)).toEqual([]);
+  });
+
+  it("returns a list when the payload holds no periods at all, so the picker shows its empty state", () => {
+    expect(periodsFor("monthly_summary", { months: [], quarters: [] })).toEqual([]);
+  });
+
+  it("survives a payload missing a list rather than handing the picker undefined to map over", () => {
+    const partial = { months: LIVE_PERIODS.months } as MrReportPeriods;
+    expect(periodsFor("quarterly_summary", partial)).toEqual([]);
+    expect(periodsFor("monthly_summary", partial)).toHaveLength(3);
   });
 });

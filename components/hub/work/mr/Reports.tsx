@@ -13,10 +13,10 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   MR_REPORT_KINDS, mrBuildReport, mrGetRun, mrListRuns, mrReportPeriods, mrReportPdfUrl,
-  type MrReport, type MrReportKind, type MrRunSummary,
+  type MrReport, type MrReportKind, type MrReportPeriods, type MrRunSummary,
 } from "@/lib/api";
 import { loadPending, useLoadSession, type Load } from "@/lib/load";
-import { REPORT_META } from "@/components/console/mr/reportMeta";
+import { REPORT_META, periodsFor, takesPeriod } from "@/components/console/mr/reportMeta";
 import { proseBlocks } from "@/components/console/mr/proseBlocks";
 import { Ic } from "../../Sprite";
 import { PageHead, RuleHead, Blank, Oops, Wait } from "../../ui";
@@ -28,7 +28,11 @@ import { SourceList } from "./parts";
 export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }) {
   const session = useLoadSession();
   const [runs, setRuns] = useState<Load<MrRunSummary[]>>(loadPending);
-  const [periods, setPeriods] = useState<Record<string, string[]>>({});
+  // The endpoint answers two named lists, `{months, quarters}` — not a map
+  // keyed by report kind. It is held as a `Load` rather than a bare value so
+  // "we never found out" cannot render as "there is nothing to pick".
+  const [periods, setPeriods] = useState<Load<MrReportPeriods>>(loadPending);
+  const [chosen, setChosen] = useState<Partial<Record<MrReportKind, string>>>({});
   const [doc, setDoc] = useState<MrReport | null>(null);
   const [opening, setOpening] = useState(false);
   const [building, setBuilding] = useState<MrReportKind | null>(null);
@@ -37,13 +41,20 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
   useEffect(() => {
     void session.run("mr-runs", () => mrListRuns(), setRuns,
       "The report history could not be read.", { keepStale: true });
-    mrReportPeriods()
-      .then((p) => setPeriods(p as unknown as Record<string, string[]>))
-      .catch(() => { /* the picker simply offers no period */ });
+    void session.run("mr-periods", () => mrReportPeriods(), setPeriods,
+      "The months and quarters on file could not be read.", { keepStale: true });
   }, [session, beat]);
 
   const list = runs.data || [];
   const lastOf = (kind: MrReportKind) => list.find((r) => r.kind === kind) || null;
+
+  /** The period a build goes out with: what the picker is showing — its own
+   *  choice, or the newest period, which is what the picker defaults to. */
+  const periodOf = useCallback((kind: MrReportKind) => {
+    const offered = periodsFor(kind, periods.data);
+    const picked = chosen[kind];
+    return (picked && offered.some((p) => p.period === picked) ? picked : offered[0]?.period);
+  }, [periods.data, chosen]);
 
   const open = useCallback(async (id: string) => {
     setOpening(true);
@@ -60,7 +71,7 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
     setBuilding(kind);
     onToast(`${REPORT_META[kind].label} is being written from the last pull.`, "ok");
     try {
-      const report = await mrBuildReport(kind, (periods[kind] || [])[0]);
+      const report = await mrBuildReport(kind, periodOf(kind));
       setDoc(report);
       setBeat((b) => b + 1);
       onToast(`${REPORT_META[kind].label} is written. It is also filed on Runs.`, "ok");
@@ -70,7 +81,7 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
     } finally {
       setBuilding(null);
     }
-  }, [onToast, periods]);
+  }, [onToast, periodOf]);
 
   // Open the newest report on arrival, so the panel leads with the thing the
   // agent hands over rather than with a list of buttons.
@@ -152,6 +163,14 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
                 <div className="kind__b">
                   <p className="kind__n">{meta.label}</p>
                   <p className="kind__w">{meta.desc}</p>
+                  {takesPeriod(kind) && (
+                    <PeriodPick
+                      kind={kind}
+                      periods={periods}
+                      value={periodOf(kind) || ""}
+                      onPick={(period) => setChosen((c) => ({ ...c, [kind]: period }))}
+                    />
+                  )}
                 </div>
                 <span className="kind__when">{meta.eyebrow}</span>
                 <span className="kind__last">
@@ -176,6 +195,52 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
         </p>
       </section>
     </>
+  );
+}
+
+/** Which month or quarter the monthly/quarterly report is written for.
+ *
+ *  Only the periods the tracker actually holds are offered, newest first, so a
+ *  pick can never ask for a window the workbook has no rows in (the backend
+ *  answers 422 for one, and it must never be a silently substituted month).
+ *  An empty list says so in words: "no period" and "we could not read the
+ *  periods" are different sentences, and neither is a picker rendered blank. */
+function PeriodPick({ kind, periods, value, onPick }: {
+  kind: MrReportKind;
+  periods: Load<MrReportPeriods>;
+  value: string;
+  onPick: (period: string) => void;
+}) {
+  const offered = periodsFor(kind, periods.data);
+  const id = `mr-period-${kind}`;
+
+  if (offered.length === 0) {
+    return (
+      <p className="kind__w" style={{ marginTop: 7 }}>
+        {periods.phase === "loading"
+          ? "Reading which periods hold data…"
+          : periods.phase === "failed"
+            ? "The periods on file could not be read, so there is none to pick — this writes the latest."
+            : "No period holds tracker data yet, so there is none to pick — this writes the latest."}
+      </p>
+    );
+  }
+
+  return (
+    <p style={{ marginTop: 7, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <label className="kind__when" htmlFor={id}>Period</label>
+      <select
+        id={id}
+        className="sel"
+        style={{ width: "auto", minWidth: 148, minHeight: 30, padding: "4px 9px" }}
+        value={value}
+        onChange={(e) => onPick(e.target.value)}
+      >
+        {offered.map((p) => (
+          <option key={p.period} value={p.period}>{p.label}{p.current ? " (so far)" : ""}</option>
+        ))}
+      </select>
+    </p>
   );
 }
 

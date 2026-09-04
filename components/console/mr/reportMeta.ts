@@ -1,4 +1,4 @@
-import type { MrReportKind } from "@/lib/api";
+import type { MrReportKind, MrReportPeriod, MrReportPeriods } from "@/lib/api";
 
 export interface ReportMeta { label: string; eyebrow: string; desc: string }
 
@@ -44,3 +44,37 @@ export const REPORT_META: Record<MrReportKind, ReportMeta> = {
     desc: "What actually happened yesterday per vendor — day deltas from the snapshot history, corrections flagged.",
   },
 };
+
+/* ---------------------------- picker periods ------------------------------ */
+
+/** Which list in `GET /api/mr/report-periods` a report kind draws its periods
+ *  from.
+ *
+ *  The endpoint answers `{months: [...], quarters: [...]}` — two named lists,
+ *  never a map keyed by report kind. Reading it as `periods[kind]` therefore
+ *  produces `undefined` for all ten kinds, which is what killed the hub's
+ *  period picker: every build went out with no period at all and there was no
+ *  way to ask for a specific quarter. The mapping has to be written down,
+ *  because it cannot be derived from the kind's name.
+ *
+ *  Only these two take a period; `POST /api/mr/reports/{kind}` answers 422 for
+ *  any other kind that is sent one, so the rest must never be offered a picker.
+ */
+export const REPORT_PERIOD_LIST: Partial<Record<MrReportKind, keyof MrReportPeriods>> = {
+  monthly_summary: "months",
+  quarterly_summary: "quarters",
+};
+
+/** True when this kind is offered a period at all. */
+export const takesPeriod = (kind: MrReportKind): boolean => kind in REPORT_PERIOD_LIST;
+
+/** The periods this kind can be built for, newest first — `[]` for a kind that
+ *  takes none, and `[]` while the lists have not been read. Always an array, so
+ *  a caller renders an empty picker state rather than crashing on `undefined`. */
+export function periodsFor(
+  kind: MrReportKind,
+  periods: MrReportPeriods | null,
+): MrReportPeriod[] {
+  const list = REPORT_PERIOD_LIST[kind];
+  return list ? periods?.[list] ?? [] : [];
+}
