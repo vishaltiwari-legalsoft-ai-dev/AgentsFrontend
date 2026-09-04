@@ -10,7 +10,7 @@ import {
 } from "@/lib/api";
 import { Badge, Button, Icon } from "@/lib/kit-ui";
 import { describeFailure, useLoadSession } from "@/lib/load";
-import { fmtTime, sourceLabel } from "./shared";
+import { fmtTime, mayDisconnect, sourceLabel } from "./shared";
 
 const CSV_PLATFORMS: { key: MrPlatform; label: string }[] = [
   { key: "google_ads", label: "Google Ads" },
@@ -303,7 +303,12 @@ export function DataView({ datasets, snapshots, connectors, config, catalog, she
                 </div>
                 {s.primary ? (
                   <Badge variant="success" dot>Primary</Badge>
-                ) : (
+                ) : mayDisconnect(s, { whenUnknown: true }) ? (
+                  /* `whenUnknown: true` is this panel's previous behaviour — it
+                     has no role of its own to fall back to, and a reply with no
+                     `can_remove` came from a backend with no delete gate, where
+                     the button worked for everyone. Once the field arrives the
+                     server's answer decides and a 403 stops being reachable. */
                   <button
                     className="mr-src__del" disabled={busy} title="Disconnect this sheet"
                     aria-label={`Disconnect ${s.label}`}
@@ -311,6 +316,8 @@ export function DataView({ datasets, snapshots, connectors, config, catalog, she
                   >
                     <Icon name="trash-2" size={15} />
                   </button>
+                ) : (
+                  <span className="mr-src__meta">Connected by someone else</span>
                 )}
               </div>
             ))}

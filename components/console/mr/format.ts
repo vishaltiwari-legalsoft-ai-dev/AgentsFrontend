@@ -18,6 +18,41 @@ export function sourceLabel(platform: string): { src: string; tab: string } {
   return { src: `${map[platform] ?? platform} · CSV upload`, tab: "" };
 }
 
+/** Whether to offer the Disconnect button on one connected sheet.
+ *
+ *  `GET /mr/sources` now answers `can_remove` per row, and
+ *  `DELETE /mr/sources/{id}` answers **403** when it is false — you may
+ *  disconnect a sheet you connected, an admin or creator may disconnect any,
+ *  and nobody may disconnect the primary tracker. A button offered outside
+ *  that is a button that only earns an error.
+ *
+ *  `whenUnknown` is the deploy-skew answer, and it is the load-bearing part.
+ *  Vercel ships in about a minute and Cloud Run in four to six, so this code
+ *  runs against the previous backend for a window every time — and a previous
+ *  console outage came from exactly that, new frontend code reading a field the
+ *  backend had not started sending. Absent must therefore mean "this backend
+ *  has no opinion", not "no":
+ *
+ *  - Reading absence as `false` hides every button on every row for minutes,
+ *    including the admin's — a working control silently disappears.
+ *  - Reading absence as `true` unconditionally would be the permissive default
+ *    that the 403 exists to remove.
+ *
+ *  So absence falls back to whatever the caller offered the button on before —
+ *  the panel's own role check — which is safe because the field and the 403
+ *  shipped in the same commit: a reply with no `can_remove` came from a backend
+ *  with no gate, where that button worked. Nothing new can 403, nothing that
+ *  worked disappears, and the moment the field arrives the server's answer
+ *  wins outright. */
+export function mayDisconnect(
+  source: { primary?: boolean; can_remove?: boolean },
+  opts: { whenUnknown: boolean },
+): boolean {
+  if (source.primary) return false;
+  if (typeof source.can_remove === "boolean") return source.can_remove;
+  return opts.whenUnknown;
+}
+
 /** Split narrative into summary + trailing "Recommend:" line (strips md noise). */
 export function readNarrative(markdown: string): { summary: string; recommend: string } {
   let body = (markdown || "").replace(/^#\s.*\n+/, "").replace(/\*\*/g, "").trim();

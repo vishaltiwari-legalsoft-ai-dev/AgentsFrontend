@@ -507,3 +507,30 @@
 @media (max-width: 760px) {
   .geo .brow__c { justify-content: flex-start; }
 }
+
+/* ---------- Marketing Research: the board report --------------------------
+ *
+ * Two period selects, a button, and the one thing the document itself cannot
+ * say: how much of the board this pull was able to answer. Nothing here is a
+ * new visual language — the controls are the prototype's `.field`/`.sel` pair
+ * and the coverage block is its `.rep__s` prose with a disclosure under it.
+ */
+
+.brd { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s4); }
+.brd .field { margin-bottom: 0; }
+.brd .sel { min-width: 220px; }
+
+/* The fill count. Deliberately a sentence and not a gauge: "13 of 38" is a
+   fact about the capture on file, and drawing it as a third-full bar invites
+   the reading this whole block exists to prevent — that the period itself was
+   thin. */
+.cov { margin-top: var(--s4); padding-top: var(--s4); border-top: 1px solid var(--rule); }
+.cov:first-of-type { margin-top: 0; padding-top: 0; border-top: 0; }
+.cov__n { margin: 0; font-size: 13px; font-weight: 650; display: flex; align-items: baseline; gap: var(--s3); }
+.cov__n b { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.cov__w { margin: 5px 0 0; font-size: 12px; line-height: 1.55; color: var(--fg-2); max-width: 70ch; }
+
+.cov__miss { margin: var(--s3) 0 0; padding-left: var(--s4); max-width: 78ch; }
+.cov__miss li { margin: 4px 0; font-size: 12px; line-height: 1.5; color: var(--fg-2); }
+.cov__miss li b { font-weight: 700; color: var(--fg); }
+.cov__miss li em { font-style: normal; color: var(--fg-3); }

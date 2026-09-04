@@ -9,6 +9,7 @@ import { fmtMoney, fmtNum } from "./format";
 // without pulling JSX in; re-exported here so existing call sites are unchanged.
 export {
   fmtMoney, fmtNum, fmtTime, fmtMonth, sourceLabel, readNarrative, splitAnswer, verdict,
+  mayDisconnect,
 } from "./format";
 
 export function Dot({ s }: { s: MrMetricStatus | undefined }) {

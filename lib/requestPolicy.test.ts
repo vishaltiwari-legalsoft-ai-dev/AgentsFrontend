@@ -32,6 +32,11 @@ describe("deadlineFor", () => {
     expect(deadlineFor("/api/geo/brands/b1/poll/step", "POST")).toBe(SLOW_TIMEOUT_MS);
     expect(deadlineFor("/api/mr/snapshots/capture", "POST")).toBe(SLOW_TIMEOUT_MS);
     expect(deadlineFor("/api/mr/snapshots/vendor/lifted/pdf?date_iso=2026-08-14")).toBe(SLOW_TIMEOUT_MS);
+    // The board report writes no narrative and makes no model call, but it
+    // loads the whole dataset and scans this workspace's runs behind it; its
+    // documents render server-side.
+    expect(deadlineFor("/api/mr/board-report", "POST")).toBe(SLOW_TIMEOUT_MS);
+    expect(deadlineFor("/api/mr/board-report/run_1/pdf")).toBe(SLOW_TIMEOUT_MS);
   });
 
   it("separates the two methods that share the briefs path", () => {

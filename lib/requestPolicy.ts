@@ -85,6 +85,12 @@ export const DEADLINE_RULES: readonly DeadlineRule[] = [
   { pattern: /^\/api\/mr\/(ingest|ingest-pdf|ingest-sheet|ask)$/, ms: SLOW_TIMEOUT_MS },
   { pattern: /^\/api\/mr\/(snapshots\/capture|workbook\/scan)$/, ms: SLOW_TIMEOUT_MS },
   { pattern: /^\/api\/mr\/reports\//, ms: SLOW_TIMEOUT_MS },
+  // The board report writes no narrative, so it makes no model call — but it
+  // loads the whole dataset like the campaign kinds do and then scans this
+  // workspace's runs for one already keyed to the same capture. Same budget,
+  // for the same reason: the cost of being wrong here is a premature timeout
+  // on work the backend is still doing.
+  { pattern: /^\/api\/mr\/board-report$/, methods: ["POST"], ms: SLOW_TIMEOUT_MS },
   { pattern: /\/pdf$/, ms: SLOW_TIMEOUT_MS },
   // Bulk / external-service admin work.
   { pattern: /^\/api\/ref-library\/sync-drive/, ms: SLOW_TIMEOUT_MS },

@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { LINE_META, METRICS_WITHOUT_A_LINE, caughtBy, unattributed } from "./lineMap";
-import type { MrReportKind, MrReportPeriods } from "@/lib/api";
-import { REPORT_PERIOD_LIST, periodsFor, takesPeriod } from "../../../console/mr/reportMeta";
+import type {
+  MrBoardCoverageColumn, MrBoardRow, MrReportKind, MrReportPeriods,
+} from "@/lib/api";
+import {
+  REPORT_META, REPORT_PERIOD_LIST, absentMetrics, boardPeriodOptions, boardPeriodValues,
+  filledOf, periodsFor, takesPeriod,
+} from "../../../console/mr/reportMeta";
+import { mayDisconnect } from "../../../console/mr/format";
 
 /** The threshold keys `GET /api/mr/targets` returned on the live account.
  *  Pinned here so a key the backend adds — or renames — turns this red instead
@@ -187,5 +193,218 @@ describe("periodsFor", () => {
     const partial = { months: LIVE_PERIODS.months } as MrReportPeriods;
     expect(periodsFor("quarterly_summary", partial)).toEqual([]);
     expect(periodsFor("monthly_summary", partial)).toHaveLength(3);
+  });
+});
+
+/* --------------------------------------------------------------------------
+   The board report: its two period pickers, and what it could fill.
+   Same reason the period tests above live here — this is the MR work area's
+   test module, and both decisions belong to the Reports panel next door.
+   `Reports.tsx` imports `@/lib/api` at runtime and vitest resolves no `@/`
+   alias, so the seam that can be tested is `reportMeta.ts` (and `format.ts`),
+   which import types only.
+   -------------------------------------------------------------------------- */
+
+describe("boardPeriodOptions", () => {
+  it("offers months, quarters and the years they fall in — one control for all three comparisons", () => {
+    const groups = boardPeriodOptions(LIVE_PERIODS);
+    expect(groups.map((g) => g.label)).toEqual(["Months", "Quarters", "Years"]);
+    // The locked decision: the ledger's columns are only A and B, so
+    // month-vs-month, quarter-vs-quarter and year-vs-year all have to be
+    // expressible from the same list.
+    expect(boardPeriodValues(groups)).toEqual([
+      "2026-09", "2026-08", "2026-07", "2026-Q3", "2026-Q2", "2026",
+    ]);
+  });
+
+  it("offers only period strings the board route parses — YYYY-MM, YYYY-Qn or YYYY", () => {
+    // `board_period()` refuses anything else with a 422 naming what it expected.
+    for (const value of boardPeriodValues(boardPeriodOptions(LIVE_PERIODS))) {
+      expect(value, `${value} is not a board-report period`)
+        .toMatch(/^\d{4}(-(0[1-9]|1[0-2])|-Q[1-4])?$/);
+    }
+  });
+
+  it("derives a year from the months on file and never invents one", () => {
+    const groups = boardPeriodOptions({
+      months: [
+        { period: "2026-01", label: "January 2026", current: false },
+        { period: "2025-12", label: "December 2025", current: false },
+        { period: "2025-03", label: "March 2025", current: false },
+      ],
+      quarters: [],
+    });
+    const years = groups.find((g) => g.label === "Years");
+    expect(years?.options.map((o) => o.period)).toEqual(["2026", "2025"]);
+  });
+
+  it("marks the year holding the current month, so 'so far' reads on it too", () => {
+    const years = boardPeriodOptions(LIVE_PERIODS).find((g) => g.label === "Years");
+    expect(years?.options[0]).toEqual({ period: "2026", label: "2026", current: true });
+  });
+
+  it("drops a group with nothing in it rather than printing an empty heading", () => {
+    const groups = boardPeriodOptions({ months: LIVE_PERIODS.months, quarters: [] });
+    expect(groups.map((g) => g.label)).toEqual(["Months", "Years"]);
+  });
+
+  it("offers nothing at all while the periods are unread, or the read failed, or the tracker holds none", () => {
+    // All three are the caller's own sentence to write — an empty select would
+    // say "there is nothing" for a read that never came back.
+    expect(boardPeriodOptions(null)).toEqual([]);
+    expect(boardPeriodOptions({ months: [], quarters: [] })).toEqual([]);
+    expect(boardPeriodValues([])).toEqual([]);
+  });
+
+  it("survives a payload missing a list rather than handing the picker undefined to map over", () => {
+    const partial = { quarters: LIVE_PERIODS.quarters } as MrReportPeriods;
+    expect(boardPeriodOptions(partial).map((g) => g.label)).toEqual(["Quarters"]);
+  });
+});
+
+/* The production case this whole block exists for: the capture on file predates
+   the roll-up parser expanding from 8 fields to 42, so the report fills 13 of
+   38. A thin capture must never read as a thin quarter. */
+const CATALOG_SIZE = 38;
+const FILLED_TODAY = 13;
+
+const ledgerRows: MrBoardRow[] = Array.from({ length: CATALOG_SIZE }, (_, i) => ({
+  key: `m${i}`,
+  label: `Metric ${i}`,
+  group: i < 9 ? "Budget & Efficiency" : "Revenue",
+  format: "money",
+  polarity: "up",
+}));
+
+const liveColumn: MrBoardCoverageColumn = {
+  column: "Q1 2026",
+  period: "2026-Q1",
+  months: ["2026-01", "2026-02", "2026-03"],
+  filled: ledgerRows.slice(0, FILLED_TODAY).map((r) => r.key),
+  absent: ledgerRows.slice(FILLED_TODAY).map((r) => r.key),
+  absent_reasons: Object.fromEntries(
+    ledgerRows.slice(FILLED_TODAY)
+      .map((r) => [r.key, `the roll-up tab does not report '${r.key}' for this period`]),
+  ),
+  filled_count: FILLED_TODAY,
+  metric_count: CATALOG_SIZE,
+};
+
+describe("filledOf", () => {
+  it("reads the production case as 13 of 38", () => {
+    expect(filledOf(liveColumn)).toEqual({ filled: 13, of: 38 });
+  });
+
+  it("counts the catalog itself when the backend sent no total, never 'of 0'", () => {
+    const older = { ...liveColumn, metric_count: 0 } as MrBoardCoverageColumn;
+    expect(filledOf(older)).toEqual({ filled: 13, of: 38 });
+  });
+
+  it("reads a fully covered column as all of them, not as a special case", () => {
+    const full: MrBoardCoverageColumn = {
+      ...liveColumn,
+      filled: ledgerRows.map((r) => r.key),
+      absent: [],
+      absent_reasons: {},
+      filled_count: CATALOG_SIZE,
+    };
+    expect(filledOf(full)).toEqual({ filled: 38, of: 38 });
+    expect(absentMetrics(full, ledgerRows)).toEqual([]);
+  });
+});
+
+describe("absentMetrics", () => {
+  it("names every metric the column has no figure for — 25 of them, not one dropped", () => {
+    const missing = absentMetrics(liveColumn, ledgerRows);
+    expect(missing).toHaveLength(CATALOG_SIZE - FILLED_TODAY);
+    // The count under the sentence and the list beneath it are the same fact,
+    // and a reader who opens the list must be able to count it back.
+    expect(missing.length + filledOf(liveColumn).filled).toBe(filledOf(liveColumn).of);
+  });
+
+  it("carries the backend's own reason for each one, so absent is never read as zero", () => {
+    const missing = absentMetrics(liveColumn, ledgerRows);
+    expect(missing[0].label).toBe("Metric 13");
+    expect(missing[0].reason).toBe("the roll-up tab does not report 'm13' for this period");
+    expect(missing.every((m) => m.reason.length > 0)).toBe(true);
+  });
+
+  it("prints them in the report's own row order, not the order the keys arrived in", () => {
+    const shuffled: MrBoardCoverageColumn = {
+      ...liveColumn,
+      absent: [...liveColumn.absent].reverse(),
+    };
+    expect(absentMetrics(shuffled, ledgerRows).map((m) => m.key))
+      .toEqual(ledgerRows.slice(FILLED_TODAY).map((r) => r.key));
+  });
+
+  it("still lists a metric the ledger rows do not carry, rather than shrinking the count", () => {
+    const withStranger: MrBoardCoverageColumn = {
+      ...liveColumn,
+      absent: [...liveColumn.absent, "a_row_this_frontend_has_never_seen"],
+      metric_count: CATALOG_SIZE + 1,
+    };
+    const missing = absentMetrics(withStranger, ledgerRows);
+    expect(missing).toHaveLength(CATALOG_SIZE - FILLED_TODAY + 1);
+    expect(missing[missing.length - 1].label).toBe("a_row_this_frontend_has_never_seen");
+  });
+
+  it("says so plainly when no reason came back, instead of printing an empty dash", () => {
+    const silent: MrBoardCoverageColumn = { ...liveColumn, absent_reasons: {} };
+    expect(absentMetrics(silent, ledgerRows).every((m) => m.reason === "the report did not say why"))
+      .toBe(true);
+  });
+
+  it("survives a report carrying no rows at all — every absent key still gets named", () => {
+    expect(absentMetrics(liveColumn, [])).toHaveLength(CATALOG_SIZE - FILLED_TODAY);
+  });
+});
+
+describe("REPORT_META", () => {
+  it("has an entry for the board kinds, which list on the same run rail as the ten", () => {
+    // `GET /api/mr/runs` returns these alongside the campaign kinds; a kind with
+    // no entry renders in the history table as its own raw id.
+    expect(REPORT_META.board_report.label).toBe("Board Report");
+    expect(REPORT_META.board_report_comparison.label).toBe("Board Report — two periods");
+  });
+
+  it("still refuses the board kinds a period picker — they take two, from their own control", () => {
+    // `POST /api/mr/reports/{kind}` answers 422 for a board kind and names the
+    // route that does build it, so the ten-kind list must never offer one.
+    expect(REPORT_PERIOD_LIST).not.toHaveProperty("board_report");
+    expect(REPORT_PERIOD_LIST).not.toHaveProperty("board_report_comparison");
+  });
+});
+
+/* --------------------------------------------------------------------------
+   Who is offered the Disconnect button on a connected sheet.
+   -------------------------------------------------------------------------- */
+
+describe("mayDisconnect", () => {
+  it("offers the button when the server says this caller may remove the sheet", () => {
+    expect(mayDisconnect({ can_remove: true }, { whenUnknown: false })).toBe(true);
+  });
+
+  it("hides it when the server says no — the click would only earn a 403", () => {
+    expect(mayDisconnect({ can_remove: false }, { whenUnknown: true })).toBe(false);
+  });
+
+  it("never offers it on the primary tracker, whatever else is said", () => {
+    expect(mayDisconnect({ primary: true, can_remove: true }, { whenUnknown: true })).toBe(false);
+  });
+
+  it("falls back to the panel's own answer while the backend has not started sending the field", () => {
+    // The deploy-skew window is real here: Vercel ships in about a minute and
+    // Cloud Run in four to six, and a reply with no `can_remove` came from a
+    // backend with no delete gate at all — where that button worked. Absent
+    // must mean "no opinion", so nothing that worked disappears and nothing
+    // new can 403.
+    expect(mayDisconnect({}, { whenUnknown: true })).toBe(true);
+    expect(mayDisconnect({}, { whenUnknown: false })).toBe(false);
+  });
+
+  it("lets the server's answer win over the fallback in both directions", () => {
+    expect(mayDisconnect({ can_remove: true }, { whenUnknown: false })).toBe(true);
+    expect(mayDisconnect({ can_remove: false }, { whenUnknown: true })).toBe(false);
   });
 });

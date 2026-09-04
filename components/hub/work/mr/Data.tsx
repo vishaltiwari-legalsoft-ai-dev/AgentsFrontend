@@ -22,7 +22,7 @@ import {
   type MrDataset, type MrSheetSources, type MrTabProfile,
 } from "@/lib/api";
 import { loadPending, useLoadSession, type Load } from "@/lib/load";
-import { fmtTime, sourceLabel } from "@/components/console/mr/format";
+import { fmtTime, mayDisconnect, sourceLabel } from "@/components/console/mr/format";
 import { Ic } from "../../Sprite";
 import { PageHead, RuleHead, Blank, Oops, Wait } from "../../ui";
 import { n, word } from "../../model";
@@ -136,6 +136,12 @@ export function MrData({ data, onToast }: { data: MrData_; onToast: ToastFn }) {
   }, [onToast]);
 
   const sheetList = sources.data?.sources || [];
+  /** Secondary sheets this caller may not disconnect — somebody else connected
+   *  them. Not the primary: that one is nobody's to disconnect and the row
+   *  already says it is the tracker. */
+  const notMine = sheetList.filter(
+    (s) => !s.primary && !mayDisconnect(s, { whenUnknown: mayEdit }),
+  ).length;
   const tabList = tabs.data || [];
   const useful = tabList.filter((t) => t.useful);
   const uploads = sets.data || [];
@@ -181,36 +187,51 @@ export function MrData({ data, onToast }: { data: MrData_; onToast: ToastFn }) {
             link below.
           </Blank>
         ) : (
-          <ul className="srcf">
-            {sheetList.map((s) => (
-              <li className="srcf__r" key={s.id}>
-                <span className="g">{s.primary ? "PR" : "EX"}</span>
-                <span className="srcf__n">
-                  {s.label}
-                  {s.primary && <span className="tag"> primary</span>}
-                </span>
-                <span className="srcf__m">
-                  {s.include_in_dashboard
-                    ? "Counted into the desk, the dossiers and the reports"
-                    : "Read for questions only — never counted into the desk"}
-                  {s.added_at ? ` · added ${new Date(s.added_at).toLocaleDateString()}` : ""}
-                </span>
-                <span className={s.include_in_dashboard ? "st done" : "st idle"}>
-                  {s.include_in_dashboard ? "Counted" : "Questions only"}
-                </span>
-                {mayEdit && !s.primary && (
-                  <button
-                    type="button"
-                    className="btn btn--quiet btn--sm"
-                    disabled={busy === s.id}
-                    onClick={() => void remove(s.id, s.label)}
-                  >
-                    {busy === s.id ? "…" : "Disconnect"}
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="srcf">
+              {sheetList.map((s) => (
+                <li className="srcf__r" key={s.id}>
+                  <span className="g">{s.primary ? "PR" : "EX"}</span>
+                  <span className="srcf__n">
+                    {s.label}
+                    {s.primary && <span className="tag"> primary</span>}
+                  </span>
+                  <span className="srcf__m">
+                    {s.include_in_dashboard
+                      ? "Counted into the desk, the dossiers and the reports"
+                      : "Read for questions only — never counted into the desk"}
+                    {s.added_at ? ` · added ${new Date(s.added_at).toLocaleDateString()}` : ""}
+                  </span>
+                  <span className={s.include_in_dashboard ? "st done" : "st idle"}>
+                    {s.include_in_dashboard ? "Counted" : "Questions only"}
+                  </span>
+                  {/* The server says per row who may disconnect it, and answers
+                      403 to anyone else — so the button is offered on its answer
+                      rather than on this panel's own idea of a role. */}
+                  {mayDisconnect(s, { whenUnknown: mayEdit }) && (
+                    <button
+                      type="button"
+                      className="btn btn--quiet btn--sm"
+                      disabled={busy === s.id}
+                      onClick={() => void remove(s.id, s.label)}
+                    >
+                      {busy === s.id ? "…" : "Disconnect"}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {/* Said once, under the list, rather than as a sentence on every row
+                about something the reader cannot do. */}
+            {notMine > 0 && (
+              <p className="help" style={{ marginTop: 10 }}>
+                {notMine === 1 ? "One connected sheet is" : `${n(notMine)} connected sheets are`}
+                {" not yours to disconnect — only whoever connected "}
+                {notMine === 1 ? "it" : "them"}, or an admin, can. Everything here is still read
+                for every question this agent answers.
+              </p>
+            )}
+          </>
         )}
 
         {mayEdit && sources.data?.enabled && (

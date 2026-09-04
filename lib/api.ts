@@ -187,7 +187,12 @@ async function fetchBlob(
   opts?: RequestOptions,
 ): Promise<Blob> {
   const response = await request(path, init, opts);
-  if (!response.ok) throw new Error(await parseError(response));
+  // `ApiError`, not a bare `Error`, for the same reason `requestJson` throws
+  // one: a document route that is not deployed yet answers 404 with FastAPI's
+  // own "Not Found", and a caller that can read the status can say that in
+  // words instead of printing two vague ones. Still an `Error`, so the call
+  // sites that only read `.message` are untouched.
+  if (!response.ok) throw new ApiError(await parseError(response), response.status);
   return response.blob();
 }
 
@@ -1375,6 +1380,27 @@ export const MR_REPORT_KINDS = [
 ] as const;
 export type MrReportKind = (typeof MR_REPORT_KINDS)[number];
 
+/** The two board kinds, deliberately kept out of `MR_REPORT_KINDS`.
+ *
+ *  Those ten are the campaign reports: one period, a model-written narrative,
+ *  built one at a time at `POST /api/mr/reports/{kind}` — which answers 422 for
+ *  a board kind and names the route that does build it. The board report takes
+ *  **two** periods, is nobody's narrative (it is the roll-up tab's own
+ *  arithmetic) and comes from `POST /api/mr/board-report`.
+ *
+ *  They do share the one run rail, so `GET /api/mr/runs` lists them and
+ *  `GET /api/mr/runs/{id}` reads them back — which is why the run types below
+ *  accept both, and why a panel that maps a run to a label has to handle a kind
+ *  that is not one of the ten. */
+export const MR_BOARD_KINDS = ["board_report", "board_report_comparison"] as const;
+export type MrBoardKind = (typeof MR_BOARD_KINDS)[number];
+
+/** Any kind the run rail can hand back. */
+export type MrAnyReportKind = MrReportKind | MrBoardKind;
+
+export const isBoardKind = (kind: string): kind is MrBoardKind =>
+  (MR_BOARD_KINDS as readonly string[]).includes(kind);
+
 export interface MrDataGap {
   source: string;
   message: string;
@@ -1428,8 +1454,11 @@ export interface MrReport {
 }
 
 export interface MrRunSummary {
+  /** Both the ten campaign kinds and the two board kinds come back here — one
+   *  run rail, one listing. A caller that maps this to a label must survive a
+   *  kind it has no entry for. */
   id: string;
-  kind: MrReportKind;
+  kind: MrAnyReportKind;
   generated_at: string;
   period?: string | null;
 }
@@ -1704,6 +1733,19 @@ export interface MrSheetSource {
   primary: boolean;
   include_in_dashboard: boolean;
   added_at?: string;
+  /** Who connected it. `null` on rows written before the field existed — "no
+   *  store ever recorded an owner", which is not the same as "owned by nobody"
+   *  and is why those rows stay listed for everyone. */
+  added_by?: string | null;
+  /** Whether **this** caller may disconnect it. `DELETE /api/mr/sources/{id}`
+   *  answers 403 when it is false, so the console has to stop offering the
+   *  button rather than let the click earn the error.
+   *
+   *  Optional on purpose: this field and the 403 shipped together, so a reply
+   *  without it came from a backend that has no gate at all — see
+   *  `mayDisconnect` in `components/console/mr/format.ts`, which is the one
+   *  place that decides what absence means. */
+  can_remove?: boolean;
 }
 export interface MrSheetSources {
   enabled: boolean;
@@ -1750,6 +1792,112 @@ export const mrBuildReport = (kind: MrReportKind, period?: string) =>
 export const mrListRuns = () => getJson<MrRunSummary[]>("/api/mr/runs");
 
 export const mrGetRun = (id: string) => getJson<MrReport>(`/api/mr/runs/${id}`);
+
+/* -------------------------------- board report ---------------------------- */
+
+/** One published row of the ledger. A single-period report fills `value`; a
+ *  comparison fills `a`/`b` and the three derived fields. `null` is **absent**,
+ *  never zero — the whole point of the coverage block below. */
+export interface MrBoardRow {
+  key: string;
+  label: string;
+  group: string;
+  format: string;
+  polarity: string;
+  basis?: string | null;
+  value?: number | null;
+  a?: number | null;
+  b?: number | null;
+  delta?: number | null;
+  change_pct?: number | null;
+  improved?: boolean | null;
+}
+
+/** What one column of the report could fill, and why the rest is blank.
+ *
+ *  Computed per request against the capture sitting in the store, so it
+ *  describes THIS pull rather than the catalog: against production today the
+ *  report fills 13 of 38, because the capture predates the roll-up parser
+ *  learning the other rows. A thin capture and a thin quarter are different
+ *  facts and this is what tells them apart. */
+export interface MrBoardCoverageColumn {
+  column: string;           // "Q1 2026" — the column heading
+  period: string;           // "2026-Q1"
+  months: string[];
+  filled: string[];         // metric keys that carry a number
+  absent: string[];         // metric keys that do not
+  absent_reasons: Record<string, string>;  // key -> why, in the reader's terms
+  filled_count: number;
+  metric_count: number;
+}
+
+export interface MrBoardCoverage {
+  columns: MrBoardCoverageColumn[];
+  metric_count: number;
+  /** Why the channel table is withheld rather than zeroed. */
+  channel_reconciliation?: string;
+}
+
+export interface MrBoardStructured {
+  generator: string;
+  cache_key: string;
+  columns: string[];
+  periods: { key: string; label: string; months: string[] }[];
+  groups: string[];
+  rows: MrBoardRow[];
+  /** Period totals the roll-up withheld, each naming the months it withheld
+   *  for. A partly-covered period is partial, not shorter. */
+  gaps: string[];
+  /** The day the figures behind this report were pulled from the sheet. */
+  captured_on?: string;
+  /** Optional because a backend older than the coverage block simply does not
+   *  send it, and "the report did not say" must not render as "0 of 0". */
+  coverage?: MrBoardCoverage;
+}
+
+/** The board report as it comes off the run rail. Deliberately not `MrReport`:
+ *  no model writes any part of this, so it carries no `markdown` and no `html`
+ *  — `ai: false` with a reason is the honest provenance, not a degradation. */
+export interface MrBoardReport {
+  id: string;
+  kind: MrBoardKind;
+  generated_at: string;
+  user_id: string;
+  agent_id: string;
+  sources?: MrSource[];
+  structured: MrBoardStructured;
+  ai?: boolean;
+  fallback_reason?: string;
+  /** True when this exact report (same periods, same capture, same generator)
+   *  was already in the store and was handed back rather than derived again. */
+  reused?: boolean;
+}
+
+/** Build — or re-serve — one board report.
+ *
+ *  `period` alone gives the one-column report; `compareTo` adds column B. The
+ *  two columns are only "A" and "B", so month-vs-month, quarter-vs-quarter and
+ *  year-vs-year are the same request. A period is `YYYY-MM`, `YYYY-Qn` or
+ *  `YYYY`; a window the tracker holds nothing for is a 422 carrying the
+ *  server's own sentence, never a substituted period. `MR_BOARD_REPORT` off
+ *  answers 404 — this deployment builds no board reports at all. */
+export const mrBuildBoardReport = (period: string, compareTo?: string) =>
+  postJson<MrBoardReport>("/api/mr/board-report",
+    compareTo ? { period, compare_to: compareTo } : { period });
+
+/** The same run, read back as a board report. Same URL as `mrGetRun` — one run
+ *  rail serves both — as a separate function rather than a union return so the
+ *  campaign panels keep reading the narrative shape they were written for. The
+ *  listing says which kind a run is; that is what picks the reader. */
+export const mrGetBoardRun = (id: string) => getJson<MrBoardReport>(`/api/mr/runs/${id}`);
+
+/** The board report as a document. Both endpoints are authenticated, so the
+ *  bytes are fetched with the caller's token and handed over as an object URL:
+ *  an `<a href>` straight to the endpoint would arrive without one and 401. */
+export const mrBoardReportHtmlUrl = (id: string) =>
+  blobUrl(`/api/mr/board-report/${id}/html`);
+export const mrBoardReportPdfUrl = (id: string) =>
+  blobUrl(`/api/mr/board-report/${id}/pdf`);
 
 /** Download-report PDFs — the console panels rendered server-side in the same
  *  format. Returns an object URL ready for an <a download> click. */
