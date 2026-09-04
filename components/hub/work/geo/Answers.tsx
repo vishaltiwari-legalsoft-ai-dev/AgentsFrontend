@@ -33,7 +33,7 @@ export function GeoAnswers({ data }: { data: GeoData }) {
   const [chosen, setChosen] = useState<Record<string, boolean>>({});
 
   // The engine filter goes to the backend — it is a stored field, and asking
-  // for one engine's answers is much less to send than all four. Naming and
+  // for one engine's answers is much less to send than all five. Naming and
   // free text are filtered here, over what came back.
   useEffect(() => {
     void session.run(

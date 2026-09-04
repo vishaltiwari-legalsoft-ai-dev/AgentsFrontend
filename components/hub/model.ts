@@ -47,7 +47,7 @@ export const AGENTS: HubAgent[] = [
   {
     id: "a10", mono: "GE", name: "GEO", role: "AI answer visibility", live: true,
     desc: "Measures how often AI engines name and cite your brand, and finds the gaps to fix.",
-    makes: "Four engines' answers to your buyer questions, scored.",
+    makes: "Five engines' answers to your buyer questions, scored.",
   },
   {
     id: "a3", mono: "CW", name: "Copywriter", role: "Words that convert", live: false,

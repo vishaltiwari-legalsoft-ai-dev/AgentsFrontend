@@ -2,14 +2,14 @@
 
 /** The pieces every GEO panel is built from.
  *
- *  GEO's artifact is not a file the shop made — it is prose four answer engines
+ *  GEO's artifact is not a file the shop made — it is prose five answer engines
  *  wrote about the shop. So the interface is a highlighter over that prose, and
  *  the two objects below carry the whole idea: a cell that says only "did this
  *  engine say your name", and an answer rendered as the engine wrote it with
  *  the names marked.
  *
  *  One rule runs through all of it: **an engine on a stand-in is never drawn
- *  like an engine on its own API.** Two of the four come through OpenRouter, so
+ *  like an engine on its own API.** Two of the five come through OpenRouter, so
  *  their wording is representative rather than verbatim, and every figure they
  *  contribute to says so.
  */
@@ -17,6 +17,7 @@
 import { Fragment, type ReactNode } from "react";
 import type { GeoAnswer, GeoEngineStatus } from "@/lib/api";
 import { blocks, inlineTokens, type InlineToken } from "@/components/console/geo/answerMd";
+import { isLive } from "@/components/console/geo/provenance";
 import { Ic } from "../../Sprite";
 import { highlight, type NameSet } from "./highlight";
 
@@ -24,7 +25,7 @@ export const ENGINE_LABELS: Record<string, string> = {
   perplexity: "Perplexity",
   gemini: "Gemini",
   chatgpt: "ChatGPT",
-  aio: "Google AIO",
+  aio: "Google AI Overview",
   ai_mode: "Google AI Mode",
 };
 
@@ -47,19 +48,16 @@ export function modeWords(st: GeoEngineStatus | undefined): string {
   if (!st) return "surface unknown";
   if (!st.connected) return "no key configured";
   if (st.mode === "native") return "live API";
-  if (st.mode === "serpapi") return "live, via SerpAPI";
   if (st.mode === "dataforseo") return "live, via DataForSEO";
   if (st.mode === "proxy") return "similar model";
   return "surface unknown";
 }
 
-/** Whether a number from this engine was measured on the real product.
- *  `serpapi` and `dataforseo` both qualify — each fetches the live consumer
- *  Google surface, only the vendor differs. Everything drawn as "live" in the
- *  GEO workspace goes through this one predicate. */
-export const isLive = (st: GeoEngineStatus | undefined): boolean =>
-  st?.connected === true &&
-  (st.mode === "native" || st.mode === "serpapi" || st.mode === "dataforseo");
+/** Re-exported so a panel gets "is this engine live" from the same module it
+ *  gets its engine labels from. The rule itself lives in `provenance`, with the
+ *  list of surfaces it is built on — one copy, because five copies is what let
+ *  the SerpAPI-to-DataForSEO switch leave four panels behind. */
+export { isLive };
 
 /* --------------------------------------------------------------- the pills -- */
 

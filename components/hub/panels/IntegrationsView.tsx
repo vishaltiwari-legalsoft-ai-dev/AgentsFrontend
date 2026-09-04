@@ -28,6 +28,7 @@ import {
   type GeoGlobalConfig, type MrConnector, type SeoOverview,
 } from "@/lib/api";
 import { loadPending, useLoadSession, type Load } from "@/lib/load";
+import { isLive } from "@/components/console/geo/provenance";
 import { useHeadline, useHub } from "../context";
 import { n, word } from "../model";
 import { Oops, PageHead, RuleHead, Wait } from "../ui";
@@ -117,7 +118,7 @@ export function IntegrationsView() {
       what: st.means,
       usedByLabel: "Answers for",
       usedBy: "GEO",
-      status: !st.connected ? "off" : st.mode === "native" || st.mode === "serpapi" ? "on" : "partial",
+      status: !st.connected ? "off" : isLive(st) ? "on" : "partial",
       note: st.model ? `via ${st.model}` : undefined,
       open: () => openWork("geo", "", "overview"),
     });

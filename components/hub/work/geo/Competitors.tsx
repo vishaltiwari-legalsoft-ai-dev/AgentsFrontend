@@ -31,7 +31,7 @@ import { PageHead, RuleHead, Blank, Oops, Wait } from "../../ui";
 import { n, word } from "../../model";
 import { useHub, type ToastFn } from "../../context";
 import type { GeoData } from "../GeoWorkspace";
-import { ENGINE_IDS, engineName, rate } from "./parts";
+import { ENGINE_IDS, engineName, isLive, rate } from "./parts";
 
 export function GeoCompetitors({
   data, cmp, onToast,
@@ -284,7 +284,7 @@ export function GeoCompetitors({
                   <th>Who</th>
                   {ENGINE_IDS.map((id) => {
                     const st = data.status[id];
-                    const live = st?.connected && (st.mode === "native" || st.mode === "serpapi");
+                    const live = isLive(st);
                     return (
                       <th className="num" key={id} title={st?.means}>
                         {engineName(id)}{live ? "" : " *"}

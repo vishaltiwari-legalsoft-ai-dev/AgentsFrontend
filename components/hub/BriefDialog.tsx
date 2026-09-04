@@ -44,7 +44,7 @@ const TAKES_BRIEF: Record<string, { label: string; placeholder: string; verb: st
 const OPENS_INSTEAD: Record<string, string> = {
   a2: "An SEO run is a crawl of one property. Pick the property in the workspace and it starts there — a first crawl takes a few minutes.",
   a6: "Marketing Research builds one of ten report kinds over a period you choose. Both choices live in the workspace.",
-  a10: "A GEO check asks every buyer question of all four engines — a few hundred engine calls. The workspace shows what is already scheduled before you add to it.",
+  a10: "A GEO check puts your buyer questions to five AI engines — a few hundred engine calls. The workspace shows what is already scheduled before you add to it.",
 };
 
 interface BrandOpt { id: string; name: string }

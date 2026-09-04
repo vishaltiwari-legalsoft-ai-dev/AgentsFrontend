@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { GeoPersona, GeoPersonaRollup, GeoPrompt } from "@/lib/api";
 import {
-  bucketLabel, coverageWords, labelProblem, MAX_PERSONAS, outcomeWords,
-  personaLabel, promptCount,
+  ASKED_CHOICES, askedChoiceProblem, bucketLabel, coverageWords, deleteAftermathWords,
+  deleteConfirmWords, deletedWords, intentWords, labelProblem, MAX_PERSONAS, outcomeWords,
+  personaLabel, promptCount, selectionWords, stillListed,
 } from "./personas";
 
 const P = (key: string, label: string): GeoPersona => ({ key, label, description: "" });
@@ -105,5 +106,116 @@ describe("labelProblem", () => {
   it("refuses a ninth persona", () => {
     const eight = Array.from({ length: MAX_PERSONAS }, (_, i) => P(`k${i}`, `Persona ${i}`));
     expect(labelProblem("One more", eight)).toMatch(/ceiling/);
+  });
+});
+
+describe("stillListed", () => {
+  const listed = [{ ...prompt(), id: "a" }, { ...prompt(), id: "b" }, { ...prompt(), id: "c" }];
+
+  it("keeps list order, not tick order", () => {
+    expect(stillListed(listed, new Set(["c", "a"]))).toEqual(["a", "c"]);
+  });
+
+  it("drops ids the set no longer carries — a regenerate must not inflate the count", () => {
+    expect(stillListed(listed, new Set(["a", "gone"]))).toEqual(["a"]);
+  });
+
+  it("is empty for an empty selection", () => {
+    expect(stillListed(listed, new Set())).toEqual([]);
+  });
+});
+
+describe("selectionWords", () => {
+  it("says nothing is picked rather than printing a zero", () => {
+    expect(selectionWords(0, 12)).toBe("Nothing selected");
+  });
+
+  it("counts a partial selection against the list", () => {
+    expect(selectionWords(3, 12)).toBe("3 of 12 selected");
+  });
+
+  it("names a whole-list selection as such", () => {
+    expect(selectionWords(12, 12)).toBe("All 12 selected");
+  });
+});
+
+describe("deleteConfirmWords", () => {
+  it("names the count being deleted", () => {
+    expect(deleteConfirmWords(3, 12)).toBe("Delete 3 of 12 questions?");
+  });
+
+  it("says out loud that the set is being emptied", () => {
+    expect(deleteConfirmWords(12, 12)).toMatch(/^Delete all 12 questions\? That leaves the set empty/);
+  });
+
+  it("reads as English when one question is all there is", () => {
+    expect(deleteConfirmWords(1, 1)).toMatch(/^Delete the only question left\?/);
+  });
+});
+
+describe("deleteAftermathWords", () => {
+  it("warns that reports keep showing deleted questions, in the window's own days", () => {
+    expect(deleteAftermathWords(30)).toBe(
+      "Answers already collected are not deleted, so reports keep showing these questions "
+      + "until they age out of the last 30 days.",
+    );
+  });
+});
+
+describe("deletedWords", () => {
+  it("uses the singular for one", () => {
+    expect(deletedWords(1)).toBe(
+      "Question deleted. Answers it already collected stay in reports until they age out.",
+    );
+  });
+
+  it("counts the rest", () => {
+    expect(deletedWords(7)).toBe(
+      "7 questions deleted. Answers they already collected stay in reports until they age out.",
+    );
+  });
+});
+
+describe("askedChoiceProblem", () => {
+  it("accepts the two kinds a person can choose", () => {
+    expect(askedChoiceProblem("category")).toBeNull();
+    expect(askedChoiceProblem("brand")).toBeNull();
+  });
+
+  it("refuses an unmade choice — there is no default to fall back on", () => {
+    expect(askedChoiceProblem("")).toMatch(/Choose which kind/);
+  });
+
+  it("refuses “problem”, which the generator writes but nobody is offered", () => {
+    // Stored "problem" questions keep displaying and keep saving; what must
+    // never happen is a form producing one, because no form offers it.
+    expect(askedChoiceProblem("problem")).toMatch(/Choose which kind/);
+  });
+});
+
+describe("ASKED_CHOICES", () => {
+  it("offers exactly the two values the create endpoints accept", () => {
+    expect(ASKED_CHOICES.map((c) => c.value)).toEqual(["category", "brand"]);
+  });
+
+  it("never labels them in the API's vocabulary", () => {
+    for (const c of ASKED_CHOICES) {
+      expect(c.label.toLowerCase()).not.toMatch(/category|brand|intent/);
+    }
+  });
+});
+
+describe("intentWords", () => {
+  it("prints the two offerable kinds", () => {
+    expect(intentWords("category")).toBe("does not name you");
+    expect(intentWords("brand")).toBe("already names you");
+  });
+
+  it("keeps printing “problem”, which is still generated and still stored", () => {
+    expect(intentWords("problem")).toBe("describes the problem, not the product");
+  });
+
+  it("prints an unknown kind rather than dropping it", () => {
+    expect(intentWords("comparison")).toBe("comparison");
   });
 });

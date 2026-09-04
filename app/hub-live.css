@@ -413,3 +413,97 @@
   .cronfold dl > div { grid-template-columns: minmax(0, 1fr); }
   .cronfold dd { grid-column: auto; }
 }
+
+
+/* ---------- GEO: five engines, not four ----------------------------------
+   `.strip4` is the prototype's four-across grid and two other panels still use
+   it for four things. GEO's engine strip has had five since Google's AI Mode
+   started answering, and the fifth was wrapping onto a second row at a quarter
+   width. The prototype sheet stays byte-identical, so the count that changed is
+   overridden here rather than edited there — including inside its two
+   breakpoints, which this file would otherwise beat on source order alone and
+   leave five columns on a phone. */
+
+.geo .strip4--five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+@media (max-width: 1180px) {
+  .geo .strip4--five { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .geo .strip4--five { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* How many answers an engine was asked for, and why that is not the number
+   beside it. Quieter than the rate's own line: it explains the measurement
+   rather than being one. Paused takes the same amber the proxy chips use —
+   usable data with a caveat, never an alarm. */
+.geo .strip4 .cover {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--fg-3);
+}
+.geo .strip4 .cover.is-paused { color: var(--proxy); }
+
+/* ---------- GEO: the brand list -------------------------------------------
+   The rows are the prototype's own setting rows (`.rows` / `.srow`), because
+   that is exactly what each one is: a label and its consequence on the left, the
+   control that changes it on the right. Only three things are added here.
+
+   `.sw` was drawn in the prototype as a static span. The scheduled check is the
+   first place it has to be pressed, so the element under it becomes a real
+   `role="switch"` button and these rules strip the browser's button chrome back
+   off it — the look is still the prototype's, and the keyboard behaviour is the
+   one a control needs. */
+
+.geo button.sw {
+  -webkit-appearance: none;
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.geo button.sw:disabled { cursor: not-allowed; opacity: 0.55; }
+
+/* The control cell carries a switch and one or two small buttons, and on a
+   narrow window they wrap rather than push the row wider. */
+.geo .brow__c { display: flex; align-items: center; justify-content: flex-end; gap: var(--s3); flex-wrap: wrap; }
+
+/* A removal waiting to be confirmed, inside the row it would remove. It takes
+   the alarm colour because it is the one moment on this screen where pressing
+   again changes what four other agents can see — and it disappears the instant
+   the answer is given, so nothing is left shouting. */
+.geo .brow__ask {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
+  color: var(--gap);
+}
+
+/* The brand that was just added, kept on screen after its toast has gone. It
+   takes the marigold edge the console uses for "this is the thing you are
+   looking at" rather than the empty-state grey — what it reports is a result,
+   and its job is to hand over the next step while the reader is still here. */
+.geo .brow__made {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--mark-line);
+  border-radius: var(--r-card);
+  background: var(--mark-row);
+  max-width: 72ch;
+}
+.geo .brow__made b { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 700; }
+.geo .brow__made p { margin: 0 0 12px; font-size: 13px; line-height: 1.5; color: var(--fg-2); }
+
+/* At the width where `.srow` stacks and its control cell stretches, the
+   controls belong under the sentence they change, not pinned to the far edge
+   of it. Matches `agenthub.css`'s own 760px stacking rule for these rows. */
+@media (max-width: 760px) {
+  .geo .brow__c { justify-content: flex-start; }
+}

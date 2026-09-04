@@ -52,6 +52,11 @@ export const WORKSPACES: WorkspaceDef[] = [
       { id: "competitors", label: "Competitors", icon: "competitors" },
       { id: "plan", label: "Plan", icon: "plan" },
       { id: "optimizer", label: "Page check", icon: "optimizer" },
+      // Which brands exist at all, and whether each is checked on a schedule.
+      // Last because it is the only section that is not about the brand you
+      // have open — it is about the shared list every one of them comes from.
+      { id: "brands", label: "Brands", icon: "globe" },
+      { id: "faq", label: "FAQ", icon: "research" },
     ],
   },
   {

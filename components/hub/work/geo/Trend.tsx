@@ -38,7 +38,7 @@ import { dayLabel } from "@/components/console/geo/trend";
 import { PageHead, RuleHead, Blank, Oops, Wait } from "../../ui";
 import { n } from "../../model";
 import type { GeoData } from "../GeoWorkspace";
-import { ENGINE_IDS, ENGINE_SHORT, engineName, rate } from "./parts";
+import { ENGINE_IDS, ENGINE_SHORT, engineName, isLive, modeWords, rate } from "./parts";
 import {
   deltaLabel,
   deltaTone,
@@ -138,8 +138,8 @@ export function GeoTrend({ data }: { data: GeoData }) {
           lede="A trend needs two checks to be a trend. The chart appears once there is a second one to compare against."
         />
         <Blank title={rows.length === 0 ? "No checks stored" : "Only one check stored"}>
-          Checks run on a schedule, and you can start one from the Overview. Each one puts every
-          enabled question to all four engines and stores what came back.
+          Checks run on a schedule, and you can start one from the Overview. Each one puts your
+          enabled questions to five AI engines and stores what came back.
         </Blank>
         {pairs.length > 0 && (
           <section className="band">
@@ -395,19 +395,17 @@ export function GeoTrend({ data }: { data: GeoData }) {
 
       <section className="band">
         <RuleHead title="Per engine" note="Share of that engine's answers naming you, at each check." />
-        <div className="strip4">
+        <div className="strip4 strip4--five">
           {ENGINE_IDS.map((id) => {
             const series = rows.map((r) => r.point.engines[id]).filter((v): v is number => v !== null && v !== undefined);
             const st = data.status[id];
-            const live = st?.connected && (st.mode === "native" || st.mode === "serpapi");
+            const live = isLive(st);
             const last = series.length ? series[series.length - 1] : null;
             const start = series.length ? series[0] : null;
             return (
               <div key={id}>
                 <h3>{engineName(id)}</h3>
-                <span className={`mode ${live ? "live" : "proxy"}`}>
-                  {st?.connected ? (live ? "live API" : st.mode === "proxy" ? "similar model" : st.mode) : "no key configured"}
-                </span>
+                <span className={`mode ${live ? "live" : "proxy"}`}>{modeWords(st)}</span>
                 <b className="big">{rate(last)}</b>
                 <p>
                   {series.length < 2

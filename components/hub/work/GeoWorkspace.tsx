@@ -2,15 +2,15 @@
 
 /** GEO — the fifth workspace, and the one whose artifact is not a file.
  *
- *  What GEO hands back is prose four answer engines wrote about you, so this
+ *  What GEO hands back is prose five answer engines wrote about you, so this
  *  reads as a document rather than a dashboard: the engines' own sentences are
  *  the front page and the highlighter mark is the interface.
  *
- *  Three things hold across all eight sections, and each is a decision the
+ *  Three things hold across all nine sections, and each is a decision the
  *  prototype made that the live data makes load-bearing rather than decorative:
  *
  *  1. **An engine on a stand-in is never drawn like an engine on its own API.**
- *     Two of the four come through OpenRouter. Their rates are real
+ *     Two of the five come through OpenRouter. Their rates are real
  *     measurements *of that model*, not of the product whose name is on the
  *     chip, and every surface here says which it was.
  *  2. **Not measured is not zero.** A question no engine was asked, a rival
@@ -25,14 +25,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   geoBrands, geoComparison, geoConfig, geoPollStatus, geoReport,
-  type GeoBrandRow, type GeoComparison, type GeoGlobalConfig, type GeoPollStatus, type GeoReport,
+  type GeoBrandRow, type GeoComparison, type GeoEngineSpec, type GeoGlobalConfig,
+  type GeoPollStatus, type GeoReport,
 } from "@/lib/api";
 import { loadPending, useLoadSession, type Load } from "@/lib/load";
 import { statusOf } from "@/components/console/geo/provenance";
 import { useHeadline, useHub, useWorkNav, type WorkSection } from "../context";
 import { initials } from "../model";
-import { Blank, Oops, Wait } from "../ui";
+import { Oops, Wait } from "../ui";
 import { workspaceBySlug } from "../workspaces";
+import { GeoBrands } from "./geo/Brands";
 import { GeoOverview } from "./geo/Overview";
 import { GeoTrend } from "./geo/Trend";
 import { GeoQuestions } from "./geo/Questions";
@@ -41,6 +43,7 @@ import { GeoSources } from "./geo/Sources";
 import { GeoCompetitors } from "./geo/Competitors";
 import { GeoPlan } from "./geo/Plan";
 import { GeoOptimizer } from "./geo/Optimizer";
+import { GeoFaq } from "./geo/Faq";
 import { namesFrom, type NameSet } from "./geo/highlight";
 import { ENGINE_IDS, isLive } from "./geo/parts";
 
@@ -56,6 +59,10 @@ export interface GeoData {
   report: GeoReport;
   status: Record<string, ReturnType<typeof statusOf>>;
   comparison: GeoComparison | null;
+  /** How each engine is asked — kind, readings per question, which question
+   *  types it is spent on. Empty until `/geo/config` carries it, so every
+   *  reader must render without it. */
+  specs: Record<string, GeoEngineSpec>;
   /** The spellings the highlighter marks, derived ONCE from the comparison's
    *  own `match_names` (self and rivals) so every tab highlights exactly what
    *  the backend scored. Falls back to the bare brand name while the
@@ -101,6 +108,8 @@ export function GeoWorkspace({ subject, section }: { subject: string; section: s
 
   const reload = useCallback(() => setBeat((b) => b + 1), []);
 
+  const specs = useMemo(() => cfg.data?.engine_specs || {}, [cfg.data]);
+
   const status = useMemo(() => {
     const declared = cfg.data?.engine_status || {};
     const enabled = cfg.data?.engines || ({} as Record<string, boolean>);
@@ -127,6 +136,10 @@ export function GeoWorkspace({ subject, section }: { subject: string; section: s
     answers: report.data ? report.data.blended.n_answers : null,
     sources: report.data ? report.data.source_gap.length : null,
     competitors: cmp.data ? cmp.data.tracked_competitors : null,
+    // The one count that does not wait on the report: the brand list is what
+    // this section is about, and it has already landed by the time a rail is
+    // drawn at all.
+    brands: brands.data ? list.length : null,
   };
 
   const sections: WorkSection[] = SECTIONS.map((s) => ({ ...s, count: counts[s.id] ?? null }));
@@ -157,15 +170,26 @@ export function GeoWorkspace({ subject, section }: { subject: string; section: s
   if (brands.phase === "failed" && !brands.data) {
     return <div className="geo"><Oops what="GEO could not be opened." error={brands.error || ""} onRetry={reload} /></div>;
   }
-  if (!brand) {
+  // The brand list itself, and the only section that must render with no brand
+  // selected — an account with nothing set up yet has to be able to add the
+  // first one, and every other section here needs a brand to be about.
+  if (current === "brands" || !brand) {
     return (
       <div className="geo">
-        <Blank title="No brand is set up for GEO yet">
-          GEO measures how often engines name one brand. Add one in the SEO Analyst&apos;s workspace —
-          GEO reads the same brand list — and its buyer questions can be generated from there.
-        </Blank>
+        <GeoBrands
+          brands={list}
+          onGo={(id, s) => openWork("geo", id, s)}
+          onToast={toast}
+        />
       </div>
     );
+  }
+
+  // Explanations must outlive the thing they explain: the FAQ answers "why is
+  // this empty / why did that fail", so it is drawn before the guards that
+  // would otherwise replace it with the failure it is there to explain.
+  if (current === "faq") {
+    return <div className="geo"><GeoFaq brandName={brand.name} days={GEO_DAYS} /></div>;
   }
 
   if (report.phase === "loading" && !report.data) {
@@ -182,6 +206,7 @@ export function GeoWorkspace({ subject, section }: { subject: string; section: s
     report: report.data,
     status,
     comparison: cmp.data,
+    specs,
     names,
     days: GEO_DAYS,
     reload,

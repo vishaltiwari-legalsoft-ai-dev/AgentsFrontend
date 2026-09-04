@@ -11,7 +11,8 @@
 import { describe, expect, it } from "vitest";
 import type { GeoEngineStatus } from "../../../lib/api";
 import {
-  blankReason, comparableEngines, engineCards, modeSuffix, proxyEngines, statusOf,
+  blankReason, comparableEngines, engineCards, engineCoverage, isLive, isLiveMode,
+  modeSuffix, proxyEngines, shortDate, statusOf,
   type EngineRow,
 } from "./provenance";
 
@@ -238,5 +239,245 @@ describe("engineCards — failure is not an observation", () => {
       { gemini: { mention: { rate: 0.3 }, n_answers: 12 } }, {}, STATUS, KNOWN);
 
     expect(cards.find((c) => c.engine === "gemini")!.errors).toBe(0);
+  });
+});
+
+
+describe("isLive / isLiveMode", () => {
+  // The bug this pins: SerpAPI was retired for DataForSEO, and four panels each
+  // kept their own `native || serpapi` copy of this test. Google's AI Overview
+  // and AI Mode — the two engines that had just started working — rendered as
+  // "not live" on the Overview, the Trend, the Competitors table and
+  // Integrations, all at once.
+  it("counts the live consumer SERP however it was fetched", () => {
+    expect(isLiveMode("dataforseo")).toBe(true);
+    expect(isLiveMode("serpapi")).toBe(true);
+    expect(isLiveMode("native")).toBe(true);
+  });
+
+  it("never counts a stand-in, an unreported surface or a missing one", () => {
+    expect(isLiveMode("proxy")).toBe(false);
+    expect(isLiveMode("unknown")).toBe(false);
+    expect(isLiveMode("off")).toBe(false);
+    expect(isLiveMode(undefined)).toBe(false);
+  });
+
+  it("needs a key as well as a real surface", () => {
+    expect(isLive({ connected: true, mode: "dataforseo" })).toBe(true);
+    expect(isLive({ connected: false, mode: "dataforseo" })).toBe(false);
+    expect(isLive({ connected: true, mode: "proxy" })).toBe(false);
+    expect(isLive(undefined)).toBe(false);
+  });
+
+  it("agrees with the ranking rule — both read the same list", () => {
+    const rows = [row("aio", "dataforseo"), row("ai_mode", "dataforseo")];
+
+    expect(comparableEngines(rows).map((r) => r.engine)).toEqual(["aio", "ai_mode"]);
+    expect(rows.every((r) => isLiveMode(r.mode))).toBe(true);
+  });
+});
+
+describe("shortDate", () => {
+  it("reads as a person would say it", () => {
+    expect(shortDate("2026-08-28T22:10:00Z", "UTC")).toBe("28 Aug");
+  });
+
+  it("invents nothing from a missing or unusable date", () => {
+    expect(shortDate(null)).toBeNull();
+    expect(shortDate(undefined)).toBeNull();
+    expect(shortDate("not a date")).toBeNull();
+  });
+});
+
+describe("engineCoverage", () => {
+  // How the two kinds of engine are asked, exactly as `/geo/config` publishes
+  // it. Read, never mirrored: this console used to hardcode the engine ids and
+  // the sample size, which is the same defect as the "four AI engines" line.
+  const CHAT = { kind: "chat", runs_per_prompt: 3, intents: null };
+  const SERP = { kind: "serp", runs_per_prompt: 1, intents: ["category", "problem"] };
+
+  describe("the per-check expectation is scaled by the checks that ran", () => {
+    it("prices a window at n_expected x n_sweeps, never at n_expected", () => {
+      // The correction this pins. `n_expected` is per CHECK and `n_answers` is
+      // per WINDOW, so a 7-day window holding 5 checks reports 350 answers
+      // against an expectation of 70. Printed unscaled that reads "350 of 70
+      // asked" — worse than the unexplained numbers it was built to explain.
+      const c = engineCoverage({ got: 350, expected: 70, sweeps: 5, spec: CHAT });
+
+      expect(c.state).toBe("complete");
+      expect(c.count).toBe("350 of 350 asked across 5 checks");
+      expect(c.count).not.toContain("of 70");
+    });
+
+    it("leaves the check count out when the window holds exactly one", () => {
+      const c = engineCoverage({ got: 34, expected: 34, sweeps: 1, spec: SERP });
+
+      expect(c.count).toBe("34 of 34 asked");
+      expect(c.count).not.toContain("across");
+    });
+
+    it("measures a shortfall against the scaled number", () => {
+      const c = engineCoverage({ got: 210, expected: 70, sweeps: 5, spec: CHAT });
+
+      expect(c.state).toBe("short");
+      expect(c.count).toBe("210 of 350 asked across 5 checks");
+      expect(c.why).toContain("140 never ran");
+    });
+  });
+
+  describe("what it will not say without the numbers to say it", () => {
+    it("says nothing at all when n_sweeps has not shipped yet", () => {
+      // Vercel is live four to six minutes before Cloud Run. Half the pair is
+      // not enough: dividing a per-window count by a per-check expectation is
+      // the bug, so this renders nothing rather than a wrong fraction.
+      const c = engineCoverage({ got: 350, expected: 70, spec: CHAT });
+
+      expect(c.state).toBe("unknown");
+      expect(c.count).toBe("");
+      expect(c.why).toBe("");
+    });
+
+    it("says nothing at all when n_expected has not shipped yet", () => {
+      expect(engineCoverage({ got: 350, sweeps: 5, spec: CHAT })).toMatchObject({
+        state: "unknown", count: "",
+      });
+    });
+
+    it("never divides by zero checks — it says no check ran", () => {
+      const c = engineCoverage({ got: 0, expected: 70, sweeps: 0, spec: CHAT, days: 7 });
+
+      expect(c.state).toBe("no_checks");
+      expect(c.count).toBe("nothing stored");
+      expect(c.why).toContain("no check ran in the last 7 days");
+      expect(c.count).not.toContain("of");
+    });
+
+    it("reports answers with no logged check honestly, rather than as a fraction", () => {
+      const c = engineCoverage({ got: 40, expected: 70, sweeps: 0, spec: CHAT, days: 7 });
+
+      expect(c.state).toBe("no_checks");
+      expect(c.count).toBe("40 answers stored");
+    });
+
+    it("still does the arithmetic when the engine spec has not shipped yet", () => {
+      // No cadence is claimed, but the fraction is still true.
+      const c = engineCoverage({ got: 350, expected: 70, sweeps: 5 });
+
+      expect(c.count).toBe("350 of 350 asked across 5 checks");
+      expect(c.why).toBe("");
+    });
+  });
+
+  describe("the cadence comes off the spec, not off a list kept here", () => {
+    it("reads the sample size the backend actually publishes", () => {
+      const five = engineCoverage({
+        got: 10, expected: 10, sweeps: 1,
+        spec: { kind: "chat", runs_per_prompt: 5, intents: null },
+      });
+
+      expect(five.why).toBe("five readings of every question");
+    });
+
+    it("says a billed engine skips the questions that already name you", () => {
+      const c = engineCoverage({ got: 34, expected: 34, sweeps: 1, spec: SERP });
+
+      expect(c.why).toBe("one reading of every question, and only the ones that do not already name you");
+    });
+
+    it("drops that clause the moment the engine is asked brand questions too", () => {
+      const c = engineCoverage({
+        got: 34, expected: 34, sweeps: 1,
+        spec: { kind: "serp", runs_per_prompt: 1, intents: ["category", "problem", "brand"] },
+      });
+
+      expect(c.why).toBe("one reading of every question");
+    });
+  });
+
+  describe("a paused engine", () => {
+    it("shows the real hole, not a full set measured against itself", () => {
+      // Five checks owed AI Overview 170 answers; the credit bought two of
+      // them. "68 of 68" would dress that up as complete.
+      const c = engineCoverage({
+        got: 68, expected: 34, sweeps: 5, spec: SERP,
+        creditSpent: true, creditUsed: 2000, creditLimit: 2000,
+        pausedSince: "2026-08-28T09:00:00Z", timeZone: "UTC",
+      });
+
+      expect(c.state).toBe("paused");
+      expect(c.count).toBe("68 of 170 asked across 5 checks");
+      expect(c.why).toContain("this month's search credit is spent (2,000 of 2,000 used)");
+      expect(c.why).toContain("none since 28 Aug");
+    });
+
+    it("falls back to the last answer when no pause date came through", () => {
+      const c = engineCoverage({
+        got: 68, expected: 34, sweeps: 5, spec: SERP,
+        creditSpent: true, lastSeen: "2026-08-28T09:00:00Z", timeZone: "UTC",
+      });
+
+      expect(c.why).toContain("last answer 28 Aug");
+      expect(c.why).not.toContain("used)");
+    });
+
+    it("says it is paused even with no denominator on the wire", () => {
+      const c = engineCoverage({ got: 68, spec: SERP, creditSpent: true });
+
+      expect(c.state).toBe("paused");
+      expect(c.count).toBe("68 answers stored");
+      expect(c.why).toBe("paused — this month's search credit is spent");
+    });
+
+    it("never pauses an engine the search credit does not pay for", () => {
+      const chat = engineCoverage({
+        got: 350, expected: 70, sweeps: 5, spec: CHAT, creditSpent: true,
+      });
+
+      expect(chat.state).toBe("complete");
+    });
+  });
+
+  describe("facts about the rows that did run", () => {
+    it("keeps a failed call and an unpublished overview apart", () => {
+      const errored = engineCoverage({
+        got: 34, expected: 34, sweeps: 1, spec: SERP, errors: 15,
+      });
+      const empty = engineCoverage({
+        got: 34, expected: 34, sweeps: 1, spec: SERP, emptySlots: 4,
+      });
+
+      expect(errored.why).toContain("15 of them failed");
+      expect(errored.why).not.toContain("Google published nothing");
+      expect(empty.why).toContain("Google published nothing on 4");
+      expect(empty.why).not.toContain("failed");
+    });
+
+    it("does not let a failed call look like a question that was never asked", () => {
+      // A failed call still stores a row, so it is INSIDE n_answers and cannot
+      // be the reason a count fell short. Saying so would send somebody looking
+      // for a shortfall that is not there.
+      const c = engineCoverage({
+        got: 34, expected: 34, sweeps: 1, spec: SERP, errors: 15,
+      });
+
+      expect(c.state).toBe("complete");
+      expect(c.why).not.toContain("never ran");
+    });
+  });
+
+  it("does not read 'not asked' as a miss when no question needs the engine", () => {
+    const c = engineCoverage({ got: 0, expected: 0, sweeps: 3, spec: SERP });
+
+    expect(c.state).toBe("none");
+    expect(c.count).toBe("not asked");
+    expect(c.why).toContain("every one of yours already names you");
+  });
+
+  it("never prints more asked than asked for when the question list shrank", () => {
+    const c = engineCoverage({ got: 190, expected: 34, sweeps: 5, spec: SERP });
+
+    expect(c.count).toBe("190 answers stored");
+    expect(c.count).not.toContain("of 170");
+    expect(c.why).toContain("questions since removed");
   });
 });

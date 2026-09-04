@@ -1,6 +1,6 @@
 /** Marking the names inside an engine's answer.
  *
- *  The whole point of the GEO workspace is reading what four engines wrote
+ *  The whole point of the GEO workspace is reading what five engines wrote
  *  about you, so the interface is a highlighter: your name in marigold, a
  *  tracked rival in blue, everything else left alone. That means finding the
  *  names inside prose the engines wrote, which has three traps in it:

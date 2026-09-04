@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   geoAddCustomPrompt, geoAnswers, geoBrandConfig, geoBrands, geoConfig, geoGeneratePrompts, geoPollStep,
   geoPollStatus, geoPrompts, geoReport, geoRescan, geoSaveBrandConfig, geoSavePrompts,
-  type GeoAnswer, type GeoBrandConfig, type GeoBrandRow, type GeoCompetitor, type GeoGlobalConfig,
+  type GeoAnswer, type GeoAskedIntent, type GeoBrandConfig, type GeoBrandRow, type GeoCompetitor,
+  type GeoGlobalConfig,
   type GeoEngineStatus, type GeoPollProgress, type GeoPollStatus, type GeoPrompt, type GeoReport,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -19,7 +20,12 @@ import { GeoActionPlan } from "./GeoActionPlan";
 import { GeoCompare } from "./GeoCompare";
 import { GeoDashboard } from "./GeoDashboard";
 import { GeoInsights } from "./GeoInsights";
-import { initialPollState, pollDecision, pollStoppedByUser, type PollLoopState } from "./pollLoop";
+// The loop moved to the hub with the panel that drives it; this screen is no
+// longer rendered (`app/page.tsx` mounts HubApp only) and keeps compiling
+// against the one copy rather than growing a second.
+import {
+  initialPollState, pollDecision, pollStoppedByUser, type PollLoopState,
+} from "@/components/hub/work/geo/pollLoop";
 import { modeSuffix, statusOf } from "./provenance";
 import { partialSweepLine, scheduleLine } from "./schedule";
 
@@ -59,7 +65,7 @@ const ENGINE_LABELS: Record<string, string> = {
  *  usable data with a caveat, neither is an alarm — and neither may look like
  *  the green that means "this is the real product". */
 const MODE_CLASS: Record<string, string> = {
-  native: "seo-chip--on", serpapi: "seo-chip--on",
+  native: "seo-chip--on", serpapi: "seo-chip--on", dataforseo: "seo-chip--on",
   proxy: "seo-chip--warn", unknown: "seo-chip--warn", off: "seo-chip--off",
 };
 
@@ -114,6 +120,10 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
   const [pollNote, setPollNote] = useState<{ text: string; warn: boolean } | null>(null);
   const [newCompetitor, setNewCompetitor] = useState("");
   const [newPrompt, setNewPrompt] = useState("");
+  // Required, and with nothing preselected: a question that does not name the
+  // brand is also put to Google's billed search engines, so the kind is asked
+  // rather than assumed.
+  const [newPromptIntent, setNewPromptIntent] = useState<GeoAskedIntent | "">("");
   const stopPoll = useRef(false);
   /** Which brand the screen is currently showing. Every brand-scoped reply
    *  checks it before writing: the slot ticket stops a *second* call to the
@@ -308,12 +318,13 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
   }
 
   async function addCustomPrompt() {
-    if (!brand || newPrompt.trim().length < 5 || busy) return;
+    if (!brand || newPrompt.trim().length < 5 || !newPromptIntent || busy) return;
     setBusy(true);
     try {
-      const universe = await geoAddCustomPrompt(brand.id, newPrompt.trim());
+      const universe = await geoAddCustomPrompt(brand.id, newPrompt.trim(), newPromptIntent);
       setPrompts(universe.prompts ?? []);
       setNewPrompt("");
+      setNewPromptIntent("");
       onToast("Added — your question survives every regeneration.");
     } catch (e) {
       onToast(describeFailure(e, "Could not add the question"), "error");
@@ -697,7 +708,14 @@ export function GeoAgent({ onToast, onBack }: { onToast: ToastFn; onBack: () => 
                     <input value={newPrompt} placeholder="Add your own buyer question — e.g. “which intake service handles Spanish-speaking clients?”"
                            onChange={(e) => setNewPrompt(e.target.value)}
                            onKeyDown={(e) => e.key === "Enter" && void addCustomPrompt()} />
-                    <button className="seo-btn" disabled={busy || newPrompt.trim().length < 5}
+                    <select className="geo-select" value={newPromptIntent}
+                            aria-label="Which kind of question is this?"
+                            onChange={(e) => setNewPromptIntent(e.target.value as GeoAskedIntent | "")}>
+                      <option value="">Which kind of question is this?</option>
+                      <option value="category">A question someone would ask without knowing us</option>
+                      <option value="brand">A question that already names us</option>
+                    </select>
+                    <button className="seo-btn" disabled={busy || newPrompt.trim().length < 5 || !newPromptIntent}
                             onClick={() => void addCustomPrompt()}>Add</button>
                   </div>
                 )}

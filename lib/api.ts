@@ -30,6 +30,26 @@ export function setUnauthorizedHandler(fn: () => void): void {
   onUnauthorized = fn;
 }
 
+/** A non-2xx reply, carrying the status alongside the message.
+ *
+ *  Still a plain `Error` with the backend's own `detail` as its message, so the
+ *  ~150 call sites that read `e.message` are untouched. What it adds is the one
+ *  thing that string could not carry: a *refusal* (the backend saying "valid
+ *  request, but no — here is why") and a *failure* (something broke) look
+ *  identical as prose, and telling them apart by matching on that prose is how
+ *  a reworded sentence silently turns one into the other. */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+/** The HTTP status behind a rejection, or null when it never got that far — a
+ *  network drop, a timeout, an abort. */
+export const apiStatus = (e: unknown): number | null =>
+  e instanceof ApiError ? e.status : null;
+
 async function parseError(response: Response): Promise<string> {
   try {
     const data = await response.json();
@@ -109,7 +129,7 @@ async function requestJson<T>(
 ): Promise<T> {
   const { response, deadline, timedOut } = await send(path, init, opts ?? {});
   try {
-    if (!response.ok) throw new Error(await parseError(response));
+    if (!response.ok) throw new ApiError(await parseError(response), response.status);
     return (await response.json()) as T;
   } catch (e) {
     if (deadline.expired) throw timedOut();
@@ -191,6 +211,14 @@ export interface User {
   is_admin: boolean;
   // Top-tier owner role (above Super Admin): may manage secrets/integrations.
   is_creator?: boolean;
+  /** May shape the shared brand registry from the GEO panel: add a brand,
+   *  switch its scheduled check, remove it. A creator is one implicitly, and
+   *  the backend derives that — never re-derive it here or the two copies drift.
+   *
+   *  Optional because a session signed in before the backend carried the flag
+   *  has a stored user without it; absent must read as "not an editor", which
+   *  hides the controls rather than offering ones that would 403. */
+  is_geo_editor?: boolean;
 }
 
 export interface GalleryItem {
@@ -2293,11 +2321,32 @@ export interface GeoEngineStatus {
   means: string;   // plain-language sentence, rendered verbatim as the tooltip
 }
 
+/** What an engine IS, as opposed to whether it is reachable: how it is asked,
+ *  and therefore why its answer count differs from the engine beside it.
+ *
+ *  `kind` is deliberately not a union — a kind this build has never heard of
+ *  must read as "not a billed search engine", not fail to compile. */
+export interface GeoEngineSpec {
+  label: string;
+  /** "chat" is sampled repeatedly; "serp" is a billed Google snapshot */
+  kind: string;
+  /** readings of each question one check buys */
+  runs_per_prompt: number;
+  /** the prompt intents this engine is spent on; null = every question. The
+   *  billed engines skip the brand-intent ones, which already name the brand. */
+  intents: string[] | null;
+}
+
 export interface GeoGlobalConfig {
   engines: Record<GeoEngineId, boolean>;
   engine_status?: Record<string, GeoEngineStatus>;
   /** engine id -> display label, from the backend's own spec table */
   engine_labels?: Record<string, string>;
+  /** engine id -> how it is asked. Optional per the deploy-skew law; without it
+   *  the panel states the arithmetic and claims no cadence. Read this rather
+   *  than mirroring `SERP_ENGINES` / `CHAT_RUNS_PER_PROMPT` as constants — a
+   *  copy of a fact starts lying the day the fact changes. */
+  engine_specs?: Record<string, GeoEngineSpec>;
   default_runs: number;
   default_daily_cap: number;
   /** joint monthly ceiling for the billed SERP engines (AIO + AI Mode) */
@@ -2312,7 +2361,45 @@ export interface GeoBrandRow {
   recent_answers: number;
   calls_used_today: number;
   competitors: number;
+  /** The scheduled check, as the list route now reports it per brand — so the
+   *  Brands screen draws a row's switch without one `poll/status` call each.
+   *
+   *  All three are optional and MUST be read through `checkOf()` in
+   *  `components/console/geo/schedule.ts`. Vercel puts this frontend live about
+   *  a minute after a push and Cloud Run four to six minutes after; in that
+   *  window the list answers without them, and a row that renders "off" or
+   *  crashes on a missing field is the deploy skew that has taken this console
+   *  down before. `next_due_at` is null for a brand that has never completed a
+   *  sweep — it is due on the next run, not on an invented date. */
+  auto_poll?: boolean;
+  poll_interval_days?: number;
+  next_due_at?: string | null;
 }
+
+/** What `POST /api/geo/brands` answers with (201).
+ *
+ *  `auto_poll` and `poll_interval_days` are read back off the document that was
+ *  actually written and are null when that seed failed — in which case
+ *  `warning` says so. Reporting the schedule we intended would be a claim about
+ *  a brand whose stored schedule is now something else. */
+export interface GeoBrandCreated {
+  brand: SeoBrand;
+  prompts: number;
+  auto_poll: boolean | null;
+  poll_interval_days: number | null;
+  warning: string | null;
+  next_steps?: string[];
+}
+
+/** Self-serve create: a name and the site's address, nothing else. GEO-editor
+ *  only. The brand lands with NO questions and the scheduled check OFF.
+ *
+ *  Two refusals are ordinary answers here rather than failures, and the caller
+ *  must keep them apart by `apiStatus`: 409 = that brand is already in the
+ *  shared registry, 422 = what was typed is not a brand. Both carry the
+ *  backend's own sentence as the message. */
+export const geoCreateBrand = (body: { name: string; url: string }) =>
+  postJson<GeoBrandCreated>("/api/geo/brands", body);
 
 export interface GeoPrompt {
   id: string;
@@ -2342,8 +2429,22 @@ export interface GeoPromptUniverse {
   updated_at?: string;
 }
 
-export const geoAddCustomPrompt = (brandId: string, text: string) =>
-  postJson<GeoPromptUniverse>(`/api/geo/brands/${brandId}/prompts/custom`, { text });
+/** Which engines a new question is sent to — and therefore what it costs.
+ *
+ *  A question that does not name the brand is also put to Google's search
+ *  engines, and every one of those calls is billed; a question that already
+ *  names the brand goes only to the chat engines. Both create endpoints now
+ *  REQUIRE it, and it is required here too: the client-side default of
+ *  "category" was quietly buying search calls for every hand-typed question.
+ *
+ *  Deliberately narrower than `GeoPrompt["intent"]`. The generator still writes
+ *  "problem" questions and the store still holds them, so they keep displaying
+ *  and keep round-tripping through a save — they are simply not a thing a
+ *  person is offered when writing one. */
+export type GeoAskedIntent = "category" | "brand";
+
+export const geoAddCustomPrompt = (brandId: string, text: string, intent: GeoAskedIntent) =>
+  postJson<GeoPromptUniverse>(`/api/geo/brands/${brandId}/prompts/custom`, { text, intent });
 
 /** One pasted list, one prompt per line. Partial acceptance is the NORMAL
  *  outcome and answers 200: `skipped` carries the per-line reasons, and
@@ -2357,7 +2458,7 @@ export interface GeoPromptsBulkResult {
 
 export const geoAddPromptsBulk = (
   brandId: string,
-  body: { text: string; persona?: string; intent?: string; stage?: string },
+  body: { text: string; intent: GeoAskedIntent; persona?: string; stage?: string },
 ) => postJson<GeoPromptsBulkResult>(`/api/geo/brands/${brandId}/prompts/bulk`, body);
 
 /** Replace the persona list; an empty list clears it. Prompts tagged with a
@@ -2390,6 +2491,13 @@ export interface GeoBrandConfig {
   poll_interval_days?: number;
   auto_poll?: boolean;
   last_poll_completed_at?: string;
+  /** The brand's registry flag, echoed back by `PUT config` — it lives on the
+   *  shared brand record, not in this document. `false` is the removal: the
+   *  brand leaves GEO, the SEO Analyst, Blog Writer and Issues at once, and
+   *  every stored measurement, question set and Search Console grant is kept.
+   *  `true` puts it back. Optional: a `GET config` predating it does not send
+   *  it, and absent must read as on. */
+  enabled?: boolean;
 }
 
 export interface GeoPollProgress {
@@ -2405,6 +2513,28 @@ export interface GeoPollProgress {
    *  without this a dead provider key would never satisfy `done >= total`. */
   terminal: boolean;
   terminal_reason: string | null;
+  /** WHICH refusal this is: `lease_held` (a check is running right now),
+   *  `already_checked_today` (this brand's one manual check per day is used),
+   *  `daily_cap` (today's engine budget is spent), `engine_failed` (the
+   *  providers stopped answering). Null on a healthy step.
+   *
+   *  A code rather than something to match out of `terminal_reason`, for the
+   *  reason the backend states: four refusals need four different sentences and
+   *  four different offers, and prose is not an API. Never string-match the
+   *  reason — read this. */
+  stop_code: string | null;
+  /** When the refusal clears: seconds away for `lease_held`, the next UTC
+   *  midnight for the two day-keyed ones, null for a dead engine. It is what
+   *  lets the button say when it frees up instead of sitting dead. */
+  unlocks_at: string | null;
+  /** The account already running a check on this brand. Set only alongside
+   *  `stop_code: "lease_held"` — a refusal reserves nothing and bills nothing. */
+  lease_held_by: string | null;
+  /** The joint monthly SERP budget for AI Overviews and AI Mode is spent, so
+   *  those two engines dropped out of this check and the rest carried on.
+   *  `aio_credits_month` is what has been drawn against that budget so far. */
+  aio_capped: boolean;
+  aio_credits_month: number;
 }
 
 export interface GeoMentionStats {
@@ -2432,6 +2562,21 @@ export interface GeoMetricBlock {
   n_errors: number;
   /** answers where Google published no AI Overview at all (AIO only) */
   n_no_aio?: number;
+  /** what ONE check of this engine owes for the brand's current question list.
+   *
+   *  **Per check, where every other count in this block is per window** — the
+   *  two are the same number only on a window holding a single check. Scale it
+   *  by `GeoReport.n_sweeps` before using it as a denominator; pairing it with
+   *  `n_answers` unscaled renders "350 of 70 asked".
+   *
+   *  It excludes nothing: a failed call and a query Google published no
+   *  overview for are both inside it, so `n_answers` — not `n_measured` — is
+   *  the numerator that matches it.
+   *
+   *  `null` from a caller with no question list in hand, absent from a backend
+   *  that predates the field. Both mean "we cannot say how many were asked
+   *  for", and neither means zero. */
+  n_expected?: number | null;
   /** answers counted per measurement surface ("native" | "openrouter" |
    *  "serpapi" | "unknown") — every rate above is only as good as this */
   via_mix?: Record<string, number>;
@@ -2472,6 +2617,24 @@ export interface GeoReport {
   /** engine -> ISO time it last produced a usable answer, even if that fell
    *  outside this report's window */
   engine_last_seen?: Record<string, string>;
+  /** checks this brand actually ran inside `days`. What scales the per-check
+   *  `n_expected` into a window expectation; zero is a real answer (no check in
+   *  this period) and is never a divisor. Optional per the deploy-skew law. */
+  n_sweeps?: number;
+  /** the month's billed-search budget is spent, so Google's two engines are
+   *  dropped from checks and their counts are frozen.
+   *
+   *  Read THESE, not `GeoPollProgress.aio_capped`: the `aio_*` names are
+   *  compatibility aliases for the same facts, and they read as though only AI
+   *  Overview were affected when the guard covers both Google engines. Being
+   *  here rather than only on a poll step is what lets the pause survive a
+   *  refresh — a brand whose credit ran out three weeks ago used to open as an
+   *  ordinary stale number. */
+  search_credit_spent?: boolean;
+  search_credit_used?: number;
+  search_credit_limit?: number;
+  /** when the pause began; null unless it is spent right now */
+  serp_capped_since?: string | null;
   prompt_rollup?: GeoPromptRollup[];
   /** optional per deploy-skew law: absent from a backend that predates personas */
   persona_rollup?: GeoPersonaRollup[];
@@ -2514,6 +2677,14 @@ export interface GeoPollStatus {
   next_due_at: string | null;
   due_now: boolean;
   due_reason: string;
+  /** What "Check now" may do *before* anyone presses it. One manual check per
+   *  brand per day, whoever clicks; these say whether today's is spent, who
+   *  spent it, and when the next unlocks. Optional because Vercel puts the
+   *  frontend live four to six minutes before Cloud Run has the matching
+   *  backend: absent must read as "not used", never as "blocked". */
+  manual_check_used?: boolean;
+  manual_check_by?: string | null;
+  manual_check_unlocks_at?: string | null;
 }
 
 export const geoPollStatus = (brandId: string, req?: RequestOptions) =>
@@ -2544,18 +2715,39 @@ export async function geoSavePrompts(brandId: string, prompts: GeoPrompt[]): Pro
 export const geoBrandConfig = (brandId: string) =>
   getJson<GeoBrandConfig>(`/api/geo/brands/${brandId}/config`);
 
+/** Patch the brand's GEO config. An omitted field is left untouched.
+ *
+ *  `enabled` is the odd one out and is deliberately in the same list: it writes
+ *  the SHARED brand registry rather than this config document, so `false` here
+ *  removes the brand from the SEO Analyst, Blog Writer and Issues as well as
+ *  from GEO — reversibly, and with every stored measurement kept. It is the
+ *  only field on this route a reader must be warned about before pressing.
+ *  GEO-editor only; a member gets 403. */
 export async function geoSaveBrandConfig(
   brandId: string,
   patch: Partial<Pick<GeoBrandConfig,
-    "aliases" | "competitors" | "daily_cap" | "aio_monthly_cap" | "poll_interval_days" | "auto_poll">>,
+    "aliases" | "competitors" | "daily_cap" | "aio_monthly_cap" | "poll_interval_days"
+    | "auto_poll" | "enabled">>,
 ): Promise<GeoBrandConfig> {
   return putJson<GeoBrandConfig>(`/api/geo/brands/${brandId}/config`, patch);
 }
 
+/** One resumable slice of a check: up to `batch_size` real, paid engine calls,
+ *  bounded server-side so the request returns rather than holding the line for
+ *  a whole sweep. A full check is many of these, driven by the loop in
+ *  `components/hub/work/geo/pollLoop.ts`.
+ *
+ *  `poll_token` names the LOOP, not the step: the same value on every step of
+ *  one press of Check now is what holds the brand's lease from the first batch
+ *  to the last, so a second person is refused consistently instead of the two
+ *  of them trading the brand between batches. Omitting it is still valid and
+ *  falls back to per-step leasing — the backend cleans the value and never
+ *  rejects it, so a token is never worth a 422 in the middle of a check. */
 export const geoPollStep = (
   brandId: string,
-  body: { engines?: string[]; runs?: number; batch_size?: number } = {},
-) => postJson<GeoPollProgress>(`/api/geo/brands/${brandId}/poll/step`, body);
+  body: { engines?: string[]; runs?: number; batch_size?: number; poll_token?: string } = {},
+  req?: RequestOptions,
+) => postJson<GeoPollProgress>(`/api/geo/brands/${brandId}/poll/step`, body, req);
 
 export const geoReport = (brandId: string, days = 7, req?: RequestOptions) =>
   getJson<GeoReport>(`/api/geo/brands/${brandId}/report?days=${days}`, req);
@@ -3118,3 +3310,53 @@ export interface CronJobsPayload {
 
 export const getCronJobs = (req?: RequestOptions) =>
   getJson<CronJobsPayload>("/api/cron/jobs", req);
+
+/* ------------- Agent health (the Agents panel's run figures) ------------- */
+
+export interface AgentHealthModel {
+  id: string | null;
+  name: string | null;
+  /** Where the effective model came from: a per-agent override, the workspace
+   *  default, or the environment. Null when nothing could say. */
+  source: "agent" | "global" | "env" | null;
+}
+
+export interface AgentHealthError {
+  at: string;
+  message: string;
+}
+
+export interface AgentHealthUser {
+  id: string;
+  name: string;
+}
+
+/** One specialist's record over the payload's window. Workspace-shared: every
+ *  signed-in reader sees the same figures. `success_rate` is never rendered —
+ *  the panel's sentences are built from `runs` / `ok` / `errors` directly, so
+ *  the words can never disagree with the figures they came from. */
+export interface AgentHealth {
+  id: string;
+  label: string;
+  model: AgentHealthModel;
+  runs: number;
+  ok: number;
+  errors: number;
+  success_rate: number | null;
+  last_run_at: string | null;
+  last_error: AgentHealthError | null;
+  /** The last three attempts in the window all failed. */
+  recent_failing: boolean;
+  users_count: number;
+  /** Names always non-empty; capped at 10 — `users_count` carries the rest. */
+  users: AgentHealthUser[];
+}
+
+export interface AgentsHealthPayload {
+  generated_at: string;
+  window_days: number;
+  agents: AgentHealth[];
+}
+
+export const getAgentsHealth = (req?: RequestOptions) =>
+  getJson<AgentsHealthPayload>("/api/agents/health", req);
