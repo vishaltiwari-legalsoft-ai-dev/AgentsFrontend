@@ -26,7 +26,7 @@ import {
   citationCell, losingQuestions, matchNames, positionCell, pct, scoreboard,
   slugKey, suggestName, trackableDomains,
 } from "@/components/console/geo/compare";
-import { questionsCell, withoutCompetitor } from "./edits";
+import { editorGate, questionsCell, withoutCompetitor } from "./edits";
 import { PageHead, RuleHead, Blank, Oops, Wait } from "../../ui";
 import { n, word } from "../../model";
 import { useHub, type ToastFn } from "../../context";
@@ -53,7 +53,10 @@ export function GeoCompetitors({
   // the second click on the same row actually writes.
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
-  const mayTrack = user.is_creator === true;
+  // Tracking writes the brand config, which is behind `require_geo_editor` —
+  // so this asks the shared gate rather than `is_creator`, which is narrower
+  // than the server's rule and hid the form from people who hold the role.
+  const { mayEdit: mayTrack, reason: readOnlyWhy } = editorGate(user);
 
   useEffect(() => {
     if (!mayTrack) return;
@@ -345,7 +348,7 @@ export function GeoCompetitors({
                       >
                         Track
                       </button>
-                    ) : <span className="opt">creator only</span>}
+                    ) : <span className="opt">editors only</span>}
                   </td>
                 </tr>
               ))}
@@ -356,8 +359,7 @@ export function GeoCompetitors({
 
       {!mayTrack ? (
         <p className="soon-note">
-          Tracking a competitor writes to the brand config, which is creator-only — so the form is
-          not shown here rather than offered and then refused on save.
+          {readOnlyWhy} The table above is scored on every name already tracked.
         </p>
       ) : (
       <section className="band" style={{ maxWidth: 520 }}>

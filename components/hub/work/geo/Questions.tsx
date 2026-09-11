@@ -23,9 +23,12 @@
  *    selection on screen with the server's own words beside it: a delete that
  *    did not happen must never look like one that did.
  *
- *  Writing questions and personas is creator-only on the backend. Rather than
+ *  Writing questions and personas needs the GEO editor role on the backend —
+ *  `require_geo_editor`, which counts a Creator as one implicitly. Rather than
  *  let a member type into a field whose save will be refused, the forms are not
- *  drawn for them and the reason is on screen.
+ *  drawn for them and the reason is on screen. The role is read through
+ *  `editorGate`, never off `is_creator`: that is a narrower rule than the
+ *  server's, and it hid this whole screen from the people who hold the role.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -39,6 +42,7 @@ import { Facet, PageHead, RuleHead, Oops, Wait } from "../../ui";
 import { n } from "../../model";
 import { useHub, type ToastFn } from "../../context";
 import type { GeoData } from "../GeoWorkspace";
+import { editorGate } from "./edits";
 import {
   ASKED_CHOICES, ASKED_WHY, askedChoiceProblem, bucketLabel, coverageWords,
   deleteAftermathWords, deleteConfirmWords, deletedWords, intentWords, labelProblem,
@@ -81,7 +85,7 @@ export function GeoQuestions({ data, onToast }: { data: GeoData; onToast: ToastF
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   const [beat, setBeat] = useState(0);
 
-  const mayEdit = user.is_creator === true;
+  const { mayEdit, reason: readOnlyWhy } = editorGate(user);
 
   useEffect(() => {
     void session.run(
@@ -445,10 +449,7 @@ export function GeoQuestions({ data, onToast }: { data: GeoData; onToast: ToastF
           {err && <p className="err" role="alert" style={{ marginTop: 10 }}>{err}</p>}
         </section>
       ) : (
-        <p className="soon-note">
-          Writing and regenerating questions is creator-only, so the form is not shown here rather
-          than offered and then refused on save. The set below is what is being asked.
-        </p>
+        <p className="soon-note">{readOnlyWhy} The set below is what is being asked.</p>
       )}
 
       <section className="band">
@@ -515,7 +516,7 @@ export function GeoQuestions({ data, onToast }: { data: GeoData; onToast: ToastF
             <p className="help" style={{ marginTop: 10 }}>
               {mayEdit
                 ? "None yet. Add the first one below."
-                : "A creator has not defined personas for this brand yet."}
+                : "No personas are defined for this brand yet."}
             </p>
           )}
 
@@ -554,7 +555,7 @@ export function GeoQuestions({ data, onToast }: { data: GeoData; onToast: ToastF
           )}
           {pErr && <p className="err" role="alert" style={{ marginTop: 10 }}>{pErr}</p>}
           {!mayEdit && personas.length > 0 && (
-            <p className="help" style={{ marginTop: 10 }}>Editing personas is creator-only.</p>
+            <p className="help" style={{ marginTop: 10 }}>Editing personas is for GEO editors.</p>
           )}
         </details>
       </section>
@@ -674,7 +675,7 @@ export function GeoQuestions({ data, onToast }: { data: GeoData; onToast: ToastF
             <p>
               {mayEdit
                 ? "Generate a first set of drafts, then edit them into the words your buyers actually use."
-                : "A creator has not written the question set for this brand yet."}
+                : "Nobody has written the question set for this brand yet."}
             </p>
             {mayEdit && (
               <button type="button" className="btn btn--mark btn--sm" onClick={regenerate} disabled={busy === "regen"}>

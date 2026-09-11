@@ -145,8 +145,15 @@ export function restoredWords(name: string): string {
     + "before it was removed — check the switch.";
 }
 
-/** Whether this viewer may shape the shared brand list — and whether we can
+/** Whether this viewer may shape what GEO measures — and whether we can
  *  actually tell.
+ *
+ *  The ONE gate for every write behind `require_geo_editor`: the brand list,
+ *  the question set and its personas, the tracked competitors, the plan. Each
+ *  of those screens asks this rather than re-deriving a rule of its own, which
+ *  is how three of them came to gate on `is_creator` and hide the controls from
+ *  the eight people who hold the role. The words below therefore name no single
+ *  screen's subject — they are read on all four.
  *
  *  `is_geo_editor` is derived at sign-in and stored with the session, so it is
  *  not refreshed until the next sign-in. A session opened before the backend
@@ -169,16 +176,15 @@ export function editorGate(
   if (user.is_geo_editor === false) {
     return {
       mayEdit: false,
-      reason: "Adding, switching and removing brands is for GEO editors, so the controls are "
-        + "not drawn here rather than offered and then refused. The brands below are the "
-        + "ones being watched.",
+      reason: "Changing what GEO measures is for GEO editors, so the controls are not drawn "
+        + "here rather than offered and then refused on save.",
     };
   }
   if (user.is_creator === true) return { mayEdit: true, reason: "" };
   return {
     mayEdit: false,
-    reason: "This console cannot tell whether you may change the brand list — your sign-in "
-      + "predates the check. Sign out and back in; if you are a GEO editor the controls "
-      + "appear. Until then this screen is read-only.",
+    reason: "This console cannot tell whether you are a GEO editor — your sign-in predates "
+      + "the check. Sign out and back in; if you are a GEO editor the controls appear. "
+      + "Until then this screen is read-only.",
   };
 }

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { GeoCompetitor } from "@/lib/api";
 import {
@@ -198,5 +199,71 @@ describe("editorGate", () => {
     expect(gate.mayEdit).toBe(false);
     expect(gate.reason).toContain("cannot tell");
     expect(gate.reason).toContain("Sign out and back in");
+  });
+
+  // The defect this gate exists to prevent, stated as the case that was broken:
+  // eight people hold the GEO editor role and hold neither of the other two, and
+  // three screens gated on `is_creator` — so the role they were granted drew
+  // them no controls anywhere but the brand list.
+  it("draws the controls for a GEO editor who is not a creator", () => {
+    const gate = editorGate({ is_geo_editor: true, is_creator: false });
+
+    expect(gate.mayEdit).toBe(true);
+    expect(gate.reason).toBe("");
+  });
+
+  // The other half of that change: nobody who could edit yesterday may lose it.
+  // A Creator reaches these screens down both live paths — the backend counts a
+  // Creator as a GEO editor (`security.is_geo_editor`), so a session signed in
+  // since the flag shipped carries `true`; one from before carries nothing and
+  // falls back. The `false` + creator pair is not a third path, it is a shape
+  // the backend cannot emit, and the test above pins that it is refused anyway.
+  it("keeps a creator editing, on a fresh session and on one that predates the flag", () => {
+    expect(editorGate({ is_geo_editor: true, is_creator: true }).mayEdit).toBe(true);
+    expect(editorGate({ is_creator: true }).mayEdit).toBe(true);
+  });
+
+  it("leaves a plain member read-only, however they are asked", () => {
+    expect(editorGate({ is_geo_editor: false, is_creator: false }).mayEdit).toBe(false);
+    expect(editorGate({ is_creator: false }).mayEdit).toBe(false);
+    expect(editorGate({}).mayEdit).toBe(false);
+  });
+
+  // These words are read on four screens now, not one. A reason that says
+  // "the brand list" is a false sentence on the other three.
+  it("gives a reason that names no single screen's subject", () => {
+    for (const gate of [editorGate({ is_geo_editor: false }), editorGate({})]) {
+      expect(gate.reason).not.toContain("brand list");
+      expect(gate.reason).not.toContain("brands");
+      expect(gate.reason).not.toContain("questions");
+      expect(gate.reason).not.toContain("competitor");
+    }
+  });
+});
+
+/** Every GEO screen that hides a write asks the one gate above.
+ *
+ *  Read off the source because there is no renderer in this suite to ask the
+ *  question any other way — and the defect being pinned was invisible to every
+ *  other kind of test: `is_creator` is a real field, the narrower gate typed
+ *  fine, rendered fine, and simply drew nothing for the eight people holding
+ *  the role. What fails here is a screen re-deriving the rule locally, which is
+ *  exactly how the three of them drifted from the fourth.
+ */
+describe("the GEO screens gate on the shared helper", () => {
+  const SCREENS = ["Brands.tsx", "Competitors.tsx", "Plan.tsx", "Questions.tsx"];
+
+  const sourceOf = (file: string) =>
+    readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
+
+  it.each(SCREENS)("%s calls editorGate", (file) => {
+    expect(sourceOf(file)).toContain("editorGate(user)");
+  });
+
+  it.each(SCREENS)("%s reads no role flag of its own", (file) => {
+    // Prose may still say "creator"; a gate reads the flag off the user, and
+    // that is the only thing refused here.
+    const gates = sourceOf(file).match(/user\??\.\s*is_(creator|admin|geo_editor)/g) || [];
+    expect(gates).toEqual([]);
   });
 });

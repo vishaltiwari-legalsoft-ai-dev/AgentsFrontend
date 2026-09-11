@@ -20,7 +20,7 @@ import {
   type GeoStrategyAction, type GeoStrategyDoc,
 } from "@/lib/api";
 import { loadPending, useLoadSession, type Load } from "@/lib/load";
-import { assigneeToSave } from "./edits";
+import { assigneeToSave, editorGate } from "./edits";
 import { PageHead, RuleHead, Blank, Oops, Wait } from "../../ui";
 import { Cap, n, word } from "../../model";
 import { useHub, type ToastFn } from "../../context";
@@ -45,7 +45,11 @@ export function GeoPlan({ data, onToast }: { data: GeoData; onToast: ToastFn }) 
   const [busy, setBusy] = useState<string | null>(null);
   const [beat, setBeat] = useState(0);
 
-  const mayGenerate = user.is_creator === true;
+  // Writing a plan is behind `require_geo_editor`; moving and assigning its
+  // actions is not gated at all beyond sign-in (see `assign` and `Assignee`).
+  // Only the generate half asks the gate, and it asks the shared one —
+  // `is_creator` is narrower than the server's rule.
+  const { mayEdit: mayGenerate, reason: readOnlyWhy } = editorGate(user);
 
   useEffect(() => {
     void session.run(
@@ -129,7 +133,7 @@ export function GeoPlan({ data, onToast }: { data: GeoData; onToast: ToastFn }) 
         >
           {mayGenerate
             ? "It reads your stored citations and searches for real places to be listed — it never invents a venue."
-            : "Writing a plan is creator-only. Ask a creator to generate one for this brand."}
+            : readOnlyWhy}
         </Blank>
       </>
     );

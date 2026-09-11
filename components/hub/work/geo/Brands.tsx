@@ -239,7 +239,9 @@ export function GeoBrands({
           )}
         </section>
       ) : (
-        <p className="soon-note">{readOnlyWhy}</p>
+        // The gate's words say why the controls are absent; this screen adds the
+        // one line that orients the reader in what is left of it.
+        <p className="soon-note">{readOnlyWhy} The brands below are the ones being watched.</p>
       )}
 
       <section className="band">
