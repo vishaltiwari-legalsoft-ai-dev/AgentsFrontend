@@ -56,7 +56,12 @@ export function SettingsView() {
     toast("Your list has been cleared on this browser.", "ok");
   };
 
-  const tier = user.is_creator ? "creator" : user.is_admin ? "admin" : "member";
+  // This page reads nothing from the backend — identity, appearance and a list
+  // kept in this browser — so it is reachable on any allowance. What it must
+  // not do is describe an access this reader does not have.
+  const tier = user.is_geo_only
+    ? "GEO only"
+    : user.is_creator ? "creator" : user.is_admin ? "admin" : "member";
   useHeadline(`${user.email} · ${tier}`);
 
   return (
@@ -78,11 +83,13 @@ export function SettingsView() {
           <Row
             title="Access"
             note={
-              tier === "creator"
-                ? "A creator sees Models and the key settings on Admin, and can change what every specialist runs on."
-                : tier === "admin"
-                  ? "An admin sees the Admin page — the people, the usage and the collections."
-                  : "A member can open every specialist and see their own record."
+              tier === "GEO only"
+                ? "Your account covers the GEO specialist and the console's own pages. The other specialists and the setup pages belong to this workspace but are not open to it."
+                : tier === "creator"
+                  ? "A creator sees Models and the key settings on Admin, and can change what every specialist runs on."
+                  : tier === "admin"
+                    ? "An admin sees the Admin page — the people, the usage and the collections."
+                    : "A member can open every specialist and see their own record."
             }
           >
             <span className="tag is-on">{tier}</span>

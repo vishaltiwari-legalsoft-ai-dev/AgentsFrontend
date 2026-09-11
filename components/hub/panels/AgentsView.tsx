@@ -16,21 +16,30 @@
 import { useState } from "react";
 import type { RunRow } from "@/lib/api";
 import { useHeadline, useHub } from "../context";
-import { AGENTS, LIVE_AGENTS, WORKSPACE_SLUG, n } from "../model";
+import { AGENTS, LIVE_AGENTS, WORKSPACE_SLUG, agentsFor, n } from "../model";
 import { Mono, Oops, PageHead, RuleHead, Tile, Wait } from "../ui";
 import { useRuns } from "../useRuns";
 import { workspaceByAgent } from "../workspaces";
 
 export function AgentsView() {
-  const { revision, openWork, openBrief, toast } = useHub();
+  const { user, revision, openWork, openBrief, toast } = useHub();
   const { state: feed, reload } = useRuns({ limit: 200 }, revision);
   const page = feed.data;
 
   const [openId] = useState<string | null>(null);
   void openId;
 
-  const soon = AGENTS.filter((a) => !a.live);
-  useHeadline(`${LIVE_AGENTS.length} live · ${soon.length} not built yet`);
+  // This rail entry is how GEO is reached, so it stays for a scoped account —
+  // but the four specialists it cannot open are not drawn as cards it can
+  // press, and the roadmap of unbuilt ones is not its business either.
+  const mine = agentsFor(user);
+  const scoped = mine.length < LIVE_AGENTS.length;
+  const soon = scoped ? [] : AGENTS.filter((a) => !a.live);
+  useHeadline(
+    scoped
+      ? `${mine.length} open to you · ${LIVE_AGENTS.length} live in this workspace`
+      : `${LIVE_AGENTS.length} live · ${soon.length} not built yet`,
+  );
 
   const recent = (id: string): RunRow[] =>
     (page?.runs || []).filter((r) => r.agent_id === id && r.state === "done").slice(0, 3);
@@ -48,19 +57,29 @@ export function AgentsView() {
     <>
       <PageHead
         statement={
-          <>
-            {LIVE_AGENTS.length === 5 ? "Five specialists are working." : `${LIVE_AGENTS.length} specialists are working.`}{" "}
-            <b>{soon.length} more</b> {soon.length === 1 ? "is" : "are"} not built yet.
-          </>
+          scoped ? (
+            <>
+              {mine.length === 1 ? <><b>{mine[0].name}</b> is open to you.</> : <><b>{mine.length} specialists</b> are open to you.</>}
+            </>
+          ) : (
+            <>
+              {LIVE_AGENTS.length === 5 ? "Five specialists are working." : `${LIVE_AGENTS.length} specialists are working.`}{" "}
+              <b>{soon.length} more</b> {soon.length === 1 ? "is" : "are"} not built yet.
+            </>
+          )
         }
-        lede="A specialist is defined by what it hands back, so that is what this page leads with — alongside the last three things each one actually produced."
+        lede={
+          scoped
+            ? "A specialist is defined by what it hands back, so that is what this page leads with — alongside the last three things it actually produced."
+            : "A specialist is defined by what it hands back, so that is what this page leads with — alongside the last three things each one actually produced."
+        }
       />
 
       <section className="band">
         <RuleHead
           title="Working now"
           note="Each takes a brief in plain words and returns one kind of artifact."
-          aside={<span className="aside">{LIVE_AGENTS.length} of {AGENTS.length}</span>}
+          aside={<span className="aside">{scoped ? `${mine.length} of ${LIVE_AGENTS.length} live` : `${LIVE_AGENTS.length} of ${AGENTS.length}`}</span>}
         />
 
         {feed.phase === "failed" && !page && (
@@ -68,7 +87,7 @@ export function AgentsView() {
         )}
 
         <div className="roster">
-          {LIVE_AGENTS.map((a) => {
+          {mine.map((a) => {
             const made = recent(a.id);
             const stored = runsFor(a.id);
             const wk = weekFor(a.id);
@@ -125,8 +144,16 @@ export function AgentsView() {
             );
           })}
         </div>
+
+        {scoped && (
+          <p className="soon-note">
+            The rest of the roster belongs to this workspace but is not open to your account, so it
+            is not listed here.
+          </p>
+        )}
       </section>
 
+      {!scoped && (
       <section className="band">
         <RuleHead
           title="Not built yet"
@@ -151,6 +178,7 @@ export function AgentsView() {
           There is nothing to show yet, so there is no page for it.
         </p>
       </section>
+      )}
     </>
   );
 }

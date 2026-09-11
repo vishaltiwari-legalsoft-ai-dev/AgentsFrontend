@@ -106,33 +106,85 @@ export interface Panel {
   title: string;
   /** Which role may open it. `null` means everyone signed in. */
   gate: null | "admin" | "creator";
+  /** Whether every route this panel reads is inside the allowance of a
+   *  GEO-only account (see `Viewer.is_geo_only`). `false` means the panel's own
+   *  first read answers 403, so it is never offered to one.
+   *
+   *  This is traced from the panel's `lib/api` call sites, not guessed — when a
+   *  panel gains a read, this flag is part of the change. */
+  inGeoScope: boolean;
 }
 
+/* The reads behind each `inGeoScope`, so the next person to touch a panel can
+ * check the claim instead of trusting it:
+ *   home         getIssues · seoOverview · listRuns          — all allowed
+ *   issues       getIssues                                   — allowed
+ *   agents       listRuns                                    — allowed, and the
+ *                only way into the GEO workspace, so it must stay
+ *   runs         listRuns                                    — allowed
+ *   library      loadLibrary + gdIngestedBrands              — `/api/gd/*` 403s
+ *   models       getAgentConfig                              — 403s
+ *   integrations mrConnectors + seoOverview + geoConfig      — `/api/mr/*` 403s
+ *   schedule     getCronJobs                                 — 403s
+ *   settings     nothing — identity, theme and a local list  — cannot 403
+ *   admin        the admin reads                             — 403s
+ */
 export const PANELS: Panel[] = [
-  { id: "home", label: "Home", icon: "home", group: "Work", title: "Home", gate: null },
-  { id: "issues", label: "Issues", icon: "issues", group: "Work", title: "Issues", gate: null },
-  { id: "agents", label: "Agents", icon: "agents", group: "Work", title: "Agents", gate: null },
-  { id: "runs", label: "Runs", icon: "runs", group: "Work", title: "Runs", gate: null },
-  { id: "library", label: "Library", icon: "library", group: "Assets", title: "Library", gate: null },
-  { id: "models", label: "Models", icon: "models", group: "Setup", title: "Models", gate: "creator" },
-  { id: "integrations", label: "Integrations", icon: "integrations", group: "Setup", title: "Integrations", gate: null },
-  { id: "schedule", label: "Schedule", icon: "plan", group: "Setup", title: "Schedule", gate: "creator" },
-  { id: "settings", label: "Settings", icon: "settings", group: "Setup", title: "Settings", gate: null },
-  { id: "admin", label: "Admin", icon: "admin", group: "Setup", title: "Admin", gate: "admin" },
+  { id: "home", label: "Home", icon: "home", group: "Work", title: "Home", gate: null, inGeoScope: true },
+  { id: "issues", label: "Issues", icon: "issues", group: "Work", title: "Issues", gate: null, inGeoScope: true },
+  { id: "agents", label: "Agents", icon: "agents", group: "Work", title: "Agents", gate: null, inGeoScope: true },
+  { id: "runs", label: "Runs", icon: "runs", group: "Work", title: "Runs", gate: null, inGeoScope: true },
+  { id: "library", label: "Library", icon: "library", group: "Assets", title: "Library", gate: null, inGeoScope: false },
+  { id: "models", label: "Models", icon: "models", group: "Setup", title: "Models", gate: "creator", inGeoScope: false },
+  { id: "integrations", label: "Integrations", icon: "integrations", group: "Setup", title: "Integrations", gate: null, inGeoScope: false },
+  { id: "schedule", label: "Schedule", icon: "plan", group: "Setup", title: "Schedule", gate: "creator", inGeoScope: false },
+  { id: "settings", label: "Settings", icon: "settings", group: "Setup", title: "Settings", gate: null, inGeoScope: true },
+  { id: "admin", label: "Admin", icon: "admin", group: "Setup", title: "Admin", gate: "admin", inGeoScope: false },
 ];
 
 export interface Viewer {
   is_admin?: boolean;
   is_creator?: boolean;
+  /** The backend's scope wall (`User.is_geo_only`): this account is served the
+   *  GEO routes and refused the rest with a 403. Absent reads as `false`, so a
+   *  session stored before the wall shipped sees exactly what it saw before. */
+  is_geo_only?: boolean;
 }
 
 export function canOpen(panel: Panel, viewer: Viewer): boolean {
+  // The scope wall is the backend's decision and outranks the role gates: a
+  // scoped account is refused these routes whatever else it is.
+  if (viewer.is_geo_only && !panel.inGeoScope) return false;
   if (panel.gate === "admin") return !!viewer.is_admin;
   if (panel.gate === "creator") return !!viewer.is_creator;
   return true;
 }
 
 export const panelsFor = (viewer: Viewer): Panel[] => PANELS.filter((p) => canOpen(p, viewer));
+
+/* ------------------------------------------------------------ scope wall -- */
+
+/** The one specialist a GEO-only account can open. All 25 `/api/geo/*` routes
+ *  are inside its allowance; every other workspace 403s on its first read. */
+export const GEO_AGENT_ID = "a10";
+
+/** Whether this viewer may open a specialist's workspace at all — the single
+ *  question every "Open workspace", "Give it work" and `#/w/<slug>` link has to
+ *  ask before it offers itself. */
+export function canOpenAgent(agentId: string, viewer: Viewer): boolean {
+  if (viewer.is_geo_only) return agentId === GEO_AGENT_ID;
+  return true;
+}
+
+export function canOpenWorkspace(slug: string, viewer: Viewer): boolean {
+  const agent = agentBySlug(slug);
+  return !!agent && canOpenAgent(agent.id, viewer);
+}
+
+/** The live specialists this viewer may open or hand work to. Everyone who is
+ *  not scoped gets the whole live roster, exactly as before. */
+export const agentsFor = (viewer: Viewer): HubAgent[] =>
+  LIVE_AGENTS.filter((a) => canOpenAgent(a.id, viewer));
 
 const isPanelId = (v: string): v is PanelId => PANELS.some((p) => p.id === v);
 
@@ -175,6 +227,9 @@ export function routeFromHash(hash: string, viewer: Viewer): Route {
   if (parts[0] === "w" && parts.length >= 2) {
     const slug = parts[1];
     if (!agentBySlug(slug)) return HOME;
+    // A bookmark or a pasted link is the one way into a workspace that no
+    // button guards, so the scope wall is applied here too.
+    if (!canOpenWorkspace(slug, viewer)) return HOME;
     return {
       panel: "agents",
       work: {

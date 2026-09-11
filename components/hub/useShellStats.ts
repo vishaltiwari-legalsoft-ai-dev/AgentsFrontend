@@ -44,8 +44,11 @@ function fmtTokens(v: number): string {
 
 const usd0 = (v: number) => `$${Math.round(v).toLocaleString("en-US")}`;
 
-export function useShellStats(enabled: boolean, revision: number): ShellStats {
-  const [counts, setCounts] = useState<Partial<Record<PanelId, number>>>({ agents: LIVE_AGENTS.length });
+/** `openAgents` is how many specialists this reader may actually open. It is
+ *  the whole live roster for everyone but an account the backend has scoped, and
+ *  the rail must not badge Agents with a five that opens a page listing one. */
+export function useShellStats(enabled: boolean, revision: number, openAgents = LIVE_AGENTS.length): ShellStats {
+  const [counts, setCounts] = useState<Partial<Record<PanelId, number>>>({});
   const [totalRuns, setTotalRuns] = useState<number | null>(null);
   const [spend, setSpend] = useState<SpendCell[]>([]);
   const [hasNews, setHasNews] = useState(false);
@@ -107,8 +110,10 @@ export function useShellStats(enabled: boolean, revision: number): ShellStats {
     };
   }, [enabled, revision]);
 
-  const live = `${LIVE_AGENTS.length} specialists live`;
+  const live = openAgents === LIVE_AGENTS.length
+    ? `${LIVE_AGENTS.length} specialists live`
+    : `${openAgents} specialist${openAgents === 1 ? "" : "s"} open to you`;
   const railStat = totalRuns === null ? live : `${n(totalRuns)} runs · ${live}`;
 
-  return { counts, railStat, spend, hasNews };
+  return { counts: { ...counts, agents: openAgents }, railStat, spend, hasNews };
 }

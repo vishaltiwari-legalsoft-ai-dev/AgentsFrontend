@@ -17,7 +17,7 @@
 import { useMemo, useState } from "react";
 import type { RunRow, RunState } from "@/lib/api";
 import { useHeadline, useHub } from "../context";
-import { LIVE_AGENTS, WORKSPACE_SLUG, agentById, n } from "../model";
+import { LIVE_AGENTS, WORKSPACE_SLUG, agentById, canOpenAgent, n } from "../model";
 import { Ic } from "../Sprite";
 import { Facet, Mono, Oops, PageHead, RuleHead, STATE_LABEL, Wait } from "../ui";
 import { RunRowCard } from "../RunLedger";
@@ -52,7 +52,7 @@ const COLS: Col[] = [
 const STATES: RunState[] = ["done", "running", "failed", "queued"];
 
 export function RunsView() {
-  const { revision, openWork, toast } = useHub();
+  const { user, revision, openWork, toast } = useHub();
   const [agent, setAgent] = useState("all");
   const [state, setState] = useState<string>("all");
   const [brand, setBrand] = useState("all");
@@ -100,6 +100,10 @@ export function RunsView() {
     }
     openWork(slug);
   };
+
+  // The record spans every specialist and this reader may not be able to open
+  // all of them, so the row's way out is offered per specialist, not per page.
+  const mayOpen = (agentId: string) => canOpenAgent(agentId, user);
 
   if (feed.phase === "failed" && !page) {
     return <Oops what="The record could not be read." error={feed.error || ""} onRetry={reload} />;
@@ -249,6 +253,7 @@ export function RunsView() {
                     duration={d}
                     onToggle={() => setOpenId(open ? null : r.id)}
                     onOpenWorkspace={openAgent}
+                    canOpenWorkspace={mayOpen}
                     cols={COLS.length}
                   />
                 );
@@ -292,7 +297,7 @@ function totalTook(runs: RunRow[]): string {
 }
 
 function RunTableRow({
-  run, open, mono, duration, onToggle, onOpenWorkspace, cols,
+  run, open, mono, duration, onToggle, onOpenWorkspace, canOpenWorkspace, cols,
 }: {
   run: RunRow;
   open: boolean;
@@ -300,6 +305,7 @@ function RunTableRow({
   duration: string | null;
   onToggle: () => void;
   onOpenWorkspace: (agentId: string) => void;
+  canOpenWorkspace: (agentId: string) => boolean;
   cols: number;
 }) {
   return (
@@ -328,7 +334,13 @@ function RunTableRow({
       {open && (
         <tr className="rt__d">
           <td colSpan={cols}>
-            <RunRowCard run={run} open onToggle={onToggle} onOpenWorkspace={onOpenWorkspace} />
+            <RunRowCard
+              run={run}
+              open
+              onToggle={onToggle}
+              onOpenWorkspace={onOpenWorkspace}
+              canOpenWorkspace={canOpenWorkspace}
+            />
           </td>
         </tr>
       )}

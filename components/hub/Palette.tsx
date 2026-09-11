@@ -11,7 +11,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Ic } from "./Sprite";
-import { LIVE_AGENTS, type Panel, type PanelId } from "./model";
+import { type HubAgent, type Panel, type PanelId } from "./model";
 import { WORKSPACES } from "./workspaces";
 
 interface Entry {
@@ -21,11 +21,15 @@ interface Entry {
 }
 
 export function HubPalette({
-  open, onClose, panels, onGo, onOpenWork, onBrief,
+  open, onClose, panels, agents, onGo, onOpenWork, onBrief,
 }: {
   open: boolean;
   onClose: () => void;
+  /** Already filtered to what this reader may open. */
   panels: Panel[];
+  /** The live specialists this reader may open or brief — the palette is a
+   *  list of places, and a place that answers 403 is not one of them. */
+  agents: HubAgent[];
   onGo: (id: PanelId) => void;
   onOpenWork: (slug: string, subject?: string, section?: string) => void;
   onBrief: (agentId: string) => void;
@@ -37,19 +41,23 @@ export function HubPalette({
 
   const all = useMemo<Entry[]>(() => [
     ...panels.map((p) => ({ label: p.title, hint: p.group, run: () => onGo(p.id) })),
-    ...LIVE_AGENTS.map((a) => ({ label: a.name, hint: "Give it work", run: () => onBrief(a.id) })),
+    ...agents.map((a) => ({ label: a.name, hint: "Give it work", run: () => onBrief(a.id) })),
     // A workspace section is a place, so it is reachable the way every other
     // place is — and named by what is in it, because "Fix list" is what someone
     // types when they want the fix list.
     ...WORKSPACES.flatMap((w) => {
-      const agent = LIVE_AGENTS.find((a) => a.id === w.agentId);
+      const agent = agents.find((a) => a.id === w.agentId);
+      // A workspace whose specialist is not open to this reader is not a place
+      // they can go, so it is not offered — searching for it finds nothing
+      // rather than finding a 403.
+      if (!agent) return [];
       return w.sections.map((s) => ({
-        label: `${s.label} — ${agent?.name ?? w.slug}`,
-        hint: agent?.role ?? "Workspace",
+        label: `${s.label} — ${agent.name}`,
+        hint: agent.role,
         run: () => onOpenWork(w.slug, "", s.id),
       }));
     }),
-  ], [panels, onGo, onBrief, onOpenWork]);
+  ], [panels, agents, onGo, onBrief, onOpenWork]);
 
   const items = useMemo(() => {
     const term = q.trim().toLowerCase();

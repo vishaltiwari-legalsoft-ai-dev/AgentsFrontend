@@ -17,10 +17,10 @@ import { useHeadline, useHub } from "../context";
 import { clock } from "../format";
 import { n } from "../model";
 import { Blank, Oops, PageHead, RuleHead, Wait } from "../ui";
-import { SEVERITY_META, countsLine, groupBySeverity, routeForFix } from "./issues";
+import { SEVERITY_META, canFollowFix, countsLine, groupBySeverity, routeForFix } from "./issues";
 
 export function IssuesView() {
-  const { revision, go, openWork } = useHub();
+  const { user, revision, go, openWork } = useHub();
   const session = useLoadSession();
   const [issues, setIssues] = useState<Load<IssuesPayload>>(loadPending);
   const [beat, setBeat] = useState(0);
@@ -61,6 +61,9 @@ export function IssuesView() {
   const groups = groupBySeverity(data.issues);
   const checking = issues.phase === "loading";
   const at = clock(data.generated_at);
+  const canFix = (fix: IssueFix) => canFollowFix(fix, user);
+  // Said once, at the foot, rather than beside every row it applies to.
+  const someWithheld = data.issues.some((i) => i.fix && !canFix(i.fix));
 
   return (
     <>
@@ -90,12 +93,19 @@ export function IssuesView() {
               />
               <ol className="prio" aria-label={`${meta.chip} severity issues`}>
                 {g.issues.map((i) => (
-                  <IssueRow key={i.id} issue={i} onFix={openFix} />
+                  <IssueRow key={i.id} issue={i} onFix={openFix} canFix={canFix} />
                 ))}
               </ol>
             </section>
           );
         })
+      )}
+
+      {someWithheld && (
+        <p className="soon-note">
+          Some of these are put right in a specialist that is not open to your account, so they are
+          listed without a fix button.
+        </p>
       )}
 
       <p className="prio__from">
@@ -116,9 +126,16 @@ export function IssuesView() {
 /** One issue on one line: chip, brand, what is wrong, what it means, and the
  *  one place to go. The chips sit nested one level down so `.prio__i div >
  *  span` cannot restyle them. A row with no fix is a fact, not a task — it
- *  simply has no button. */
-function IssueRow({ issue, onFix }: { issue: Issue; onFix: (fix: IssueFix) => void }) {
-  const fix = issue.fix;
+ *  simply has no button, and so does a row whose fix lives behind a wall this
+ *  reader is on the other side of. */
+function IssueRow({
+  issue, onFix, canFix,
+}: {
+  issue: Issue;
+  onFix: (fix: IssueFix) => void;
+  canFix: (fix: IssueFix) => boolean;
+}) {
+  const fix = issue.fix && canFix(issue.fix) ? issue.fix : null;
   const high = issue.severity === "high";
   return (
     <li className={`prio__i${high ? " is-bad" : ""}`}>

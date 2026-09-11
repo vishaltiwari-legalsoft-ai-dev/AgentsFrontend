@@ -18,7 +18,10 @@ import { useEffect, useState } from "react";
 import { getIssues, seoOverview, type IssueFix, type IssuesPayload, type SeoOverview } from "@/lib/api";
 import { loadPending, useLoadSession, type Load } from "@/lib/load";
 import { useHeadline, useHub } from "../context";
-import { LIVE_AGENTS, WORKSPACE_SLUG, Cap, agentById, greeting, n, word } from "../model";
+import {
+  WORKSPACE_SLUG, Cap, agentById, agentsFor, canOpenAgent, canOpenWorkspace,
+  greeting, n, word, type HubAgent, type Viewer,
+} from "../model";
 import { Ic } from "../Sprite";
 import { Mono, Oops, PageHead, RuleHead, Wait } from "../ui";
 import { Ledger } from "../RunLedger";
@@ -26,7 +29,7 @@ import { useRuns } from "../useRuns";
 import { JOBS } from "../jobs";
 import { daysBetween, shiftDay, todayKey, useTasks, type Task } from "../useTasks";
 import { dayLabel } from "../format";
-import { homeIssues, needsBrandTag, routeForFix } from "./issues";
+import { canFollowFix, homeIssues, needsBrandTag, routeForFix } from "./issues";
 
 /** How far back the day pager goes. The same seven days every other figure on
  *  this page uses. */
@@ -77,6 +80,12 @@ export function HomeView() {
   const firstName = (user.name || user.email || "").split(/[\s@]/)[0] || "there";
   const live = (page?.runs || []).filter((r) => r.state === "running" || r.state === "queued");
 
+  // Everything Home reads is allowed for every signed-in account; what it
+  // *offers* is not. So the three reads stay and the affordances are narrowed
+  // to the specialists this reader can actually open.
+  const mine = agentsFor(user);
+  const mayOpen = (agentId: string) => canOpenAgent(agentId, user);
+
   const openSlug = (agentId: string, section?: string) => {
     const slug = WORKSPACE_SLUG[agentId];
     if (slug) openWork(slug, "", section || "");
@@ -103,15 +112,20 @@ export function HomeView() {
         day={day}
         setDay={setDay}
         tasks={tasks}
-        blockers={<Blockers seo={seo} issues={issues} onRetry={() => setBeat((b) => b + 1)} failedThisWeek={page?.week.failed ?? 0} go={go} openWork={openWork} />}
+        blockers={<Blockers seo={seo} issues={issues} onRetry={() => setBeat((b) => b + 1)} failedThisWeek={page?.week.failed ?? 0} go={go} openWork={openWork} viewer={user} />}
       />
 
-      <section className="band">
-        <RuleHead title="Start something" note="Pick the specialist, then the job. Nothing needs typing." />
-        <ComposeRow onBrief={openBrief} onOpen={openSlug} />
-      </section>
+      {mine.length > 0 && (
+        <section className="band">
+          <RuleHead
+            title="Start something"
+            note={mine.length === 1 ? "Pick the job. Nothing needs typing." : "Pick the specialist, then the job. Nothing needs typing."}
+          />
+          <ComposeRow agents={mine} onBrief={openBrief} onOpen={openSlug} />
+        </section>
+      )}
 
-      <ThisWeek page={page} onBrief={openBrief} />
+      <ThisWeek page={page} onBrief={openBrief} canBrief={mayOpen} />
 
       {feed.phase === "failed" && !page ? (
         <Oops what="The record could not be read." error={feed.error || ""} onRetry={reload} />
@@ -135,6 +149,7 @@ export function HomeView() {
             openId={openId}
             onToggle={(id) => setOpenId((cur) => (cur === id ? null : id))}
             onOpenWorkspace={(id) => openSlug(id)}
+            canOpenWorkspace={mayOpen}
           />
         </section>
       ) : null}
@@ -150,7 +165,7 @@ export function HomeView() {
  *  by the one rule only this page can see (failed runs this week) and tailed
  *  by the per-brand fix counts the SEO overview carries. */
 function Blockers({
-  seo, issues, onRetry, failedThisWeek, go, openWork,
+  seo, issues, onRetry, failedThisWeek, go, openWork, viewer,
 }: {
   seo: Load<SeoOverview>;
   issues: Load<IssuesPayload>;
@@ -158,6 +173,11 @@ function Blockers({
   failedThisWeek: number;
   go: (p: "runs" | "issues" | "settings") => void;
   openWork: (slug: string, subject?: string, section?: string) => void;
+  /** Both reads behind this list are allowed for every account, and both name
+   *  work across the whole workspace. A row whose only point is the button —
+   *  the SEO fix counts — is dropped for a reader who cannot follow it; a row
+   *  that states a real problem keeps its place and loses only the button. */
+  viewer: Viewer;
 }) {
   const seoDown = seo.phase === "failed" && !seo.data;
   const issuesDown = issues.phase === "failed" && !issues.data;
@@ -206,7 +226,7 @@ function Blockers({
   }
 
   pick.top.forEach((i) => {
-    const fix = i.fix;
+    const fix = i.fix && canFollowFix(i.fix, viewer) ? i.fix : null;
     items.push({
       key: `is-${i.id}`,
       bad: i.severity === "high",
@@ -229,7 +249,11 @@ function Blockers({
     });
   }
 
+  // These rows exist to carry the reader into the SEO fix list. Without that
+  // door they are a count of somebody else's work, so they are not drawn.
+  const seoOpen = canOpenWorkspace("seo", viewer);
   brands.forEach((b) => {
+    if (!seoOpen) return;
     const count = b.last_run?.todo_count ?? 0;
     if (count === 0) return;
     items.push({
@@ -423,34 +447,39 @@ function YourList({
 /* -------------------------------------------------------------- start something -- */
 
 function ComposeRow({
-  onBrief, onOpen,
+  agents, onBrief, onOpen,
 }: {
+  /** The specialists this reader may open. Every job below starts a run or
+   *  opens a workspace, so one outside the allowance is a button that 403s. */
+  agents: HubAgent[];
   onBrief: (agentId: string) => void;
   onOpen: (agentId: string, section?: string) => void;
 }) {
-  const [who, setWho] = useState(LIVE_AGENTS[0].id);
+  const [who, setWho] = useState(agents[0].id);
   const agent = agentById(who)!;
   const jobs = JOBS[who] || [];
 
   return (
     <div className="compose">
       <div className="compose__top">
-        <div className="compose__who" role="radiogroup" aria-label="Which specialist">
-          {LIVE_AGENTS.map((a) => (
-            <button
-              type="button"
-              key={a.id}
-              role="radio"
-              aria-checked={a.id === who}
-              aria-label={a.name}
-              title={a.name}
-              className={a.id === who ? "is-on" : ""}
-              onClick={() => setWho(a.id)}
-            >
-              {a.mono}
-            </button>
-          ))}
-        </div>
+        {agents.length > 1 && (
+          <div className="compose__who" role="radiogroup" aria-label="Which specialist">
+            {agents.map((a) => (
+              <button
+                type="button"
+                key={a.id}
+                role="radio"
+                aria-checked={a.id === who}
+                aria-label={a.name}
+                title={a.name}
+                className={a.id === who ? "is-on" : ""}
+                onClick={() => setWho(a.id)}
+              >
+                {a.mono}
+              </button>
+            ))}
+          </div>
+        )}
         <p className="compose__says">
           <b>{agent.name}</b> hands back {agent.makes.replace(/^A /, "a ").replace(/\.$/, "")}. Pick a job, or open it.
         </p>
@@ -495,7 +524,16 @@ function ComposeRow({
  *  uses. The prototype put each specialist's 30-day spend beside its name; that
  *  figure does not exist per agent — nothing records it — so this counts runs,
  *  which it can. */
-function ThisWeek({ page, onBrief }: { page: { week: { total: number; by_agent: { id: string; name: string; count: number }[] } } | null; onBrief: (id: string) => void }) {
+function ThisWeek({
+  page, onBrief, canBrief,
+}: {
+  page: { week: { total: number; by_agent: { id: string; name: string; count: number }[] } } | null;
+  onBrief: (id: string) => void;
+  /** The record spans every specialist. Who you leaned on is a fact and stays
+   *  on the page; the button that hands that one more work does not, unless
+   *  this reader may actually reach it. */
+  canBrief: (agentId: string) => boolean;
+}) {
   if (!page) return null;
   const rows = page.week.by_agent;
   if (!rows.length) return null;
@@ -521,10 +559,12 @@ function ThisWeek({ page, onBrief }: { page: { week: { total: number; by_agent: 
               Your most-used specialist this week — {word(top.count)} of {word(page.week.total)} runs.
             </p>
           </div>
-          <button type="button" className="btn btn--quiet btn--sm" onClick={() => onBrief(top.id)}>
-            <Ic name="send" />
-            Give it a job
-          </button>
+          {canBrief(topAgent.id) && (
+            <button type="button" className="btn btn--quiet btn--sm" onClick={() => onBrief(top.id)}>
+              <Ic name="send" />
+              Give it a job
+            </button>
+          )}
         </div>
       )}
 

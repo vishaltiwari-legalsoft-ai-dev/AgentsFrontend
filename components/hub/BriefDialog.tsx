@@ -23,7 +23,7 @@ import {
 } from "@/lib/api";
 import { useLoadSession } from "@/lib/load";
 import { Ic } from "./Sprite";
-import { AGENTS, LIVE_AGENTS, WORKSPACE_SLUG, agentById } from "./model";
+import { AGENTS, WORKSPACE_SLUG, agentById, type HubAgent } from "./model";
 import type { ToastFn } from "./context";
 
 /** The two that take a written brief, and what the field should say for each. */
@@ -50,9 +50,14 @@ const OPENS_INSTEAD: Record<string, string> = {
 interface BrandOpt { id: string; name: string }
 
 export function BriefDialog({
-  agentId, onClose, onToast, onOpenWork, onQueued,
+  agentId, agents, onClose, onToast, onOpenWork, onQueued,
 }: {
   agentId: string | null;
+  /** The specialists this reader may hand work to. The brand lists behind the
+   *  two that take a written brief are `/api/gd/*` and `/api/blog/*` reads, so
+   *  a picker offering one outside the allowance is a form that 403s the
+   *  moment it opens. The caller filters; this dialog only draws what it gets. */
+  agents: HubAgent[];
   onClose: () => void;
   onToast: ToastFn;
   onOpenWork: (slug: string, subject?: string, section?: string) => void;
@@ -62,7 +67,7 @@ export function BriefDialog({
   const area = useRef<HTMLTextAreaElement>(null);
   const session = useLoadSession();
 
-  const [who, setWho] = useState<string>(agentId || LIVE_AGENTS[0].id);
+  const [who, setWho] = useState<string>(agentId || agents[0]?.id || "");
   const [text, setText] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [brands, setBrands] = useState<BrandOpt[] | null>(null);
@@ -173,21 +178,24 @@ export function BriefDialog({
         {agent ? agent.makes : "Every specialist takes a brief in its own words. Pick who this is for."}
       </p>
 
-      <div className="picker" role="radiogroup" aria-label="Specialist">
-        {LIVE_AGENTS.map((a) => (
-          <button
-            type="button"
-            key={a.id}
-            role="radio"
-            aria-checked={a.id === who}
-            className={`pick${a.id === who ? " is-on" : ""}`}
-            onClick={() => { setWho(a.id); setErr(null); }}
-          >
-            <span className="mono" aria-hidden="true">{a.mono}</span>
-            <span><b>{a.name}</b><em>{a.role}</em></span>
-          </button>
-        ))}
-      </div>
+      {/* One specialist is not a choice, so it is not drawn as one. */}
+      {agents.length > 1 && (
+        <div className="picker" role="radiogroup" aria-label="Specialist">
+          {agents.map((a) => (
+            <button
+              type="button"
+              key={a.id}
+              role="radio"
+              aria-checked={a.id === who}
+              className={`pick${a.id === who ? " is-on" : ""}`}
+              onClick={() => { setWho(a.id); setErr(null); }}
+            >
+              <span className="mono" aria-hidden="true">{a.mono}</span>
+              <span><b>{a.name}</b><em>{a.role}</em></span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {takes ? (
         <>

@@ -14,7 +14,7 @@
 
 import { useHub } from "./context";
 import type { Route } from "./model";
-import { agentBySlug } from "./model";
+import { PANELS, agentBySlug, canOpen, canOpenAgent } from "./model";
 import { HomeView } from "./panels/HomeView";
 import { IssuesView } from "./panels/IssuesView";
 import { AgentsView } from "./panels/AgentsView";
@@ -40,11 +40,14 @@ function Legacy({ children }: { children: React.ReactNode }) {
 }
 
 export function PanelSwitch({ route }: { route: Route }) {
-  const { toast, go, closeWork } = useHub();
+  const { user, toast, go, closeWork } = useHub();
 
   if (route.work) {
     const agent = agentBySlug(route.work.slug);
-    if (!agent) {
+    // Unknown, or refused to this account: either way the canvas must not
+    // mount a workspace whose first read the backend answers 403. The header
+    // is drawn from the same gate, so the two can never disagree.
+    if (!agent || !canOpenAgent(agent.id, user)) {
       go("agents");
       return null;
     }
@@ -66,6 +69,11 @@ export function PanelSwitch({ route }: { route: Route }) {
       </Legacy>
     );
   }
+
+  // The shell already draws the header from `canOpen`; drawing the body from
+  // anything else would let a gated panel render under the right title.
+  const panel = PANELS.find((p) => p.id === route.panel);
+  if (panel && !canOpen(panel, user)) return <HomeView />;
 
   switch (route.panel) {
     case "home": return <HomeView />;

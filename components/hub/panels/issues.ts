@@ -11,6 +11,7 @@
  */
 
 import type { Issue, IssueFix, IssuesPayload } from "@/lib/api";
+import { PANELS, canOpen, canOpenWorkspace, type Viewer } from "../model";
 
 export type Severity = Issue["severity"];
 
@@ -76,6 +77,23 @@ export type FixRoute =
 export function routeForFix(fix: IssueFix): FixRoute {
   if (fix.section === "settings") return { kind: "panel", panel: "settings" };
   return { kind: "work", workspace: fix.workspace, subject: fix.subject, section: fix.section };
+}
+
+/** Whether this reader can actually follow a fix to where it is put right.
+ *
+ *  The issues record is readable by every signed-in account, and it names
+ *  problems across the whole workspace — so a reader scoped to one specialist
+ *  can be shown a real problem whose fix lives somewhere the backend refuses
+ *  them. The row still stands, because the problem is real; the button does
+ *  not, because pressing it would land on a 403.
+ */
+export function canFollowFix(fix: IssueFix, viewer: Viewer): boolean {
+  const to = routeForFix(fix);
+  if (to.kind === "panel") {
+    const panel = PANELS.find((p) => p.id === to.panel);
+    return !!panel && canOpen(panel, viewer);
+  }
+  return canOpenWorkspace(to.workspace, viewer);
 }
 
 /** Whether a Home row needs the brand named beside it. Most backend titles

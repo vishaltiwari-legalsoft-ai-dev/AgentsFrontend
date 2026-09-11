@@ -20,8 +20,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { Sprite, Ic } from "./Sprite";
 import {
-  HOME, LIVE_AGENTS, PANELS,
-  agentById, agentBySlug, canOpen, panelsFor, routeFromHash, routeToHash,
+  HOME, PANELS,
+  agentById, agentBySlug, agentsFor, canOpen, canOpenWorkspace, panelsFor,
+  routeFromHash, routeToHash,
   type PanelId, type Route,
 } from "./model";
 import { HubProvider, type Headline, type HubContextValue, type ToastFn, type WorkNav } from "./context";
@@ -65,12 +66,16 @@ function Rail({
   onOpenPalette: () => void;
   dark: boolean;
   onTheme: () => void;
-  user: { name: string; email: string; is_admin?: boolean; is_creator?: boolean };
+  user: { name: string; email: string; is_admin?: boolean; is_creator?: boolean; is_geo_only?: boolean };
   onLogout: () => void;
   workRail: React.ReactNode;
 }) {
   const groups = useMemo(() => [...new Set(panels.map((p) => p.group))], [panels]);
-  const tier = user.is_creator ? "creator" : user.is_admin ? "admin" : "member";
+  // A scoped account is not a "member" with fewer links — it has a different
+  // allowance, and the chip that names its access should say which.
+  const tier = user.is_geo_only
+    ? "GEO only"
+    : user.is_creator ? "creator" : user.is_admin ? "admin" : "member";
   const avatar = (user.name || user.email || "?").slice(0, 2).toUpperCase();
 
   return (
@@ -223,9 +228,17 @@ export default function HubApp() {
   const { toasts, fire, dismiss } = useToasts();
 
   const viewer = useMemo(
-    () => ({ is_admin: user?.is_admin, is_creator: user?.is_creator }),
-    [user?.is_admin, user?.is_creator],
+    () => ({
+      is_admin: user?.is_admin,
+      is_creator: user?.is_creator,
+      is_geo_only: user?.is_geo_only,
+    }),
+    [user?.is_admin, user?.is_creator, user?.is_geo_only],
   );
+
+  /** The specialists this reader may open or brief. For everyone but a scoped
+   *  account this is the whole live roster. */
+  const agents = useMemo(() => agentsFor(viewer), [viewer]);
 
   // The hash is the address bar's copy of `route`; `route` is the truth. Writing
   // it with pushState means Back returns to the previous panel instead of
@@ -256,12 +269,21 @@ export default function HubApp() {
 
   // A workspace is layered over the panel you came from, not instead of it, so
   // the way out returns you to where you were rather than always to Agents.
+  //
+  // It is also the one door every workspace link goes through — a card, a
+  // palette entry, an issue's fix button, a run row — so the scope wall is
+  // enforced here as well as at each of those call sites. A link that survives
+  // a stale render then says one plain line rather than landing on a 403.
   const openWork = useCallback(
     (slug: string, subject = "", section = "") => {
       if (!agentBySlug(slug)) return;
+      if (!canOpenWorkspace(slug, viewer)) {
+        fire(`${agentBySlug(slug)?.name} is not open to your account.`, "warn");
+        return;
+      }
       navigate({ panel: route.panel, work: { slug, subject, section } });
     },
-    [navigate, route.panel],
+    [navigate, route.panel, viewer, fire],
   );
 
   const closeWork = useCallback(() => {
@@ -271,7 +293,14 @@ export default function HubApp() {
   const setHead = useCallback((h: Headline) => setHeadState(h), []);
   const setWorkNavStable = useCallback((nav: WorkNav | null) => setWorkNav(nav), []);
   const bumpRevision = useCallback(() => setRevision((r) => r + 1), []);
-  const openBrief = useCallback((agentId?: string) => setBriefFor(agentId || LIVE_AGENTS[0].id), []);
+  // The dialog only ever opens on a specialist this reader may actually reach:
+  // the header's bare "New work" has no agent in mind, and a button aimed at
+  // one outside the allowance must not open a form whose first read 403s.
+  const openBrief = useCallback((agentId?: string) => {
+    if (!agents.length) return;
+    const wanted = agentId && agents.some((a) => a.id === agentId) ? agentId : agents[0].id;
+    setBriefFor(wanted);
+  }, [agents]);
 
   const toggleTheme = useCallback(() => {
     setDark((d) => {
@@ -292,7 +321,7 @@ export default function HubApp() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const stats = useShellStats(!!user, revision);
+  const stats = useShellStats(!!user, revision, agents.length);
 
   const ctx: HubContextValue | null = useMemo(
     () => (user ? {
@@ -368,6 +397,7 @@ export default function HubApp() {
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
         panels={panels}
+        agents={agents}
         onGo={go}
         onOpenWork={openWork}
         onBrief={openBrief}
@@ -375,6 +405,7 @@ export default function HubApp() {
 
       <BriefDialog
         agentId={briefFor}
+        agents={agents}
         onClose={() => setBriefFor(null)}
         onToast={fire}
         onOpenWork={openWork}

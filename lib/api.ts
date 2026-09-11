@@ -224,6 +224,15 @@ export interface User {
    *  has a stored user without it; absent must read as "not an editor", which
    *  hides the controls rather than offering ones that would 403. */
   is_geo_editor?: boolean;
+  /** The backend's scope wall: this account is allowed sign-in, the shell's
+   *  four reads, the SEO/GEO overview and all 25 `/api/geo/*` routes, and is
+   *  refused everything else with a 403. The console reads it to stop offering
+   *  what the backend will not serve — see `components/hub/model.ts`.
+   *
+   *  Optional for the same reason as `is_geo_editor`: a session stored before
+   *  the wall shipped carries no field, and absent must read as `false` — the
+   *  console then behaves for that reader exactly as it does today. */
+  is_geo_only?: boolean;
 }
 
 export interface GalleryItem {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Issue, IssuesPayload } from "@/lib/api";
 import {
   HOME_ISSUE_LIMIT,
+  canFollowFix,
   countsLine,
   groupBySeverity,
   homeIssues,
@@ -96,6 +97,52 @@ describe("routeForFix", () => {
   it("routes every other section into its workspace at the subject", () => {
     const route = routeForFix({ label: "Open the fix list", workspace: "seo", subject: "b1", section: "fixes" });
     expect(route).toEqual({ kind: "work", workspace: "seo", subject: "b1", section: "fixes" });
+  });
+});
+
+/* The issues record is readable by every signed-in account and names problems
+ * across the whole workspace, so a reader the backend has scoped to GEO can be
+ * shown a real problem whose fix lives behind a 403. `canFollowFix` decides
+ * whether the button is offered; the row itself always stands. */
+describe("canFollowFix", () => {
+  const seoFix = { label: "Open the fix list", workspace: "seo", subject: "b1", section: "fixes" };
+  const geoFix = { label: "Ask the engines", workspace: "geo", subject: "b1", section: "questions" };
+  const mrFix = { label: "Check the sources", workspace: "mr", subject: "", section: "data" };
+  const settingsFix = { label: "Add the key", workspace: "geo", subject: "b1", section: "settings" };
+
+  const member = {};
+  const scoped = { is_geo_only: true };
+
+  it("lets an ordinary member follow every fix, exactly as before", () => {
+    expect(canFollowFix(seoFix, member)).toBe(true);
+    expect(canFollowFix(geoFix, member)).toBe(true);
+    expect(canFollowFix(mrFix, member)).toBe(true);
+    expect(canFollowFix(settingsFix, member)).toBe(true);
+  });
+
+  it("lets an admin and a creator follow every fix", () => {
+    for (const viewer of [{ is_admin: true }, { is_creator: true }]) {
+      expect(canFollowFix(seoFix, viewer)).toBe(true);
+      expect(canFollowFix(mrFix, viewer)).toBe(true);
+      expect(canFollowFix(geoFix, viewer)).toBe(true);
+    }
+  });
+
+  it("withholds a fix that lands in a workspace a scoped reader is refused", () => {
+    expect(canFollowFix(seoFix, scoped)).toBe(false);
+    expect(canFollowFix(mrFix, scoped)).toBe(false);
+  });
+
+  it("keeps the GEO fix, which is the one a scoped reader can actually do", () => {
+    expect(canFollowFix(geoFix, scoped)).toBe(true);
+  });
+
+  it("keeps a fix that routes to Settings, which reads nothing from the backend", () => {
+    expect(canFollowFix(settingsFix, scoped)).toBe(true);
+  });
+
+  it("treats a session stored before the wall as unscoped", () => {
+    expect(canFollowFix(seoFix, { is_geo_only: undefined })).toBe(true);
   });
 });
 

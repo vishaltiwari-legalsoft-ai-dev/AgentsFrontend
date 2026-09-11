@@ -29,14 +29,19 @@ function agentStamp(agentId: string, agentName: string) {
 }
 
 export function RunRowCard({
-  run, open, onToggle, onOpenWorkspace,
+  run, open, onToggle, onOpenWorkspace, canOpenWorkspace,
 }: {
   run: RunRow;
   open: boolean;
   onToggle: () => void;
   onOpenWorkspace?: (agentId: string) => void;
+  /** Whether this reader may open the specialist that filed the run. The record
+   *  is readable by accounts that cannot open every specialist in it, so the
+   *  row stays and only the way out of it is withheld. Absent means yes. */
+  canOpenWorkspace?: (agentId: string) => boolean;
 }) {
   const a = agentStamp(run.agent_id, run.agent_name);
+  const canOpen = !canOpenWorkspace || canOpenWorkspace(run.agent_id);
   const duration = took(run.took_seconds);
   const line = [a.name, clock(run.created_at), duration].filter(Boolean).join(" · ");
 
@@ -71,7 +76,7 @@ export function RunRowCard({
                   {duration ? ` · ${duration}` : ""}
                 </p>
               </div>
-              {onOpenWorkspace && agentById(run.agent_id) && (
+              {onOpenWorkspace && canOpen && agentById(run.agent_id) && (
                 <div className="art__acts">
                   <button
                     type="button"
@@ -181,13 +186,14 @@ function RunDetail({ run }: { run: RunRow }) {
 /** The grouped ledger. `grouped` puts a day divider above each new date; Home
  *  turns it off, because a list of five live rows is not a diary. */
 export function Ledger({
-  runs, grouped = true, openId, onToggle, onOpenWorkspace,
+  runs, grouped = true, openId, onToggle, onOpenWorkspace, canOpenWorkspace,
 }: {
   runs: RunRow[];
   grouped?: boolean;
   openId: string | null;
   onToggle: (id: string) => void;
   onOpenWorkspace?: (agentId: string) => void;
+  canOpenWorkspace?: (agentId: string) => boolean;
 }) {
   let last: string | null = null;
   const out: React.ReactNode[] = [];
@@ -211,6 +217,7 @@ export function Ledger({
         open={r.id === openId}
         onToggle={() => onToggle(r.id)}
         onOpenWorkspace={onOpenWorkspace}
+        canOpenWorkspace={canOpenWorkspace}
       />,
     );
   });
