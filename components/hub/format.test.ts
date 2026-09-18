@@ -182,3 +182,24 @@ describe("routeFromHash under the scope wall", () => {
     expect(routeFromHash("#/issues", SCOPED)).toEqual({ panel: "issues", work: null });
   });
 });
+
+/* The OAuth return lands on `#/w/inbox?connected=1`. The query is the
+ * workspace's to read; the route must not mistake it for part of the slug. */
+describe("routeFromHash with a query on the hash", () => {
+  it("routes to the workspace and leaves the query to it", () => {
+    expect(routeFromHash("#/w/inbox?connected=1", MEMBER)).toEqual({
+      panel: "agents",
+      work: { slug: "inbox", subject: "", section: "" },
+    });
+    expect(routeFromHash("#/w/inbox?error=The%20state%20did%20not%20match.", MEMBER)).toEqual({
+      panel: "agents",
+      work: { slug: "inbox", subject: "", section: "" },
+    });
+  });
+
+  it("keeps the inbox behind the scope wall like every other non-GEO workspace", () => {
+    expect(routeFromHash("#/w/inbox?connected=1", SCOPED)).toEqual({ panel: "home", work: null });
+    expect(canOpenWorkspace("inbox", SCOPED)).toBe(false);
+    expect(canOpenWorkspace("inbox", MEMBER)).toBe(true);
+  });
+});

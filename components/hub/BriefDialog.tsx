@@ -45,6 +45,7 @@ const OPENS_INSTEAD: Record<string, string> = {
   a2: "An SEO run is a crawl of one property. Pick the property in the workspace and it starts there — a first crawl takes a few minutes.",
   a6: "Marketing Research builds one of ten report kinds over a period you choose. Both choices live in the workspace.",
   a10: "A GEO check puts your buyer questions to five AI engines — a few hundred engine calls. The workspace shows what is already scheduled before you add to it.",
+  a12: "Inbox Triage takes no brief. It reads your Gmail on its own clock and writes to your sheet; the workspace is where you connect it and see whether it is running.",
 };
 
 interface BrandOpt { id: string; name: string }

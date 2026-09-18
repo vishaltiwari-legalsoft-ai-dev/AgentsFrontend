@@ -3517,3 +3517,90 @@ export interface AgentsHealthPayload {
 
 export const getAgentsHealth = (req?: RequestOptions) =>
   getJson<AgentsHealthPayload>("/api/agents/health", req);
+
+/* ------------- Inbox Triage (a12): Gmail to a sheet, read-only ----------- */
+
+/** What the last look at the named sheet found. `null` means it has not been
+ *  looked at since it was named.
+ *
+ *  - `not_yours` — the signed-in person does not own the sheet and cannot edit
+ *    it; nothing was written.
+ *  - `mr_source` — a sheet the Marketing Research agent reads, refused so that
+ *    recruiting mail never lands in a team-wide sheet; nothing was written. */
+export type InboxSheetCheck =
+  | "ok" | "not_shared" | "not_found" | "not_editable" | "not_yours" | "mr_source";
+
+/** One account's pipe, whole. Every write below answers with this same
+ *  object, so a workspace never has to re-read after acting. */
+export interface InboxStatus {
+  /** Switched on per account by whoever runs the deployment; nothing below
+   *  can be changed from the console while this is false. */
+  enabled: boolean;
+  /** The account the agent writes to the sheet as. The sheet has to be shared
+   *  with it as an Editor. */
+  service_account_email: string;
+  gmail: {
+    connected: boolean;
+    address: string | null;
+    connected_at: string | null;
+  };
+  sheet: {
+    id: string | null;
+    url: string | null;
+    title: string | null;
+    check: InboxSheetCheck | null;
+    checked_at: string | null;
+  };
+  /** The first pass over the last 90 days. `total` is null until it is known. */
+  backfill: {
+    state: "not_started" | "running" | "done";
+    done: number;
+    total: number | null;
+  };
+  last_poll: {
+    at: string | null;
+    ok: boolean | null;
+    messages_read: number | null;
+    error: string | null;
+  };
+  next_poll_at: string | null;
+  rows_24h: number;
+  needs_review: number;
+  generated_at: string;
+}
+
+export const inboxStatus = (req?: RequestOptions) =>
+  getJson<InboxStatus>("/api/inbox/status", req);
+
+/** Where to send the browser for Google's consent screen. 503 with a `detail`
+ *  when the deployment lacks the OAuth secret or the token key. */
+export const inboxOauthStart = () =>
+  postJson<{ url: string }>("/api/inbox/oauth/start", {});
+
+/** Finish the exchange with what Google sent back to `/oauth/google`. The
+ *  bearer on the call is what ties the grant to this account. */
+export const inboxOauthComplete = (code: string, state: string) =>
+  postJson<InboxStatus>("/api/inbox/oauth/complete", { code, state });
+
+/** Name the sheet by link or ID. 400 with a `detail` for a reference that
+ *  cannot be parsed; anything the sheet itself is wrong about is answered in
+ *  `sheet.check`, not as an error. */
+export const inboxSetSheet = (ref: string) =>
+  putJson<InboxStatus>("/api/inbox/sheet", { ref });
+
+export const inboxCheckSheet = () =>
+  postJson<InboxStatus>("/api/inbox/sheet/check", {});
+
+/** The disconnect reply: the usual status, plus whether Google confirmed the
+ *  grant was revoked. Optional because an older backend does not send it; a
+ *  missing field is read as "not confirmed", never as success. */
+export interface InboxDisconnectResult extends InboxStatus {
+  google_revoked?: boolean;
+}
+
+/** Stops reading, deletes the stored rows and the hub's copy of the Google
+ *  permission, and asks Google to revoke the grant — `google_revoked` says
+ *  whether Google confirmed it. The sheet is not touched, and the server keeps
+ *  its reference. */
+export const inboxDisconnect = () =>
+  postJson<InboxDisconnectResult>("/api/inbox/disconnect", {});

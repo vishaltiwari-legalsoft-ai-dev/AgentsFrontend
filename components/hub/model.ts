@@ -50,6 +50,13 @@ export const AGENTS: HubAgent[] = [
     makes: "Five engines' answers to your buyer questions, scored.",
   },
   {
+    // `IN`, not `IT`: two capitals drawn alone on a chip, and `IT` beside five
+    // other monograms reads as the department rather than the specialist.
+    id: "a12", mono: "IN", name: "Inbox Triage", role: "Gmail to a sheet, read-only", live: true,
+    desc: "Reads your Gmail inbox and writes one row per message to a Google Sheet you own — sender, subject, category, summary, deadline and link — with an Upcoming tab of deadlines nearest first.",
+    makes: "A row per message in your own sheet, every five minutes. It never sends, labels, deletes or marks mail — it only reads.",
+  },
+  {
     id: "a3", mono: "CW", name: "Copywriter", role: "Words that convert", live: false,
     desc: "Drafts landing copy, emails, and posts in your brand voice.",
     makes: "Landing copy and email bodies.",
@@ -79,13 +86,14 @@ export const AGENTS: HubAgent[] = [
 export const LIVE_AGENTS = AGENTS.filter((a) => a.live);
 export const agentById = (id: string): HubAgent | undefined => AGENTS.find((a) => a.id === id);
 
-/** Agent id to workspace slug, for the five that have a workspace behind them. */
+/** Agent id to workspace slug, for the six that have a workspace behind them. */
 export const WORKSPACE_SLUG: Record<string, string> = {
   a1: "art",
   a2: "seo",
   a6: "mr",
   a9: "blog",
   a10: "geo",
+  a12: "inbox",
 };
 
 export const agentBySlug = (slug: string): HubAgent | undefined =>
@@ -220,7 +228,11 @@ export function routeToHash(r: Route): string {
 /** Parse a hash into a route. Anything unrecognised, or gated away from this
  *  viewer, falls back to Home rather than rendering a panel they cannot have. */
 export function routeFromHash(hash: string, viewer: Viewer): Route {
-  const raw = hash.replace(/^#\/?/, "");
+  // A hash may carry a query after the route — `#/w/inbox?connected=1` is how
+  // the OAuth return says what happened. The route is everything before it;
+  // the workspace reads the rest. A subject is `encodeURIComponent`ed on the
+  // way in, so a literal `?` can only ever be this.
+  const raw = hash.replace(/^#\/?/, "").split("?")[0];
   if (!raw) return HOME;
 
   const parts = raw.split("/").filter(Boolean);

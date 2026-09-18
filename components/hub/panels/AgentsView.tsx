@@ -16,7 +16,7 @@
 import { useState } from "react";
 import type { RunRow } from "@/lib/api";
 import { useHeadline, useHub } from "../context";
-import { AGENTS, LIVE_AGENTS, WORKSPACE_SLUG, agentsFor, n } from "../model";
+import { AGENTS, Cap, LIVE_AGENTS, WORKSPACE_SLUG, agentsFor, n, word } from "../model";
 import { Mono, Oops, PageHead, RuleHead, Tile, Wait } from "../ui";
 import { useRuns } from "../useRuns";
 import { workspaceByAgent } from "../workspaces";
@@ -63,7 +63,7 @@ export function AgentsView() {
             </>
           ) : (
             <>
-              {LIVE_AGENTS.length === 5 ? "Five specialists are working." : `${LIVE_AGENTS.length} specialists are working.`}{" "}
+              {Cap(word(LIVE_AGENTS.length))} specialists are working.{" "}
               <b>{soon.length} more</b> {soon.length === 1 ? "is" : "are"} not built yet.
             </>
           )

@@ -27,6 +27,7 @@ import { SettingsView } from "./panels/SettingsView";
 import { AdminView } from "./panels/AdminView";
 import { GeoWorkspace } from "./work/GeoWorkspace";
 import { MrWorkspace } from "./work/MrWorkspace";
+import { InboxWorkspace } from "./work/InboxWorkspace";
 
 import { GraphicsStudioV2 } from "@/components/console/gd2/GraphicsStudioV2";
 import { SeoAgent } from "@/components/console/seo/SeoAgent";
@@ -59,6 +60,10 @@ export function PanelSwitch({ route }: { route: Route }) {
     }
     if (agent.id === "a6") {
       return <MrWorkspace subject={route.work.subject} section={route.work.section} />;
+    }
+    // One account, one sheet, one section: the route carries nothing it needs.
+    if (agent.id === "a12") {
+      return <InboxWorkspace />;
     }
     const back = () => closeWork();
     return (

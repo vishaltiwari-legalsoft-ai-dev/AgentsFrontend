@@ -95,6 +95,20 @@ export const WORKSPACES: WorkspaceDef[] = [
       { id: "kit", label: "Brand kit", icon: "kit" },
     ],
   },
+  {
+    // One section, and no subjects: the workspace is one account's Gmail and
+    // one sheet, so there is nothing to pick between. The section still goes
+    // in the rail, because the rail's workspace group is also the way out and
+    // the chip that says where you are — its one link just has nowhere else
+    // to go.
+    slug: "inbox",
+    agentId: "a12",
+    subjectNoun: "inbox",
+    subjectPlural: "inboxes",
+    sections: [
+      { id: "inbox", label: "Inbox", icon: "bell" },
+    ],
+  },
 ];
 
 export const workspaceBySlug = (slug: string): WorkspaceDef | undefined =>

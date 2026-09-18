@@ -3419,3 +3419,30 @@ textarea { resize: vertical; line-height: 1.55; }
   .geo .cell { height: 25px; font-size: 11px; }
   .geo .voice__key { flex-direction: column; gap: 7px; }
 }
+
+/* ================= Inbox Triage =================
+   The sixth workspace, and the first whose artifact is not on this screen at all: the
+   rows land in a sheet the reader owns, so the page is two setting rows, four facts and
+   a foot. Everything on it is the console's own — `.srow`, `.tag`, `.facts`, `.danger`,
+   `.dialog`, `.prio__from`. What is here is only what a setting row never needed before:
+   an input with its buttons and its error stacked in the control cell, a tag with a
+   quiet note above them, and the service account's address with its copy button under
+   the note. Scoped to `.inbox` so none of it reaches Settings. */
+
+.inbox .ctl { display: flex; align-items: center; justify-content: flex-end; gap: var(--s3); flex-wrap: wrap; }
+.inbox .srow__c .ctl { margin-bottom: var(--s2); }
+.inbox .srow__c form { display: grid; gap: var(--s2); }
+.inbox .srow__c .acts { display: flex; gap: var(--s2); flex-wrap: wrap; }
+.inbox .srow__c .err { margin: 0; }
+/* `.srow__t b` is the row's title and is drawn as a block; the one word marked
+   inside the note must stay in its sentence. */
+.inbox .srow__t span b { display: inline; font-size: inherit; color: inherit; }
+.inbox .sa { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; margin-top: 8px; }
+.inbox .sa code { font-family: inherit; font-size: 12px; font-weight: 650; color: var(--fg); word-break: break-all; }
+.inbox a { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.inbox .facts + a { font-size: 13px; font-weight: 650; }
+.inbox .danger { margin-bottom: var(--s5); }
+
+@media (max-width: 760px) {
+  .inbox .ctl { justify-content: flex-start; }
+}
