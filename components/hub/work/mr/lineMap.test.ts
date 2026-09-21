@@ -1,13 +1,18 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { LINE_META, METRICS_WITHOUT_A_LINE, caughtBy, unattributed } from "./lineMap";
 import type {
-  MrBoardCoverageColumn, MrBoardRow, MrReportKind, MrReportPeriods,
+  MrAskAnswer, MrAskFact, MrBoardCoverageColumn, MrBoardRow, MrReportKind, MrReportPeriods,
 } from "@/lib/api";
 import {
   REPORT_META, REPORT_PERIOD_LIST, absentMetrics, boardPeriodOptions, boardPeriodValues,
   filledOf, periodsFor, takesPeriod,
 } from "../../../console/mr/reportMeta";
-import { mayDisconnect } from "../../../console/mr/format";
+import {
+  askCaveat, askPeriodLabel, askProvenance, citedFacts, citeTitle, citeTokens, isOfflineSummary,
+  mayDisconnect, mrDataActions, notModelWritten, offersForcedPull, pullBody, readNarrative,
+  summarisePull,
+} from "../../../console/mr/format";
 
 /** The threshold keys `GET /api/mr/targets` returned on the live account.
  *  Pinned here so a key the backend adds — or renames — turns this red instead
@@ -406,5 +411,501 @@ describe("mayDisconnect", () => {
   it("lets the server's answer win over the fallback in both directions", () => {
     expect(mayDisconnect({ can_remove: true }, { whenUnknown: false })).toBe(true);
     expect(mayDisconnect({ can_remove: false }, { whenUnknown: true })).toBe(false);
+  });
+});
+
+/* --------------------------------------------------------------------------
+   Who is offered the pull, and who is offered the rest of the Data panel.
+   -------------------------------------------------------------------------- */
+
+/** Source of a sibling file, for the screens that cannot be rendered here — this
+ *  suite has no DOM, and tsconfig's `jsx: "preserve"` means a .tsx module cannot
+ *  be imported. The same device `geo/edits.test.ts` uses for its editor gate. */
+const sourceOf = (file: string) => readFileSync(new URL(file, import.meta.url), "utf8");
+
+describe("mrDataActions", () => {
+  const member = { is_admin: false, is_creator: false };
+
+  it("offers a plain member the pull — the server asks only that they are signed in", () => {
+    expect(mrDataActions(member).pull).toBe(true);
+    expect(mrDataActions({ is_admin: false }).pull).toBe(true);
+  });
+
+  it("offers a plain member nothing that edits what the whole workspace reads", () => {
+    expect(mrDataActions(member).edit).toBe(false);
+  });
+
+  it("reads a session stored before the role flags existed as a member, not as nobody", () => {
+    expect(mrDataActions({})).toEqual({ pull: true, edit: false });
+  });
+
+  it("keeps connecting and re-reading with admins and creators", () => {
+    expect(mrDataActions({ is_admin: true })).toEqual({ pull: true, edit: true });
+    expect(mrDataActions({ is_creator: true })).toEqual({ pull: true, edit: true });
+  });
+
+  it("offers a GEO-only account neither — the scope wall refuses every /api/mr route", () => {
+    expect(mrDataActions({ is_geo_only: true, is_admin: true })).toEqual({ pull: false, edit: false });
+  });
+
+  it("offers nothing when nobody is signed in", () => {
+    expect(mrDataActions(null)).toEqual({ pull: false, edit: false });
+    expect(mrDataActions(undefined)).toEqual({ pull: false, edit: false });
+  });
+
+  it("does not hand a member Disconnect on a sheet somebody else connected, whichever backend answers", () => {
+    const { edit } = mrDataActions(member);
+    // A backend that has not started answering `can_remove`: the panel's own answer.
+    expect(mayDisconnect({}, { whenUnknown: edit })).toBe(false);
+    // One that has: the server's answer wins outright, in both directions.
+    expect(mayDisconnect({ can_remove: false }, { whenUnknown: edit })).toBe(false);
+    expect(mayDisconnect({ can_remove: true }, { whenUnknown: edit })).toBe(true);
+  });
+});
+
+/** What the screens draw, read off their source.
+ *
+ *  The defect being pinned was invisible to every other kind of test: the old
+ *  gate typed fine, rendered fine, and simply drew no button for the team.
+ *  `mrDataActions` above proves the rule; this proves the screens ask it. */
+describe("the MR screens offer the pull to everyone, and only the pull", () => {
+  const data = () => sourceOf("./Data.tsx");
+
+  it("Data.tsx asks the shared gate and reads no role flag of its own", () => {
+    expect(data()).toContain("mrDataActions(user)");
+    expect(data().match(/user\??\.\s*is_(creator|admin|geo_only)/g) || []).toEqual([]);
+  });
+
+  it("draws the pull button on the pull right, not the edit right", () => {
+    expect(data()).toMatch(/mayPull\s*\?\s*<PullButton/);
+    expect(data()).not.toMatch(/mayEdit\s*\?\s*\(?\s*<PullButton/);
+  });
+
+  it("keeps connect, disconnect and re-reading behind the edit right", () => {
+    // The connect form and the line that tells you to share the sheet first.
+    expect(data().match(/mayEdit && sources\.data\?\.enabled/g)).toHaveLength(2);
+    expect(data()).toContain("mayDisconnect(s, { whenUnknown: mayEdit })");
+    expect(data()).toMatch(/mayEdit\s*\?\s*\(\s*<button[\s\S]*?onClick=\{scan\}/);
+  });
+
+  it("has no dataset delete control, so nothing here needs `can_delete` yet", () => {
+    // `MrDataset.can_delete === false` means the DELETE would answer 403. The day
+    // this panel grows a delete control it must be hidden on that — and this is
+    // the reminder to do it.
+    expect(
+      data(),
+      "a dataset delete now exists in Data.tsx: hide it when can_delete === false, then update this test",
+    ).not.toContain("mrDeleteDataset");
+  });
+
+  it("the whole-workspace empty state carries the pull, not a pointer to a panel it stands in front of", () => {
+    const ws = sourceOf("../MrWorkspace.tsx");
+    expect(ws).toMatch(/if \(!ov\.has_data\) return <NothingPulled/);
+    expect(ws).toMatch(/function NothingPulled[\s\S]*useWorkbookPull[\s\S]*<PullWorkbook/);
+    expect(ws).not.toContain("Connect the tracker on the Data panel");
+    expect(ws).toContain("team's workbook data");
+  });
+
+  it("the board builder's empty state carries the pull too", () => {
+    const reports = sourceOf("./Reports.tsx");
+    expect(reports).toMatch(/No period holds tracker figures yet"[\s\S]{0,80}action=\{<PullWorkbook/);
+    expect(reports).toContain("team's workbook data");
+  });
+});
+
+/* --------------------------------------------------------------------------
+   What a finished pull says.
+   -------------------------------------------------------------------------- */
+
+describe("summarisePull", () => {
+  const STAMP = "2026-09-21T09:58:00Z";
+  const since = (iso: string) => (iso === STAMP ? "2 minutes ago" : "");
+
+  it("says a clean pull landed, with the rows and the tabs", () => {
+    const out = summarisePull(
+      { status: "ok", degraded: [], tabs: [{ tab: "A", metrics: 10 }, { tab: "B", metrics: 5 }] },
+      since, true,
+    );
+    expect(out).toMatchObject({ kind: "ok", tone: "ok", rows: 15, tabs: 2 });
+    expect(out.message).toBe("Pulled 15 rows across 2 tabs. The team's workbook data is now up to date.");
+  });
+
+  it("reads singular counts as singular, and groups thousands the same on every machine", () => {
+    expect(summarisePull({ tabs: [{ tab: "A", metrics: 1 }] }, since, true).message)
+      .toContain("Pulled 1 row across 1 tab.");
+    expect(summarisePull({ tabs: [{ tab: "A", metrics: 1234 }] }, since, true).message)
+      .toContain("Pulled 1,234 rows");
+  });
+
+  it("reads a reply with no status field as a normal pull — an older backend sent none", () => {
+    expect(summarisePull({ tabs: [{ tab: "A", metrics: 3 }] }, since, true).kind).toBe("ok");
+  });
+
+  it("does not report a partial pull as a success, and names what did not land", () => {
+    const out = summarisePull(
+      { status: "partial", degraded: ["Leads — the tab was unreadable"], tabs: [{ tab: "A", metrics: 4 }] },
+      since, true,
+    );
+    expect(out.kind).toBe("partial");
+    expect(out.tone).toBe("warn");
+    expect(out.message).toContain("but not everything: Leads — the tab was unreadable");
+    expect(out.message).toContain("still showing its previous data");
+  });
+
+  it("falls back to the failed tabs when the server gave no reasons of its own", () => {
+    const out = summarisePull(
+      { tabs: [{ tab: "A", metrics: 4 }, { tab: "B", error: "quota exceeded" }] },
+      since, true,
+    );
+    expect(out.kind).toBe("partial");
+    expect(out.message).toContain("B — quota exceeded");
+  });
+
+  it("prefers the server's reasons over its own list of failed tabs", () => {
+    const out = summarisePull(
+      { status: "partial", degraded: ["the server's words"], tabs: [{ tab: "B", error: "raw error" }] },
+      since, true,
+    );
+    expect(out.message).toContain("the server's words");
+    expect(out.message).not.toContain("raw error");
+  });
+
+  it("does not say 'done' about a pull that found no rows — the reader would be shown the same blank screen", () => {
+    const out = summarisePull({ status: "ok", degraded: [], tabs: [] }, since, true);
+    expect(out.kind).toBe("empty");
+    expect(out.tone).toBe("warn");
+    expect(out.message).toContain("no rows");
+  });
+
+  it("treats 'already fresh' as a calm success, and says how long ago", () => {
+    // It arrives as `tabs: []` with nothing ingested — the exact shape of a pull
+    // that found no rows — so it is the order of the checks that keeps it from
+    // being reported as an empty workbook.
+    const out = summarisePull(
+      { status: "fresh", degraded: [], tabs: [], last_pulled_at: STAMP },
+      since, true,
+    );
+    expect(out.kind).toBe("fresh");
+    expect(out.tone).toBe("ok");
+    expect(out.message).toBe("Already up to date — the team's workbook data was pulled 2 minutes ago.");
+  });
+
+  it("still says something true when the 'fresh' reply carries no readable time", () => {
+    expect(summarisePull({ status: "fresh", tabs: [] }, since, true).message)
+      .toBe("Already up to date — the team's workbook data was pulled a moment ago.");
+    expect(summarisePull({ status: "fresh", tabs: [], last_pulled_at: "not a date" }, since, true).message)
+      .toContain("pulled a moment ago");
+  });
+
+  it("offers the way past 'fresh' only for 'fresh'", () => {
+    // The component draws "Pull again anyway" on kind === "fresh" and nowhere else.
+    const others = [
+      summarisePull({ status: "ok", tabs: [{ tab: "A", metrics: 2 }] }, since, true),
+      summarisePull({ status: "partial", tabs: [{ tab: "A", metrics: 2 }] }, since, true),
+      summarisePull({ tabs: [] }, since, true),
+    ];
+    expect(others.map((o) => o.kind)).not.toContain("fresh");
+  });
+});
+
+describe("'Pull again anyway' is for admins and creators", () => {
+  const STAMP = "2026-09-21T09:58:00Z";
+  const since = (iso: string) => (iso === STAMP ? "2 minutes ago" : "");
+  const fresh = { status: "fresh", degraded: [], tabs: [], last_pulled_at: STAMP };
+
+  it("tells a member, calmly, when they can pull again — and does not offer to force it", () => {
+    const out = summarisePull(fresh, since, false);
+    expect(out.kind).toBe("fresh");
+    expect(out.message).toBe(
+      "Already up to date — the team's workbook data was pulled 2 minutes ago. "
+      + "You can pull again in a couple of minutes.",
+    );
+  });
+
+  it("does not tell an admin or creator to wait — the button is beside the line instead", () => {
+    expect(summarisePull(fresh, since, true).message).not.toContain("pull again in a couple of minutes");
+  });
+
+  it("says the wait only about 'fresh', never about a pull that landed, part-landed or found nothing", () => {
+    const rest = [
+      summarisePull({ status: "ok", tabs: [{ tab: "A", metrics: 2 }] }, since, false),
+      summarisePull({ status: "partial", tabs: [{ tab: "A", metrics: 2 }] }, since, false),
+      summarisePull({ tabs: [] }, since, false),
+    ];
+    for (const out of rest) expect(out.message).not.toContain("pull again in a couple of minutes");
+  });
+
+  it("draws the button only after 'fresh' and only for a reader who may edit", () => {
+    expect(offersForcedPull("fresh", true)).toBe(true);
+    expect(offersForcedPull("fresh", false)).toBe(false);
+    for (const kind of ["ok", "partial", "empty"] as const) {
+      expect(offersForcedPull(kind, true)).toBe(false);
+      expect(offersForcedPull(kind, false)).toBe(false);
+    }
+  });
+
+  it("sends no `force` on a normal pull, and none at all from a member who asks for it", () => {
+    expect(pullBody(false, true)).toEqual({});
+    expect(pullBody(false, false)).toEqual({});
+    expect(pullBody(true, false)).toEqual({});
+    expect(pullBody(true, true)).toEqual({ force: true });
+  });
+
+  it("is drawn and sent through those two helpers, and through the shared gate", () => {
+    const src = sourceOf("./Data.tsx");
+    expect(src).toMatch(/offersForcedPull\(s\.outcome\.kind, pull\.mayForce\)\s*&&/);
+    expect(src).toContain("mrIngestSheet(pullBody(opts?.force === true, mayForce))");
+    expect(src).toMatch(/const \{ edit: mayForce \} = mrDataActions\(user\)/);
+    // The one place `force: true` is written at a call site is the gated button.
+    expect(src.match(/force: true/g)).toHaveLength(1);
+  });
+});
+
+/* The hub's Data panel offers no CSV/PDF upload, no single-tab (`gid`) pull and
+   no dataset delete — the server is restricting those to admins and creators,
+   and there is nothing here to gate. This is the reminder for the day one is
+   added: it must be drawn on `mayEdit`, and a 403 must show the server's own
+   message (`describeFailure` already does, for a pull). */
+describe("the hub offers no other restricted action yet", () => {
+  const panel = () => sourceOf("./Data.tsx");
+
+  it("has no upload or single-tab pull (the dataset delete is pinned above)", () => {
+    expect(panel(), "an upload now exists in Data.tsx: gate it on mayEdit").not.toMatch(/mrIngest\b|mrIngestPdf|type="file"/);
+    expect(panel(), "a single-tab pull now exists in Data.tsx: gate it on mayEdit").not.toMatch(/\bgid\s*:/);
+  });
+});
+
+/* --------------------------------------------------------------------------
+   How an Ask answer was made.
+   -------------------------------------------------------------------------- */
+
+const factOf = (id: string, extra: Partial<MrAskFact> = {}): MrAskFact => ({
+  id, label: `Figure ${id}`, value: 1, unit: null,
+  tab: "Vendor Summary", month: "2026-07", basis: "month to date", ...extra,
+});
+
+/** A reply from a backend that predates every new field. */
+const OLD: MrAskAnswer = {
+  question: "Which vendor is cheapest?",
+  timeframe: "monthly",
+  answer: "Vendor A spent $100 [f12].\n\nRecommend: hold.",
+  used_tabs: ["Vendor Summary"],
+};
+
+describe("readNarrative and the offline marker", () => {
+  it("no longer strips the (offline summary) marker — it was the only tell that the text was canned", () => {
+    const out = readNarrative("[daily_summary] (offline summary) Spend was $100.\nRecommend: hold.");
+    expect(out.summary).toBe("[daily_summary] (offline summary) Spend was $100.");
+    expect(out.recommend).toBe("hold.");
+  });
+
+  it("still strips the heading line and the bold, and still splits off the Recommend line", () => {
+    const out = readNarrative("# Title\n\n**Vendor A** spent $100.\n\nRecommend: hold.");
+    expect(out).toEqual({ summary: "Vendor A spent $100.", recommend: "hold." });
+  });
+
+  it("leaves citation markers where the model put them", () => {
+    expect(readNarrative("Spend was $100 [f12]. Recommend: hold [f3].")).toEqual({
+      summary: "Spend was $100 [f12].", recommend: "hold [f3].",
+    });
+  });
+});
+
+describe("isOfflineSummary", () => {
+  it("recognises the marker at the head of the text, through a heading and bold", () => {
+    expect(isOfflineSummary("[daily_summary] (offline summary) Spend was $100.")).toBe(true);
+    expect(isOfflineSummary("# Title\n\n**[daily_summary] (Offline Summary)** Spend.")).toBe(true);
+  });
+
+  it("does not mistake an ordinary answer, or a marker mid-text, for one", () => {
+    expect(isOfflineSummary("Vendor A spent $100.")).toBe(false);
+    expect(isOfflineSummary("Vendor A spent $100 [daily_summary] (offline summary)")).toBe(false);
+    expect(isOfflineSummary("")).toBe(false);
+  });
+});
+
+describe("askProvenance", () => {
+  it("reads an answer with no `ai` field as model-written — an older backend sent the text and nothing else", () => {
+    expect(askProvenance(OLD)).toEqual({ ai: true, reason: null });
+    expect(askProvenance({ ...OLD, ai: true })).toEqual({ ai: true, reason: null });
+  });
+
+  it("says `ai: false` is not model-written, and carries the reason the backend gave", () => {
+    expect(askProvenance({ ...OLD, ai: false, fallback_reason: "  the model returned no answer " }))
+      .toEqual({ ai: false, reason: "the model returned no answer" });
+  });
+
+  it("says `ai: false` even when the backend gave no reason, and invents none", () => {
+    expect(askProvenance({ ...OLD, ai: false })).toEqual({ ai: false, reason: null });
+    expect(askProvenance({ ...OLD, ai: false, fallback_reason: null })).toEqual({ ai: false, reason: null });
+    expect(askProvenance({ ...OLD, ai: false, fallback_reason: "   " })).toEqual({ ai: false, reason: null });
+  });
+
+  it("catches a canned text by its own marker when the backend sent no `ai` field", () => {
+    expect(askProvenance({ ...OLD, answer: "[daily_summary] (offline summary) Spend was $100." }))
+      .toEqual({ ai: false, reason: null });
+  });
+
+  it("lets the marker outvote an `ai: true` that contradicts it", () => {
+    expect(askProvenance({ ...OLD, ai: true, answer: "[daily_summary] (offline summary) Spend." }).ai).toBe(false);
+  });
+});
+
+describe("notModelWritten", () => {
+  it("writes the reason as a sentence, then says what the text is", () => {
+    expect(notModelWritten("the model returned no answer")).toBe(
+      "The model returned no answer. What follows is the figures read straight from the tabs, not an analysis of them.",
+    );
+  });
+
+  it("does not double a full stop the reason already ends with", () => {
+    expect(notModelWritten("No key is set.")).toMatch(/^No key is set\. What follows/);
+  });
+
+  it("still says what the text is when there is no reason", () => {
+    expect(notModelWritten(null)).toBe(
+      "What follows is the figures read straight from the tabs, not an analysis of them.",
+    );
+  });
+});
+
+describe("askPeriodLabel", () => {
+  it("shows the period the backend resolved", () => {
+    expect(askPeriodLabel({ period_label: "July 2026" })).toBe("July 2026");
+  });
+
+  it("shows nothing when there is no label — and never the granularity word in `timeframe`", () => {
+    expect(askPeriodLabel(OLD)).toBeNull();
+    expect(askPeriodLabel({ ...OLD, period_label: null })).toBeNull();
+    expect(askPeriodLabel({ ...OLD, period_label: "   " })).toBeNull();
+    expect(sourceOf("./Ask.tsx")).not.toMatch(/\ba\.timeframe\b/);
+  });
+});
+
+describe("askCaveat", () => {
+  it("says nothing when the backend flagged nothing", () => {
+    expect(askCaveat(OLD)).toBeNull();
+    expect(askCaveat({ unverified_numbers: [], omitted: [] })).toBeNull();
+    expect(askCaveat({ unverified_numbers: null as unknown as string[], omitted: null as unknown as [] })).toBeNull();
+  });
+
+  it("names the numbers it could not match, and says to check them", () => {
+    expect(askCaveat({ unverified_numbers: ["$1,234", "45%"] })).toBe(
+      "2 figures in this answer could not be matched to the workbook: $1,234, 45%. "
+      + "Check them against the sheet before you rely on them.",
+    );
+    expect(askCaveat({ unverified_numbers: ["$9"] })).toMatch(/^One figure in this answer, \$9, could not/);
+  });
+
+  it("lists the first few and counts the rest, rather than printing forty numbers", () => {
+    const many = Array.from({ length: 9 }, (_, i) => `$${i + 1}`);
+    const note = askCaveat({ unverified_numbers: many })!;
+    expect(note).toContain("9 figures");
+    expect(note).toContain("$1, $2, $3, $4, $5, $6 and 3 more.");
+    expect(note).not.toContain("$7");
+  });
+
+  it("names the rows the read left out, per tab", () => {
+    expect(askCaveat({ omitted: [{ tab: "Vendor Summary", rows: 312 }] })).toBe(
+      "312 rows of Vendor Summary were left out of what was read. The answer cannot speak for them.",
+    );
+    expect(askCaveat({ omitted: [{ tab: "Leads", rows: 1 }] })).toMatch(/^1 row of Leads was left out/);
+    expect(askCaveat({ omitted: [{ tab: "A", rows: 5 }, { tab: "B", rows: 40 }] })).toContain(
+      "Some rows were left out of what was read: 5 of A, 40 of B.",
+    );
+  });
+
+  it("ignores an omission that omitted nothing, or that names no tab", () => {
+    expect(askCaveat({ omitted: [{ tab: "Leads", rows: 0 }, { tab: "", rows: 9 }] })).toBeNull();
+  });
+
+  it("folds both into ONE note, numbers first", () => {
+    const note = askCaveat({ unverified_numbers: ["$9"], omitted: [{ tab: "Leads", rows: 4 }] })!;
+    expect(note.indexOf("$9")).toBeLessThan(note.indexOf("Leads"));
+    expect(note.match(/rely on them/g)).toHaveLength(1);
+  });
+});
+
+describe("citeTokens", () => {
+  const facts = [factOf("f12"), factOf("f7"), factOf("f3"), factOf("f4")];
+  const rebuild = (tokens: ReturnType<typeof citeTokens>) =>
+    tokens.map((t) => ("cite" in t ? `[${t.cite.id}]` : t.text)).join("");
+
+  it("turns a marker the answer has a fact for into a chip, leaving the words around it alone", () => {
+    expect(citeTokens("Spend was $18,624 [f12], up on June [f7].", facts)).toEqual([
+      { text: "Spend was $18,624 " }, { cite: facts[0] },
+      { text: ", up on June " }, { cite: facts[1] }, { text: "." },
+    ]);
+  });
+
+  it("hands the text back whole when there are no facts — an older backend renders as it always did", () => {
+    const text = "Spend was $18,624 [f12].";
+    expect(citeTokens(text, undefined)).toEqual([{ text }]);
+    expect(citeTokens(text, null)).toEqual([{ text }]);
+    expect(citeTokens(text, [])).toEqual([{ text }]);
+  });
+
+  it("leaves a marker with no fact behind it exactly as written — a chip pointing nowhere is a made-up source", () => {
+    expect(citeTokens("Spend [f99] here.", facts)).toEqual([{ text: "Spend [f99] here." }]);
+  });
+
+  it("leaves other bracketed text, and markdown links, alone", () => {
+    const text = "See [the sheet](https://example.com) and [note to self] and [f12 is wrong].";
+    expect(citeTokens(text, facts)).toEqual([{ text }]);
+  });
+
+  it("chips every id in a grouped marker, but only when every id is known", () => {
+    expect(citeTokens("Both [f3, f4] agree.", facts)).toEqual([
+      { text: "Both " }, { cite: facts[2] }, { cite: facts[3] }, { text: " agree." },
+    ]);
+    expect(citeTokens("Both [f3, f99] agree.", facts)).toEqual([{ text: "Both [f3, f99] agree." }]);
+  });
+
+  it("handles a marker at either end of the text, and empty text", () => {
+    expect(rebuild(citeTokens("[f12] opens and closes [f7]", facts))).toBe("[f12] opens and closes [f7]");
+    expect(citeTokens("", facts)).toEqual([]);
+  });
+
+  it("ignores facts with no usable id", () => {
+    const junk = [{ id: "", label: "x", tab: "t" }, null as unknown as MrAskFact];
+    expect(citeTokens("Spend [f12].", junk)).toEqual([{ text: "Spend [f12]." }]);
+  });
+});
+
+describe("citeTitle and citedFacts", () => {
+  it("says where a figure came from: tab, month, basis", () => {
+    expect(citeTitle(factOf("f1"))).toBe("Vendor Summary · July 2026 · month to date");
+  });
+
+  it("skips whatever the fact does not carry", () => {
+    expect(citeTitle({ tab: "Vendor Summary", month: null, basis: undefined })).toBe("Vendor Summary");
+    expect(citeTitle({ tab: "Leads", month: "Q3 2026", basis: "total" })).toBe("Leads · Q3 2026 · total");
+  });
+
+  it("lists each cited figure once, in the order it was first cited", () => {
+    const a = factOf("f12");
+    const b = factOf("f7");
+    const tokens = [{ cite: b }, { text: " and " }, { cite: a }, { text: " and again " }, { cite: b }];
+    expect(citedFacts(tokens).map((f) => f.id)).toEqual(["f7", "f12"]);
+  });
+});
+
+describe("an answer from a backend that predates every new field", () => {
+  it("draws exactly what it drew before: no badge, no period, no caveat, no chips", () => {
+    expect(askProvenance(OLD).ai).toBe(true);
+    expect(askPeriodLabel(OLD)).toBeNull();
+    expect(askCaveat(OLD)).toBeNull();
+    const { summary, recommend } = readNarrative(OLD.answer);
+    expect(citeTokens(summary, OLD.facts)).toEqual([{ text: "Vendor A spent $100 [f12]." }]);
+    expect(recommend).toBe("hold.");
+  });
+});
+
+describe("the Ask panel's own words", () => {
+  it("no longer claims an answer cannot disagree with the desk", () => {
+    // Every connected sheet is read to answer; the desk counts the primary
+    // tracker and another sheet only when it was included in the dashboard.
+    expect(sourceOf("./Ask.tsx")).not.toContain("cannot disagree with the desk");
+    expect(sourceOf("./Ask.tsx")).toContain("only if it was included in the dashboard");
   });
 });

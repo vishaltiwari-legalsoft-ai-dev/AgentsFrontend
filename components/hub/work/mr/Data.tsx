@@ -14,21 +14,152 @@
  *    and the row shows which side of the line each sheet is on.
  *  - A pull **replaces** what it read, it does not merge. The button says so
  *    before it is pressed.
+ *
+ *  The pull is offered to everyone who can open this workspace; connecting a
+ *  sheet, disconnecting one and re-reading the tabs stay with admins and
+ *  creators. `mrDataActions` is the one place that says which is which, and the
+ *  pull itself — its button, its progress, its result — is exported from here
+ *  (`useWorkbookPull`, `PullWorkbook`) so the empty workspace and the report
+ *  pickers offer the SAME action rather than a pointer to this panel.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   mrAddSource, mrDeleteSource, mrDatasets, mrIngestSheet, mrSources, mrWorkbook, mrWorkbookScan,
   type MrDataset, type MrSheetSources, type MrTabProfile,
 } from "@/lib/api";
-import { loadPending, useLoadSession, type Load } from "@/lib/load";
-import { fmtTime, mayDisconnect, sourceLabel } from "@/components/console/mr/format";
+import { describeFailure, loadPending, useLoadSession, type Load } from "@/lib/load";
+import {
+  fmtTime, mayDisconnect, mrDataActions, offersForcedPull, pullBody, sourceLabel, summarisePull,
+  type PullOutcome,
+} from "@/components/console/mr/format";
 import { Ic } from "../../Sprite";
 import { PageHead, RuleHead, Blank, Oops, Wait } from "../../ui";
 import { n, word } from "../../model";
+import { ago } from "../../format";
 import { useHub, type ToastFn } from "../../context";
 import type { MrData_ } from "../MrWorkspace";
 import { fmtNum } from "./parts";
+
+/* ----------------------------------------------------------- the pull -- */
+
+/** One pull, from the press to the words that follow it. `failed` and `done`
+ *  are kept apart: a pull that came back "already up to date" or "partial" is
+ *  an answer, and one that never came back is an error. */
+export type PullState =
+  | { phase: "idle" }
+  | { phase: "pulling" }
+  | { phase: "done"; outcome: PullOutcome }
+  | { phase: "failed"; message: string };
+
+export interface WorkbookPull {
+  state: PullState;
+  /** Whether this reader may pull inside the "already fresh" cooldown — admins
+   *  and creators only. Everyone else gets the normal pull and a sentence. */
+  mayForce: boolean;
+  /** `force` is for "Pull again anyway" only — a normal pull sends none, and a
+   *  reader who may not force cannot send it even by asking. */
+  run: (opts?: { force?: boolean }) => void;
+}
+
+/** The pull, shared by every place that offers it.
+ *
+ *  `onDone` runs after any answer that reached this screen — including "already
+ *  up to date": that answer means a colleague or the cron pulled first, so this
+ *  screen may well be the one that is behind. */
+export function useWorkbookPull(
+  { onToast, onDone }: { onToast: ToastFn; onDone: () => void },
+): WorkbookPull {
+  const { user } = useHub();
+  const { edit: mayForce } = mrDataActions(user);
+  const [state, setState] = useState<PullState>({ phase: "idle" });
+  // A ref, not the state: two presses inside one frame both read `idle`.
+  const inFlight = useRef(false);
+
+  const run = async (opts?: { force?: boolean }) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setState({ phase: "pulling" });
+    try {
+      const r = await mrIngestSheet(pullBody(opts?.force === true, mayForce));
+      const outcome = summarisePull(r, (iso) => ago(iso), mayForce);
+      setState({ phase: "done", outcome });
+      onToast(outcome.message, outcome.tone);
+      onDone();
+    } catch (e: unknown) {
+      // The server's own words when it has them — a 502 says the existing data
+      // was left untouched, a 409 says another pull is mid-flight, a 403 says
+      // what this account may not do, and a timeout says the job may still be
+      // finishing. None of that is ours to improve on, or to assert without
+      // knowing.
+      const message = describeFailure(e, "The pull did not finish, and the server did not say why.");
+      setState({ phase: "failed", message });
+      onToast(message, "error");
+    } finally {
+      inFlight.current = false;
+    }
+  };
+
+  return { state, mayForce, run: (opts) => { void run(opts); } };
+}
+
+export function PullButton({ pull, disabled = false }: { pull: WorkbookPull; disabled?: boolean }) {
+  const pulling = pull.state.phase === "pulling";
+  return (
+    <button
+      type="button"
+      className="btn btn--solid btn--sm"
+      onClick={() => pull.run()}
+      disabled={pulling || disabled}
+      aria-busy={pulling}
+      title="Reads the tracker sheet again and replaces what every panel here reads. It does not add to it."
+    >
+      <Ic name="sweep" />
+      {pulling ? "Pulling…" : "Pull the workbook now"}
+    </button>
+  );
+}
+
+/** Progress while it runs, then what came back — and, for an admin or creator
+ *  who was told "already up to date", the one way past it. Everyone else is
+ *  told in the same sentence when to try again. Persistent text rather than a
+ *  toast alone: a toast is gone before somebody who looked away has read it. */
+export function PullStatus({ pull }: { pull: WorkbookPull }) {
+  const s = pull.state;
+  if (s.phase === "idle") return null;
+  if (s.phase === "pulling") {
+    return <Wait what="Pulling the workbook. Every panel here reads it once it lands" />;
+  }
+  if (s.phase === "failed") {
+    return <p className="err" role="alert" style={{ marginTop: 10 }}>{s.message}</p>;
+  }
+  return (
+    <p className="calm" role="status" style={{ padding: 0, marginTop: 10 }}>
+      {s.outcome.message}
+      {offersForcedPull(s.outcome.kind, pull.mayForce) && (
+        <>
+          {" "}
+          <button type="button" className="btn btn--quiet btn--sm" onClick={() => pull.run({ force: true })}>
+            Pull again anyway
+          </button>
+        </>
+      )}
+    </p>
+  );
+}
+
+/** The button and its result, together — for the places that have no header to
+ *  put the button in. */
+export function PullWorkbook({ pull }: { pull: WorkbookPull }) {
+  return (
+    <>
+      <PullButton pull={pull} />
+      <PullStatus pull={pull} />
+    </>
+  );
+}
+
+/* ---------------------------------------------------------- the panel -- */
 
 export function MrData({ data, onToast }: { data: MrData_; onToast: ToastFn }) {
   const { user } = useHub();
@@ -41,7 +172,12 @@ export function MrData({ data, onToast }: { data: MrData_; onToast: ToastFn }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [beat, setBeat] = useState(0);
 
-  const mayEdit = user.is_admin === true || user.is_creator === true;
+  const { pull: mayPull, edit: mayEdit } = mrDataActions(user);
+  const pull = useWorkbookPull({
+    onToast,
+    onDone: () => { data.reload(); setBeat((b) => b + 1); },
+  });
+  const pulling = pull.state.phase === "pulling";
 
   useEffect(() => {
     void session.run("mr-sources", () => mrSources(), setSources,
@@ -51,35 +187,6 @@ export function MrData({ data, onToast }: { data: MrData_; onToast: ToastFn }) {
     void session.run("mr-datasets", () => mrDatasets(), setSets,
       "The uploaded files could not be read.", { keepStale: true });
   }, [session, beat]);
-
-  const pull = useCallback(async () => {
-    setBusy("pull");
-    onToast("Pulling the workbook. Every panel here reads what this replaces.", "ok");
-    try {
-      const r = await mrIngestSheet({});
-      const rows = r.tabs.reduce((s2, t) => s2 + (t.metrics ?? 0), 0);
-      const failed = r.tabs.filter((t) => t.error);
-      // A pull that came back "partial" left some component on its PREVIOUS
-      // data. Reporting that as success is how weeks-old figures stayed on
-      // screen looking current.
-      if (r.status === "partial" || failed.length || (r.degraded && r.degraded.length)) {
-        onToast(
-          `Pulled ${fmtNum(rows)} rows, but not everything: ${
-            (r.degraded && r.degraded.length ? r.degraded : failed.map((t) => `${t.tab} — ${t.error}`)).join("; ")
-          }. Whatever did not land is still showing its previous data.`,
-          "warn",
-        );
-      } else {
-        onToast(`Pulled ${fmtNum(rows)} rows across ${n(r.tabs.length)} tabs. Every panel now reads this pull.`, "ok");
-      }
-      data.reload();
-      setBeat((b) => b + 1);
-    } catch (e: unknown) {
-      onToast(e instanceof Error ? e.message : "The pull failed. Nothing was replaced.", "error");
-    } finally {
-      setBusy(null);
-    }
-  }, [onToast, data]);
 
   const scan = useCallback(async () => {
     setBusy("scan");
@@ -163,14 +270,12 @@ export function MrData({ data, onToast }: { data: MrData_; onToast: ToastFn }) {
           title="Connected sheets"
           note="The primary one feeds the desk. Anything else is read for questions and counted into the desk only if you say so."
           aside={
-            mayEdit ? (
-              <button type="button" className="btn btn--solid btn--sm" onClick={pull} disabled={busy !== null}>
-                <Ic name="sweep" />
-                {busy === "pull" ? "Pulling…" : "Pull the workbook now"}
-              </button>
-            ) : <span className="aside">{n(sheetList.length)} connected</span>
+            mayPull
+              ? <PullButton pull={pull} disabled={busy !== null} />
+              : <span className="aside">{n(sheetList.length)} connected</span>
           }
         />
+        <PullStatus pull={pull} />
 
         {sources.phase === "loading" && !sources.data ? (
           <Wait what="Reading the connected sheets" rows={2} />
@@ -268,7 +373,7 @@ export function MrData({ data, onToast }: { data: MrData_; onToast: ToastFn }) {
           note="Every tab, and what the agent worked out it holds. A tab marked not useful is one it read and decided carries nothing it can use."
           aside={
             mayEdit ? (
-              <button type="button" className="btn btn--quiet btn--sm" onClick={scan} disabled={busy !== null}>
+              <button type="button" className="btn btn--quiet btn--sm" onClick={scan} disabled={busy !== null || pulling}>
                 {busy === "scan" ? "Reading…" : "Read the tabs again"}
               </button>
             ) : undefined

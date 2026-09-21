@@ -1430,6 +1430,15 @@ export interface MrDataset {
   metrics: number;
   leads: number;
   gaps: MrDataGap[];
+  /** Who brought the file in. Optional: a backend that keeps one copy per
+   *  person never sent it. */
+  created_by?: string | null;
+  /** Whether THIS caller may delete it. `false` means the delete would answer
+   *  403, so a control that deletes must not be drawn; absent means the backend
+   *  has no opinion and the control is drawn as it always was. The hub's Data
+   *  panel lists these files and has no delete control, so nothing there reads
+   *  this yet. */
+  can_delete?: boolean;
 }
 
 export interface MrConnector {
@@ -1667,18 +1676,34 @@ export interface MrSheetIngestResult {
   spreadsheet_id: string;
   year: number;
   tabs: MrSheetTabResult[];
-  /** "ok" | "partial" — "partial" means some component kept its PREVIOUS data. */
+  /** "ok" | "partial" | "fresh".
+   *
+   *  "partial" means some component kept its PREVIOUS data.
+   *
+   *  "fresh" (HTTP 200, `tabs: []`, nothing ingested) means the cron or a
+   *  colleague already pulled the team's workbook data within the last couple
+   *  of minutes, so nothing was fetched. It is a success — and, being newer
+   *  than any pull this reader could make, the reply carries `last_pulled_at`.
+   *  Older backends never send it. */
   status?: string;
   /** Why, in plain words. The backend has always sent these; the console used
    *  to drop them, which is how a pull that ingested zero tracker tabs still
    *  reported success and left weeks-old figures on screen. */
   degraded?: string[];
   ingested?: number;
+  /** ISO time of the pull a "fresh" reply stands on. Optional: absent on every
+   *  other status and on every backend that predates the cooldown. */
+  last_pulled_at?: string | null;
 }
 
-/** Pull Legal Soft's live Google-Sheets performance tracker (brand tabs). */
-export const mrIngestSheet = (body: { gid?: string; brand?: string; year?: number } = {}) =>
-  postJson<MrSheetIngestResult>("/api/mr/ingest-sheet", body);
+/** Pull Legal Soft's live Google-Sheets performance tracker (brand tabs).
+ *
+ *  `force` bypasses the "already fresh" cooldown. It is sent only when a reader
+ *  has just been told the data is up to date and chose to pull anyway — a
+ *  normal pull sends no `force` at all, so an older backend never sees it. */
+export const mrIngestSheet = (
+  body: { gid?: string; brand?: string; year?: number; force?: boolean } = {},
+) => postJson<MrSheetIngestResult>("/api/mr/ingest-sheet", body);
 
 export const mrDatasets = () => getJson<MrDataset[]>("/api/mr/datasets");
 
@@ -1729,11 +1754,60 @@ export interface MrTabProfile {
   hidden: boolean;
 }
 
+/** One figure the answer stands on, keyed by the `[f12]`-style marker the answer
+ *  text carries. The console prints where it came from — never the value: the
+ *  answer already says the number, and reformatting it here would be a second
+ *  opinion about a unit this type does not pin down. */
+export interface MrAskFact {
+  id: string;
+  label: string;
+  value?: number | string | null;
+  unit?: string | null;
+  /** The tab it was read from — namespaced `<sheet> · <tab>` for a secondary sheet. */
+  tab: string;
+  /** `YYYY-MM`, or the label the backend wrote. */
+  month?: string | null;
+  /** What kind of figure it is: month to date, a total, a daily value, … */
+  basis?: string | null;
+}
+
+/** A tab the read cut short: `rows` is how many rows were left out of it. */
+export interface MrAskOmission {
+  tab: string;
+  rows: number;
+}
+
+/** What `POST /api/mr/ask` answers.
+ *
+ *  Every field after `used_tabs` is optional and MUST be read with a default:
+ *  Vercel ships in about a minute and Cloud Run in four to six, so this console
+ *  runs against a backend that has not started sending them for a window on
+ *  every deploy. Absent reads as "this backend said nothing", which is never
+ *  the same as "this was checked" — see `askProvenance`, `askPeriodLabel`,
+ *  `askCaveat` and `citeTokens` in `components/console/mr/format.ts`, the one
+ *  place that decides what each absence means. */
 export interface MrAskAnswer {
   question: string;
+  /** Kept for old readers. On an older backend this is often the granularity
+   *  the question implied ("monthly"), not a period — the console reads
+   *  `period_label` instead and shows nothing when it is absent. */
   timeframe: string | null;
   answer: string;
   used_tabs: string[];
+  /** `false` when the text is the workbook's own listing rather than a model's
+   *  answer. Absent reads as `true`: an older backend sent the text and nothing
+   *  else, and a model wrote it. */
+  ai?: boolean;
+  /** Why it is not model-written, in the backend's words. */
+  fallback_reason?: string | null;
+  /** The period the question resolved to, ready to print ("July 2026"). */
+  period_label?: string | null;
+  /** The figures the answer's `[id]` markers point at. */
+  facts?: MrAskFact[];
+  /** Numbers in the answer text that could not be matched to a fact. */
+  unverified_numbers?: string[];
+  /** Tabs the read left rows out of. */
+  omitted?: MrAskOmission[];
 }
 
 export interface MrSheetSource {

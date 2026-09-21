@@ -29,7 +29,7 @@ import {
 import { loadPending, useLoadSession, type Load } from "@/lib/load";
 import { readPace, type PaceRead } from "@/components/console/mr/pace";
 import { fmtMonth } from "@/components/console/mr/format";
-import { useHeadline, useHub, useWorkNav, type WorkSection } from "../context";
+import { useHeadline, useHub, useWorkNav, type ToastFn, type WorkSection } from "../context";
 import { Blank, Oops, Wait } from "../ui";
 import { workspaceBySlug } from "../workspaces";
 import { MrDesk } from "./mr/Desk";
@@ -38,7 +38,7 @@ import { MrLeads } from "./mr/Leads";
 import { MrLines } from "./mr/Lines";
 import { MrAsk } from "./mr/Ask";
 import { MrReports } from "./mr/Reports";
-import { MrData } from "./mr/Data";
+import { MrData, PullWorkbook, useWorkbookPull } from "./mr/Data";
 
 const SECTIONS = workspaceBySlug("mr")!.sections;
 
@@ -135,15 +135,7 @@ export function MrWorkspace({ subject, section }: { subject: string; section: st
   }
   if (!ov) return null;
 
-  if (!ov.has_data) {
-    return (
-      <Blank title="Nothing has been pulled from the workbook yet">
-        This agent reads one Google Sheets workbook — there is no advertising API behind it. Connect
-        the tracker on the Data panel and pull it once; every figure on every panel here comes from
-        that pull.
-      </Blank>
-    );
-  }
+  if (!ov.has_data) return <NothingPulled onToast={toast} onDone={reload} />;
 
   const data: MrData_ = {
     overview: ov,
@@ -163,9 +155,31 @@ export function MrWorkspace({ subject, section }: { subject: string; section: st
       {current === "vendors" && <MrVendors data={data} />}
       {current === "leads" && <MrLeads data={data} />}
       {current === "lines" && <MrLines data={data} targets={targets} setTargets={setTargets} onToast={toast} />}
-      {current === "ask" && <MrAsk data={data} onToast={toast} />}
+      {current === "ask" && <MrAsk onToast={toast} />}
       {current === "reports" && <MrReports data={data} onToast={toast} />}
       {current === "data" && <MrData data={data} onToast={toast} />}
     </>
+  );
+}
+
+/** The whole workspace when nothing has been pulled: one sentence and the
+ *  action that fixes it, for everyone who can see this screen.
+ *
+ *  The pull is on this screen rather than behind a pointer to the Data panel,
+ *  because this screen stands in for every section — Data included — so a
+ *  pointer would lead back here. What the pull says back (progress, "already up
+ *  to date", a failure in the server's words) stays on this screen for as long
+ *  as the workspace is empty; a success is carried by the toast, since the
+ *  screen is replaced by the workspace it just filled. */
+function NothingPulled({ onToast, onDone }: { onToast: ToastFn; onDone: () => void }) {
+  const pull = useWorkbookPull({ onToast, onDone });
+  return (
+    <Blank
+      title="The team's workbook data has not been pulled yet"
+      action={<PullWorkbook pull={pull} />}
+    >
+      Pull it from the tracker sheet once and every panel here fills in for the whole team —
+      nothing on it comes from an advertising account.
+    </Blank>
   );
 }

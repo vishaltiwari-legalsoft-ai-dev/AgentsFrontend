@@ -30,6 +30,7 @@ import { n } from "../../model";
 import type { ToastFn } from "../../context";
 import type { MrData_ } from "../MrWorkspace";
 import { SourceList } from "./parts";
+import { PullWorkbook, useWorkbookPull, type WorkbookPull } from "./Data";
 
 export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }) {
   const session = useLoadSession();
@@ -47,6 +48,13 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
   const [opening, setOpening] = useState(false);
   const [building, setBuilding] = useState<MrReportKind | null>(null);
   const [beat, setBeat] = useState(0);
+  // The pickers below have nothing to offer until the workbook has been pulled,
+  // so the pull is offered where they say so. Its result re-reads the periods
+  // as well as the workspace: a new pull is what puts months into them.
+  const pull = useWorkbookPull({
+    onToast,
+    onDone: () => { data.reload(); setBeat((b) => b + 1); },
+  });
 
   useEffect(() => {
     void session.run("mr-runs", () => mrListRuns(), setRuns,
@@ -173,6 +181,7 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
 
       <BoardBuild
         periods={periods}
+        pull={pull}
         disabled={building !== null || opening}
         onBuilt={(report) => { setBoard(report); setDoc(null); setBeat((b) => b + 1); }}
         onToast={onToast}
@@ -258,7 +267,7 @@ function PeriodPick({ kind, periods, value, onPick }: {
           ? "Reading which periods hold data…"
           : periods.phase === "failed"
             ? "The periods on file could not be read, so there is none to pick — this writes the latest."
-            : "No period holds tracker data yet, so there is none to pick — this writes the latest."}
+            : "No period holds tracker data yet, so there is none to pick — this writes the latest. Pull the workbook from the Data panel and this fills in."}
       </p>
     );
   }
@@ -296,8 +305,10 @@ function PeriodPick({ kind, periods, value, onPick }: {
  *  which window it refused — so with nothing to pick the button does not go
  *  out at all.
  */
-function BoardBuild({ periods, disabled, onBuilt, onToast, onRetry }: {
+function BoardBuild({ periods, pull, disabled, onBuilt, onToast, onRetry }: {
   periods: Load<MrReportPeriods>;
+  /** The workspace's pull — offered here when there is no period to build for. */
+  pull: WorkbookPull;
   disabled: boolean;
   onBuilt: (report: MrBoardReport) => void;
   onToast: ToastFn;
@@ -388,9 +399,12 @@ function BoardBuild({ periods, disabled, onBuilt, onToast, onRetry }: {
             onRetry={onRetry}
           />
         ) : (
-          <Blank title="No period holds tracker figures yet">
+          <Blank
+            title="No period holds tracker figures yet"
+            action={<PullWorkbook pull={pull} />}
+          >
             A board report is the roll-up tab totalled over a window, so it needs a window with
-            figures in it. Pull the workbook on Data and this fills in.
+            figures in it. Pull the team's workbook data and this fills in.
           </Blank>
         )
       ) : (
