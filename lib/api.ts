@@ -998,9 +998,221 @@ export interface GdHookSuggestion {
   subtext_pairs: { subtext1: string; subtext2: string }[];
 }
 
-/** Brands the studio can produce for (registry packs) — drives the picker. */
-export const gdListBrands = () =>
-  getJson<{ brands: GdBrandOption[]; default: string }>("/api/gd/brands");
+/* ---------------- Self-serve brands (company-wide, shared) ----------------- */
+// `GET /api/gd/brands` answers with `BrandSummary` rows. Every field here is
+// read with a default because the frontend deploys minutes before the backend
+// (Vercel 1 min vs Cloud Run 4–6 min): the old reply carried `{id, name}` and
+// `default` only, and a picker that dies on a missing field takes the studio
+// down for the length of that window.
+
+export type GdBrandSource = "user" | "builtin";
+
+export interface GdBrandSummary {
+  brand_id: string;
+  name: string;
+  slug: string;
+  source: GdBrandSource;
+  /** Built-in packs are read-only; only a user-created brand takes a PATCH. */
+  editable: boolean;
+  logo_url: string | null;
+  primary_colors: string[];
+  has_kit: boolean;
+  reference_count: number;
+}
+
+export interface GdBrandAsset { path: string; url: string; name: string }
+
+export type GdBrandReferenceKind = "creative" | "reference";
+
+export interface GdBrandReference {
+  ref_id: string;
+  /** Signed view URL; empty when the object could not be signed — the sheet
+   *  draws a plain tile for it rather than a broken image. */
+  url: string;
+  kind: GdBrandReferenceKind;
+  creative_type: string | null;
+  note: string;
+  created_at: string;
+}
+
+export interface GdBrandColors { primary: string[]; secondary: string[]; accent: string[] }
+
+export interface GdBrandDetail extends GdBrandSummary {
+  archived_at: string | null;
+  created_by: string | null;
+  tone_of_voice: string;
+  /** Empty when none is stored. */
+  website: string;
+  fonts: string[];
+  colors: GdBrandColors;
+  assets: { logos: GdBrandAsset[]; fonts: GdBrandAsset[]; guidelines: GdBrandAsset[] };
+  references: GdBrandReference[];
+  /** The most references one brand may hold; the sheet shows `n / cap`. */
+  reference_cap: number;
+}
+
+/** The JSON body of a create (all of it) or a PATCH (any subset). */
+export interface GdBrandInput {
+  name: string;
+  /** At least one `#RRGGBB` on create. */
+  primary_colors: string[];
+  secondary_colors?: string[];
+  accent_colors?: string[];
+  fonts?: string[];
+  tone_of_voice?: string;
+  website?: string;
+}
+
+export type GdBrandAssetKind = "logo" | "font" | "guidelines";
+
+/** What the backend actually sent, before the defaults below make it a
+ *  `GdBrandSummary`. Every field is optional on purpose — see the note above. */
+type RawBrandSummary = Partial<GdBrandSummary> & { id?: string };
+
+const brandSummary = (raw: RawBrandSummary): GdBrandSummary => ({
+  brand_id: raw.brand_id ?? raw.id ?? "",
+  name: raw.name ?? "",
+  slug: raw.slug ?? "",
+  source: raw.source ?? "builtin",
+  editable: raw.editable ?? false,
+  logo_url: raw.logo_url ?? null,
+  primary_colors: Array.isArray(raw.primary_colors) ? raw.primary_colors : [],
+  has_kit: raw.has_kit ?? false,
+  reference_count: raw.reference_count ?? 0,
+});
+
+/** A brand detail as the backend actually sent it — every field optional, the
+ *  same deploy-skew rule as `RawBrandSummary`. */
+type RawBrandDetail = RawBrandSummary & Partial<Omit<GdBrandDetail, keyof GdBrandSummary | "references" | "assets">> & {
+  references?: Partial<GdBrandReference>[];
+  assets?: Partial<GdBrandDetail["assets"]>;
+};
+
+const brandReference = (raw: Partial<GdBrandReference>): GdBrandReference => ({
+  ref_id: raw.ref_id ?? "",
+  url: raw.url ?? "",
+  kind: raw.kind === "creative" ? "creative" : "reference",
+  creative_type: raw.creative_type ?? null,
+  note: raw.note ?? "",
+  created_at: raw.created_at ?? "",
+});
+
+const brandDetail = (raw: RawBrandDetail): GdBrandDetail => ({
+  ...brandSummary(raw),
+  archived_at: raw.archived_at ?? null,
+  created_by: raw.created_by ?? null,
+  tone_of_voice: raw.tone_of_voice ?? "",
+  website: raw.website ?? "",
+  fonts: Array.isArray(raw.fonts) ? raw.fonts : [],
+  colors: {
+    primary: raw.colors?.primary ?? [],
+    secondary: raw.colors?.secondary ?? [],
+    accent: raw.colors?.accent ?? [],
+  },
+  assets: {
+    logos: raw.assets?.logos ?? [],
+    fonts: raw.assets?.fonts ?? [],
+    guidelines: raw.assets?.guidelines ?? [],
+  },
+  references: (raw.references ?? []).map(brandReference).filter((r) => r.ref_id),
+  reference_cap: raw.reference_cap ?? 200,
+});
+
+/** Every brand the studio can produce for, built in and user-made alike.
+ *  `default` is the one to preselect: the backend's pick when it names one,
+ *  else the first row. */
+export async function gdBrands(
+  opts?: RequestOptions,
+): Promise<{ brands: GdBrandSummary[]; default: string }> {
+  const raw = await getJson<{ brands?: RawBrandSummary[]; default?: string }>("/api/gd/brands", opts);
+  const brands = (raw.brands ?? []).map(brandSummary).filter((b) => b.brand_id);
+  const def = raw.default && brands.some((b) => b.brand_id === raw.default)
+    ? raw.default
+    : (brands[0]?.brand_id ?? "");
+  return { brands, default: def };
+}
+
+/** The picker's view of `gdBrands` — `{id, name}` rows — kept for the callers
+ *  that only need a name per id. */
+export const gdListBrands = (): Promise<{ brands: GdBrandOption[]; default: string }> =>
+  gdBrands().then((r) => ({
+    brands: r.brands.map((b) => ({ id: b.brand_id, name: b.name })),
+    default: r.default,
+  }));
+
+export const gdBrand = (brandId: string, opts?: RequestOptions) =>
+  getJson<{ brand: RawBrandDetail }>(`/api/gd/brands/${encodeURIComponent(brandId)}`, opts)
+    .then((r) => brandDetail(r.brand));
+
+/** 201 `{brand}`; 409 `brand_exists`; 422 on bad input. */
+export const gdCreateBrand = (body: GdBrandInput) =>
+  postJson<{ brand: RawBrandDetail }>("/api/gd/brands", body).then((r) => brandDetail(r.brand));
+
+/** Partial update; 409 `brand_not_editable` for a built-in pack. */
+export const gdPatchBrand = (brandId: string, body: Partial<GdBrandInput>) =>
+  requestJson<{ brand: RawBrandDetail }>(`/api/gd/brands/${encodeURIComponent(brandId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then((r) => brandDetail(r.brand));
+
+/** Logo / font / guidelines files for one brand. 413 too large, 415 wrong
+ *  type — the sheet checks both before sending, so those replies are the
+ *  backend disagreeing with the client's limits, and are shown as they come. */
+export function gdUploadBrandAssets(
+  brandId: string,
+  kind: GdBrandAssetKind,
+  files: File[],
+): Promise<GdBrandDetail> {
+  const form = new FormData();
+  form.append("kind", kind);
+  for (const f of files) form.append("files", f, f.name);
+  return sendForm<{ brand: RawBrandDetail }>(
+    `/api/gd/brands/${encodeURIComponent(brandId)}/assets`,
+    form,
+  ).then((r) => brandDetail(r.brand));
+}
+
+/** Reference images / past creatives — at most 10 per request. 409
+ *  `reference_cap_reached` once the brand holds `reference_cap`. */
+export function gdUploadBrandReferences(
+  brandId: string,
+  files: File[],
+  meta: { kind?: GdBrandReferenceKind; creative_type?: string; note?: string } = {},
+): Promise<{ references: GdBrandReference[]; reference_count: number }> {
+  const form = new FormData();
+  for (const f of files) form.append("files", f, f.name);
+  if (meta.kind) form.append("kind", meta.kind);
+  if (meta.creative_type) form.append("creative_type", meta.creative_type);
+  if (meta.note) form.append("note", meta.note);
+  return sendForm<{ references?: Partial<GdBrandReference>[]; reference_count?: number }>(
+    `/api/gd/brands/${encodeURIComponent(brandId)}/references`,
+    form,
+  ).then((r) => {
+    const references = (r.references ?? []).map(brandReference).filter((x) => x.ref_id);
+    return { references, reference_count: r.reference_count ?? references.length };
+  });
+}
+
+/** DELETE that answers 204 with no body — unlike every other delete here, so
+ *  `deleteJson` (which reads a JSON reply) is the wrong verb for it. */
+async function deleteNoContent(path: string, opts?: RequestOptions): Promise<void> {
+  const { response, deadline } = await send(path, { method: "DELETE" }, opts ?? {});
+  try {
+    if (!response.ok) throw new ApiError(await parseError(response), response.status);
+  } finally {
+    deadline.clear();
+  }
+}
+
+export const gdDeleteBrandReference = (brandId: string, refId: string) =>
+  deleteNoContent(
+    `/api/gd/brands/${encodeURIComponent(brandId)}/references/${encodeURIComponent(refId)}`,
+  );
+
+/** Admin only — the sheet hides the button for everyone else. */
+export const gdArchiveBrand = (brandId: string) =>
+  deleteNoContent(`/api/gd/brands/${encodeURIComponent(brandId)}`);
 
 /** Brands whose kit data has been ingested — the setup-screen readiness strip. */
 export interface GdIngestedBrand {

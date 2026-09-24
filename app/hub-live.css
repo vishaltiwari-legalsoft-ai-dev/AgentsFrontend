@@ -534,3 +534,103 @@
 .cov__miss li { margin: 4px 0; font-size: 12px; line-height: 1.5; color: var(--fg-2); }
 .cov__miss li b { font-weight: 700; color: var(--fg); }
 .cov__miss li em { font-style: normal; color: var(--fg-3); }
+/* ---------- Graphic Designer: the brand-kit sheet ------------------------
+ *
+ * One dialog creates a brand and edits its kit. It is the console's `.dialog`,
+ * wider, because a kit is colours + fonts + logo + guidelines + references and
+ * a 560px column of that reads as a form to be endured. Every colour here is a
+ * token; the only red is `--gap`, and it appears only under a real refusal —
+ * a file the rules turned away, a `detail` the backend sent back.
+ */
+
+.bk { width: min(760px, calc(100vw - 32px)); max-height: min(92vh, 960px); overflow-y: auto; }
+.bk__form { display: block; }
+.bk__opt { font-style: normal; font-weight: 400; color: var(--fg-3); margin-left: 4px; }
+.bk__lede { margin: 0 0 var(--s3); font-size: 12px; line-height: 1.55; color: var(--fg-2); max-width: 70ch; }
+
+.bk__two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s4); }
+@media (max-width: 640px) { .bk__two { grid-template-columns: minmax(0, 1fr); } }
+
+.bk__set { margin: 0 0 var(--s4); padding: var(--s3) var(--s4) var(--s4); border: 1px solid var(--rule); border-radius: var(--r-card); min-width: 0; }
+.bk__set > legend { padding: 0 6px; font-size: 12px; font-weight: 650; display: flex; align-items: baseline; gap: var(--s3); }
+.bk__set .hint { display: block; margin-top: var(--s2); font-size: 11px; color: var(--fg-3); }
+.bk__count { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--fg-2); }
+
+/* colour rows: a swatch you can pick from, a hex you can type, a remove */
+.bk__role { margin-top: var(--s3); }
+.bk__role:first-of-type { margin-top: 0; }
+.bk__rolehead { display: flex; align-items: baseline; gap: var(--s2); margin-bottom: 6px; }
+.bk__rolehead b { font-size: 12px; font-weight: 650; }
+.bk__rolehead span { font-size: 11px; color: var(--fg-3); }
+.bk__chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.bk__chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px; border: 1px solid var(--rule); border-radius: var(--r-ctl); background: var(--surface); }
+.bk__chip input[type="color"] { width: 28px; height: 28px; padding: 0; border: 1px solid var(--rule-hard); border-radius: var(--r-mark); background: none; cursor: pointer; }
+.bk__chip input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.bk__chip input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 2px; }
+.bk__chip input[type="color"]:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
+.bk__hex.inp { width: 92px; min-height: 28px; padding: 4px 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; text-transform: uppercase; }
+.bk__x { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: var(--r-mark); color: var(--fg-3); }
+.bk__x:hover, .bk__x:focus-visible { color: var(--fg); background: var(--surface-2); }
+.bk__x svg { width: 12px; height: 12px; }
+
+/* fonts: named families, files on disk, files waiting to go */
+.bk__tag { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 3px 6px 3px 10px; border: 1px solid var(--rule); border-radius: var(--r-pill); font-size: 12px; font-weight: 600; background: var(--surface); }
+.bk__tag--file { color: var(--fg-2); font-weight: 500; }
+.bk__tag--new { border-style: dashed; border-color: var(--rule-hard); }
+.bk__none { font-size: 12px; color: var(--fg-3); }
+.bk__fontrow { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; margin-top: var(--s3); }
+.bk__fontrow .inp { flex: 1 1 200px; width: auto; min-height: 32px; }
+
+/* logo: the picture, or a plain monogram — a brand with no logo yet is a
+   fact to state, not an error to raise */
+.bk__logo { display: flex; gap: var(--s3); align-items: center; }
+.bk__logo img, .bk__mono { width: 72px; height: 72px; flex: 0 0 auto; border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface-2); }
+.bk__logo img { object-fit: contain; padding: 6px; }
+.bk__mono { display: grid; place-items: center; font-size: 26px; font-weight: 800; color: var(--fg-3); }
+.bk__logoside, .bk__doc { display: grid; gap: 4px; justify-items: start; min-width: 0; }
+.bk__logoside b, .bk__doc b { font-size: 12px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.bk__logoside span, .bk__doc span { font-size: 11px; color: var(--fg-2); line-height: 1.45; }
+.bk__doc a { font-size: 12px; color: var(--fg); text-decoration: underline; text-underline-offset: 2px; }
+.bk__logoside .btn, .bk__doc .btn { margin-top: 4px; }
+
+/* references: the drop zone, then the grid */
+.bk__drop { display: grid; justify-items: center; gap: 4px; padding: var(--s4); border: 1px dashed var(--rule-hard); border-radius: var(--r-card); background: var(--surface-2); text-align: center; transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease); }
+.bk__drop.is-over { border-color: var(--fg); background: var(--mark-row); }
+.bk__drop > svg { width: 20px; height: 20px; color: var(--fg-3); }
+.bk__drop b { font-size: 13px; font-weight: 650; }
+.bk__drop > span { font-size: 11px; color: var(--fg-2); max-width: 46ch; line-height: 1.45; }
+.bk__drop .btn { margin-top: 6px; }
+
+.bk__refs { list-style: none; margin: var(--s3) 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: var(--s2); }
+.bk__ref { position: relative; aspect-ratio: 1; border: 1px solid var(--rule); border-radius: var(--r-cell); overflow: hidden; background: var(--surface-2); }
+.bk__ref img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* a reference on file with no signed URL: a plain tile, never a broken image */
+.bk__refblank { display: grid; place-items: center; align-content: center; gap: 4px; width: 100%; height: 100%; color: var(--fg-3); font-size: 10px; font-weight: 600; letter-spacing: 0.02em; }
+.bk__refblank svg { width: 18px; height: 18px; }
+.bk__ref.is-new { border-style: dashed; border-color: var(--rule-hard); }
+.bk__refcap { position: absolute; left: 4px; bottom: 4px; padding: 1px 6px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--surface) 88%, transparent); font-size: 9px; font-stretch: 76%; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg-2); }
+.bk__refx { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--surface) 90%, transparent); color: var(--fg); opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+.bk__refx svg { width: 12px; height: 12px; }
+.bk__ref:hover .bk__refx, .bk__refx:focus-visible { opacity: 1; }
+.bk__refx:disabled { opacity: 0.5; cursor: wait; }
+.bk__refmeta { margin-top: var(--s3); display: grid; gap: 0; }
+.bk__refmeta .field { margin-bottom: var(--s3); }
+
+/* what was refused — the one place this sheet uses --gap */
+.bk__problems { margin: var(--s3) 0 0; padding: var(--s3) var(--s4); list-style: none; border: 1px solid var(--gap); border-radius: var(--r-ctl); background: var(--gap-soft); }
+.bk__problems li { font-size: 12px; line-height: 1.5; color: var(--fg); }
+.bk__problems li + li { margin-top: 4px; }
+
+/* the closing row: archive (admins, edit only) far left, then cancel + the one primary */
+.bk__actions { align-items: center; flex-wrap: wrap; }
+.bk__spacer { flex: 1 1 auto; }
+.bk__archive { font-size: 12px; color: var(--fg-3); text-decoration: underline; text-underline-offset: 2px; padding: 4px 0; }
+.bk__archive:hover, .bk__archive:focus-visible { color: var(--fg); }
+.bk__confirm { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s2); font-size: 12px; color: var(--fg-2); }
+
+/* the Library's row: "Edit kit" sits after the swatches */
+.kit__head .kit__edit { align-self: center; margin-left: var(--s3); }
+.kit__head h3 + .kit__edit { margin-left: auto; }
+
+/* the studio's setup screen: the two quiet buttons under the brand picker */
+.gdx-kitrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }

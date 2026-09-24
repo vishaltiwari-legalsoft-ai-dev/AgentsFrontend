@@ -13,6 +13,8 @@ import { StyleGallery } from "./StyleGallery";
 import { pickDefaultStyle } from "./styleChoice";
 import { DEFAULT_PLAN_LAYOUT } from "./wireframe";
 import { attachErrorMessage, canAttach, MAX_PROMPT_IMAGES } from "./promptAttach";
+import { BrandKitSheet } from "./BrandKitSheet";
+import { useAuth } from "@/lib/auth";
 import {
   creativeTypes,
   gdApprove,
@@ -23,8 +25,8 @@ import {
   gdElements,
   gdFontBlob,
   gdGenerate,
+  gdBrands,
   gdGetConfig,
-  gdListBrands,
   gdPlan,
   gdStage4,
   gdSubjectUpload,
@@ -35,7 +37,7 @@ import {
   gdUpdateConfig,
   type CreativeTypeMeta,
   type GdBrandLogoVariant,
-  type GdBrandOption,
+  type GdBrandSummary,
   type GdAttempt,
   type GdChatMessage,
   type GdChatTurn,
@@ -160,8 +162,13 @@ export function GraphicsStudioV2({
 }) {
   /* ---------------- state ---------------- */
   const [phase, setPhase] = useState<"setup" | "studio">("setup");
-  const [brands, setBrands] = useState<GdBrandOption[]>([]);
+  const [brands, setBrands] = useState<GdBrandSummary[]>([]);
   const [brandId, setBrandId] = useState<string>("");
+  // The brand-kit sheet: closed, creating, or editing one brand. `kitRev`
+  // ticks after a save so the picker and the config re-read the kit.
+  const [kitSheet, setKitSheet] = useState<{ open: boolean; brandId: string | null }>({ open: false, brandId: null });
+  const [kitRev, setKitRev] = useState(0);
+  const { user } = useAuth();
   const [cfg, setCfg] = useState<GdConfig | null>(null);
   const [aspect, setAspect] = useState<string>("");
   const [brief, setBrief] = useState("");
@@ -242,13 +249,13 @@ export function GraphicsStudioV2({
 
   /* ---------------- data loads ---------------- */
   useEffect(() => {
-    gdListBrands()
+    gdBrands()
       .then((r) => {
         setBrands(r.brands);
-        setBrandId((b) => b || r.default);
+        setBrandId((b) => (b && r.brands.some((x) => x.brand_id === b) ? b : r.default));
       })
       .catch(fail);
-  }, [fail]);
+  }, [fail, kitRev]);
 
   // Creative-Agent types for the setup picker (additive; failure is silent so
   // the social studio still works if the rail isn't reachable).
@@ -267,7 +274,7 @@ export function GraphicsStudioV2({
         setAspect((a) => a || (def ? def.ar : ""));
       })
       .catch(fail);
-  }, [brandId, fail]);
+  }, [brandId, fail, kitRev]);
 
   const cur = run ? stageNum(run.state) : 1;
 
@@ -1114,7 +1121,7 @@ export function GraphicsStudioV2({
     return (
       <CreativeAgent
         brandId={brandId || null}
-        brandName={brands.find((b) => b.id === brandId)?.name}
+        brandName={brands.find((b) => b.brand_id === brandId)?.name}
         creativeType={creaType}
         onToast={onToast}
         onBack={() => setLaunchedCreative(false)}
@@ -1128,6 +1135,7 @@ export function GraphicsStudioV2({
     const briefMax = 10000;
     const overBrief = brief.length >= briefMax;
     return (
+      <>
       <div className="gd2">
         <div className="gdx-scroll">
           <div className="gdx-wrap">
@@ -1165,10 +1173,32 @@ export function GraphicsStudioV2({
                     </span>
                     <select id="gd2brand" value={brandId} onChange={(e) => setBrandId(e.target.value)}>
                       {brands.map((b) => (
-                        <option key={b.id} value={b.id}>{b.name}</option>
+                        <option key={b.brand_id} value={b.brand_id}>{b.name}</option>
                       ))}
                     </select>
                     <svg className="gdx-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+                  </div>
+                  {/* Brands are shared: anyone here may add one or change its kit.
+                      A built-in pack has no "Edit kit" because a PATCH to it 409s. */}
+                  <div className="gdx-kitrow">
+                    <button
+                      type="button"
+                      className="gdx-attachbtn"
+                      onClick={() => setKitSheet({ open: true, brandId: null })}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                      New brand
+                    </button>
+                    {brands.find((b) => b.brand_id === brandId)?.editable ? (
+                      <button
+                        type="button"
+                        className="gdx-attachbtn"
+                        onClick={() => setKitSheet({ open: true, brandId })}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M16.5 3.5l4 4L8 20l-4.5 1L4.5 16.5 16.5 3.5z" /></svg>
+                        Edit kit
+                      </button>
+                    ) : null}
                   </div>
                 </div>
 
@@ -1375,6 +1405,25 @@ export function GraphicsStudioV2({
           </div>
         </div>
       </div>
+      {/* Outside `.gd2` on purpose: the sheet is the console's dialog, drawn
+          with the console's controls, and `.gd2`'s own button/input resets
+          would restyle it. */}
+      <BrandKitSheet
+        open={kitSheet.open}
+        brandId={kitSheet.brandId}
+        viewer={user ?? {}}
+        onToast={onToast}
+        onClose={() => setKitSheet((s) => ({ ...s, open: false }))}
+        onSaved={(b) => {
+          setBrandId(b.brand_id);
+          setKitRev((r) => r + 1);
+        }}
+        onArchived={(archivedId) => {
+          if (brandId === archivedId) setBrandId("");
+          setKitRev((r) => r + 1);
+        }}
+      />
+      </>
     );
   }
 

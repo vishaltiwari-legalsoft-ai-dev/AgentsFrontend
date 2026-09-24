@@ -13,10 +13,11 @@
 
 import { useEffect, useState } from "react";
 import {
-  gdIngestedBrands, loadLibrary,
-  type GdIngestedBrand, type LibraryBrand,
+  gdBrands, gdIngestedBrands, loadLibrary,
+  type GdBrandSummary, type GdIngestedBrand, type LibraryBrand,
 } from "@/lib/api";
 import { loadPending, useLoadSession, type Load } from "@/lib/load";
+import { BrandKitSheet } from "@/components/console/gd2/BrandKitSheet";
 import { useHeadline, useHub } from "../context";
 import { n, word } from "../model";
 import { Ic } from "../Sprite";
@@ -24,10 +25,15 @@ import { Blank, Oops, PageHead, Wait } from "../ui";
 import { useRuns } from "../useRuns";
 
 export function LibraryView() {
-  const { revision, openWork, toast } = useHub();
+  const { revision, openWork, toast, user, bumpRevision } = useHub();
   const session = useLoadSession();
   const [lib, setLib] = useState<Load<LibraryBrand[]>>(loadPending);
   const [kits, setKits] = useState<Load<GdIngestedBrand[]>>(loadPending);
+  // The shared brand registry — the one read that says whether a kit may be
+  // edited here (a built-in pack may not) and opens the same sheet the
+  // Graphic Designer uses. A failure here only hides the "Edit kit" buttons.
+  const [reg, setReg] = useState<Load<GdBrandSummary[]>>(loadPending);
+  const [kitSheet, setKitSheet] = useState<{ open: boolean; brandId: string | null }>({ open: false, brandId: null });
   const [beat, setBeat] = useState(0);
 
   const { state: feed } = useRuns({ limit: 1 }, revision, { live: false });
@@ -47,10 +53,30 @@ export function LibraryView() {
       "The brand kits could not be read.",
       { keepStale: true },
     );
+    void session.run(
+      "library-registry",
+      (signal) => gdBrands({ signal }).then((r) => r.brands),
+      setReg,
+      "The brand registry could not be read.",
+      { keepStale: true },
+    );
   }, [session, beat]);
 
   const brands = lib.data || [];
   const kitById = new Map((kits.data || []).map((k) => [k.id, k]));
+  const regById = new Map((reg.data || []).map((b) => [b.brand_id, b]));
+  const openKit = (brandId: string | null) => setKitSheet({ open: true, brandId });
+  const kitSheetEl = (
+    <BrandKitSheet
+      open={kitSheet.open}
+      brandId={kitSheet.brandId}
+      viewer={user}
+      onToast={toast}
+      onClose={() => setKitSheet((s) => ({ ...s, open: false }))}
+      onSaved={() => { setBeat((b) => b + 1); bumpRevision(); }}
+      onArchived={() => { setBeat((b) => b + 1); bumpRevision(); }}
+    />
+  );
   const totalAssets = brands.reduce((s, b) => s + b.creative_count, 0);
   const noLogo = brands.filter((b) => {
     const k = kitById.get(b.id);
@@ -83,14 +109,16 @@ export function LibraryView() {
         <Blank
           title="No brand kits"
           action={
-            <button type="button" className="btn btn--mark btn--sm" onClick={() => openWork("art")}>
-              Open the Graphic Designer
+            <button type="button" className="btn btn--mark btn--sm" onClick={() => openKit(null)}>
+              <Ic name="plus" />
+              Add a brand
             </button>
           }
         >
-          Brand kits are ingested from Drive or uploaded through the Graphic Designer. Once one is
-          in, its logo, palette and fonts are available to every specialist.
+          A brand starts with a name and one colour; its logo, fonts, guidelines and reference
+          creatives can follow. Once it is in, every specialist can draw on it.
         </Blank>
+        {kitSheetEl}
       </>
     );
   }
@@ -119,6 +147,7 @@ export function LibraryView() {
         const runs = feed.data?.facets.brands.find((x) => x.name === b.brand_name)?.count ?? null;
         const colors = kit?.primary_colors || [];
         const missingLogo = kit ? kit.counts.logos === 0 : false;
+        const editable = regById.get(b.id)?.editable === true;
         return (
           <section className="kit" key={b.id}>
             <div className="kit__head">
@@ -127,6 +156,11 @@ export function LibraryView() {
                 <span className="swatches" role="img" aria-label={`Brand colours: ${colors.join(", ")}`}>
                   {colors.map((c) => <i key={c} style={{ background: c }} />)}
                 </span>
+              )}
+              {editable && (
+                <button type="button" className="btn btn--quiet btn--sm kit__edit" onClick={() => openKit(b.id)}>
+                  Edit kit
+                </button>
               )}
             </div>
 
@@ -169,6 +203,10 @@ export function LibraryView() {
                     <button
                       type="button"
                       onClick={() => {
+                        if (editable) {
+                          openKit(b.id);
+                          return;
+                        }
                         toast("A logo is added with the brand kit, in the Graphic Designer.", "warn");
                         openWork("art");
                       }}
@@ -177,7 +215,7 @@ export function LibraryView() {
                       <b>No logo on file</b>
                       <span>
                         The Graphic Designer places one at stage four. Until it is here, no run for
-                        this brand can finish.
+                        this brand can finish.{editable ? " Add it here." : ""}
                       </span>
                     </button>
                   </li>
@@ -193,6 +231,7 @@ export function LibraryView() {
           </section>
         );
       })}
+      {kitSheetEl}
     </>
   );
 }
