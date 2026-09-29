@@ -138,7 +138,7 @@ export default function TopNav({
         <div className="tnav__ops">
           <button type="button" className="tnav__ic tnav__search" onClick={onOpenPalette} title="Search — Ctrl K">
             <Ic name="search" />
-            <span className="sr">Search</span>
+            <span className="tnav__slabel">Search</span>
             <kbd>Ctrl K</kbd>
           </button>
           <button type="button" className="tnav__ic" onClick={onBell} title="Announcements">
