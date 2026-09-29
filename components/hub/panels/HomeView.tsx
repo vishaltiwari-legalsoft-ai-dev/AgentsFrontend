@@ -124,10 +124,6 @@ function GuideModule({
             <button type="button" className="btn btn--quiet btn--sm" onClick={() => onOpen(agent.id)}>
               Open workspace
             </button>
-            <button type="button" className="btn btn--mark btn--sm" onClick={() => onBrief(agent.id)}>
-              <Ic name="send" />
-              Give it work
-            </button>
           </span>
         </header>
 
