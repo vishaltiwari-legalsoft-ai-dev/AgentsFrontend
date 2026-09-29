@@ -424,71 +424,76 @@
 
 /* ---------- the field guide (Home) ---------- */
 
-/* How the hub works: three moves, one strip. */
-.hgw {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;
-}
-.hgw__s {
-  position: relative;
-  padding: 16px 18px 15px;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-card);
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04);
-}
-.hgw__n {
-  position: absolute; top: 14px; right: 14px;
-  display: grid; place-items: center;
-  width: 22px; height: 22px;
+/* How the hub works: one slim line inside the lede, not three cards. The
+   lede's measure is for prose; a strip of three steps needs the row. */
+.app2 .lede:has(.hgw) { max-width: none; }
+.hgw { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.hgw > span { display: inline-flex; align-items: baseline; gap: 7px; white-space: nowrap; }
+.hgw > span b {
+  display: inline-grid; place-items: center; align-self: center;
+  width: 17px; height: 17px;
   border-radius: 50%;
-  background: var(--mark);
-  color: var(--mark-ink);
-  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+  background: var(--mark); color: var(--mark-ink);
+  font-size: 9.5px; font-weight: 700; font-variant-numeric: tabular-nums;
   box-shadow: inset 0 0 0 1px rgba(13, 15, 18, 0.1);
 }
-.hgw__s b { display: block; font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; }
-.hgw__s p { margin: 5px 24px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--fg-2); }
+.hgw > i { width: 22px; height: 1px; background: var(--rule-hard); }
 
-/* the manuals */
+/* The specialists: one contained master–detail module. The list keeps its
+   place on the left; exactly one manual is open on the right — never six
+   cards fighting down the page. */
 
-.hg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
-
-.hg__card {
+.hgm {
+  display: grid; grid-template-columns: 252px minmax(0, 1fr);
   border: 1px solid var(--rule);
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--surface);
-  padding: 18px 18px 14px;
-  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04);
-  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
-}
-.hg__card:hover {
-  border-color: var(--rule-hard);
-  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04), 0 18px 40px -28px rgba(13, 15, 18, 0.35);
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04), 0 24px 56px -44px rgba(13, 15, 18, 0.4);
+  overflow: hidden;
 }
 
-.hg__top { display: flex; align-items: center; gap: 12px; }
-.hg__id { display: flex; flex-direction: column; gap: 1px; min-width: 0; line-height: 1.3; }
-.hg__id b { font-size: 14.5px; font-weight: 600; letter-spacing: -0.015em; }
-.hg__id em { font-style: normal; font-size: 12px; color: var(--fg-3); }
-
-.hg__what { margin: 11px 0 0; font-size: 13px; line-height: 1.55; color: var(--fg-2); }
-
-/* the folded manual */
-
-.hg__more { margin-top: 13px; border-top: 1px solid var(--rule-soft); }
-.hg__more > summary {
-  display: flex; align-items: center; gap: 7px;
-  padding: 11px 0;
-  cursor: pointer; list-style: none;
-  font-size: 12.5px; font-weight: 600; color: var(--fg-2);
-  transition: color var(--t-fast) var(--ease);
+.hgm__list {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px;
+  border-right: 1px solid var(--rule-soft);
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
 }
-.hg__more > summary::-webkit-details-marker { display: none; }
-.hg__more > summary:hover { color: var(--fg); }
-.hg__more > summary svg { width: 12px; height: 12px; transition: transform var(--t-fast) var(--ease); }
-.hg__more[open] > summary svg { transform: rotate(90deg); }
 
-.hg__manual { padding: 2px 0 6px; display: grid; gap: 12px; }
+.hgm__row {
+  display: flex; align-items: center; gap: 11px;
+  padding: 9px 11px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  text-align: left;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.hgm__row:hover { background: color-mix(in srgb, var(--fg) 4%, transparent); }
+.hgm__row.is-on {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--fg) 8%, transparent);
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.05), 0 6px 16px -10px rgba(13, 15, 18, 0.18);
+}
+
+.hgm__who { display: flex; flex-direction: column; gap: 0; min-width: 0; line-height: 1.3; }
+.hgm__who b { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+.hgm__who em { font-style: normal; font-size: 10.5px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.hgm__detail { padding: 20px 24px 20px; min-width: 0; animation: hgm-in var(--t) var(--ease) both; }
+@keyframes hgm-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.hgm__head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s4);
+  padding-bottom: 14px; margin-bottom: 14px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.hgm__id { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.hgm__id b { font-size: 15px; font-weight: 600; letter-spacing: -0.015em; }
+.hgm__id em { font-style: normal; font-size: 12.5px; line-height: 1.5; color: var(--fg-2); max-width: 52ch; }
+.hgm__acts { display: flex; gap: 8px; flex: 0 0 auto; }
+
+/* the manual body (shared vocabulary, used inside the module) */
+
+.hg__manual { display: grid; gap: 12px; }
 .hg__manual > p { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--fg-2); }
 .hg__manual b { font-weight: 600; color: var(--fg); }
 
@@ -502,6 +507,7 @@
   position: relative;
   padding-left: 30px;
   font-size: 12.5px; line-height: 1.55; color: var(--fg-2);
+  max-width: 74ch;
 }
 .hg__steps li::before {
   content: counter(hgstep);
@@ -515,9 +521,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-.hg__tip { border-left: 2px solid var(--mark); padding-left: 10px; }
+.hg__tip { border-left: 2px solid var(--mark); padding-left: 10px; max-width: 70ch; }
 
-.hg__jobs { display: flex; flex-wrap: wrap; gap: 7px; }
+.hg__jobs { display: flex; flex-wrap: wrap; gap: 7px; padding-top: 2px; }
 .hg__job {
   padding: 6px 11px 7px; text-align: left;
   border: 1px solid var(--rule); border-radius: 9px;
@@ -528,24 +534,22 @@
 .hg__job b { display: block; font-size: 12px; font-weight: 600; letter-spacing: -0.01em; }
 .hg__job span { display: block; margin-top: 1px; font-size: 10.5px; color: var(--fg-3); }
 
-.hg__acts { display: flex; gap: 8px; margin-top: 13px; padding-top: 13px; border-top: 1px solid var(--rule-soft); }
+/* the FAQ: two quiet columns of one-at-a-time accordions */
 
-/* the FAQ */
-
-.hgfaq { max-width: 780px; }
+.hgfaq { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 44px; }
 .hgfaq details { border-bottom: 1px solid var(--rule-soft); }
 .hgfaq summary {
   display: flex; align-items: center; justify-content: space-between; gap: var(--s4);
-  padding: 15px 2px;
+  padding: 13px 2px;
   cursor: pointer; list-style: none;
-  font-size: 14px; font-weight: 550; letter-spacing: -0.01em;
+  font-size: 13px; font-weight: 550; letter-spacing: -0.008em;
   transition: color var(--t-fast) var(--ease);
 }
 .hgfaq summary::-webkit-details-marker { display: none; }
 .hgfaq summary:hover { color: var(--fg-2); }
-.hgfaq summary svg { width: 14px; height: 14px; flex: 0 0 auto; color: var(--fg-3); transition: transform var(--t-fast) var(--ease); }
+.hgfaq summary svg { width: 13px; height: 13px; flex: 0 0 auto; color: var(--fg-3); transition: transform var(--t-fast) var(--ease); }
 .hgfaq details[open] summary svg { transform: rotate(45deg); }
-.hgfaq details > p { margin: 0; padding: 0 2px 17px; font-size: 13px; line-height: 1.65; color: var(--fg-2); max-width: 66ch; }
+.hgfaq details > p { margin: 0; padding: 0 2px 15px; font-size: 12.5px; line-height: 1.6; color: var(--fg-2); max-width: 58ch; }
 
 /* the foot links */
 
@@ -557,7 +561,15 @@
 }
 .hgfoot button:hover { color: var(--fg); text-decoration-color: var(--fg); }
 
+/* tighter rhythm for the guide page */
+.app2 .phead { margin-bottom: 46px; }
+.app2 .band { margin-bottom: 72px; }
+
 @media (max-width: 900px) {
-  .hgw { grid-template-columns: minmax(0, 1fr); }
-  .hg { grid-template-columns: minmax(0, 1fr); }
+  .hgm { grid-template-columns: minmax(0, 1fr); }
+  .hgm__list { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--rule-soft); }
+  .hgm__row { flex: 0 0 auto; }
+  .hgm__who em { display: none; }
+  .hgm__head { flex-direction: column; }
+  .hgfaq { grid-template-columns: minmax(0, 1fr); }
 }

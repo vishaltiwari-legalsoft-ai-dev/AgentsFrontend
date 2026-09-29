@@ -1,18 +1,13 @@
 "use client";
 
-/** Home — the field guide.
+/** Home — the field guide, contained.
  *
- *  The old front page tried to be a dashboard: a personal list, the shop's
- *  blockers, a composer, usage bars and the live ledger, all at once — and
- *  read as none of them. What people actually asked of it was orientation:
- *  which specialists exist, how do I use each one, and the handful of
- *  questions everyone has in their first week.
- *
- *  So Home now answers exactly that, in three moves: how the hub works in one
- *  strip, a usage manual per specialist (with its quick-start jobs folded
- *  inside), and the FAQ. Everything operational lives where it belongs —
- *  what needs you on Issues, what is running on Runs — and the two quiet
- *  links at the foot go there.
+ *  Orientation, in three moves that stay out of each other's way: how the hub
+ *  works in one slim line, the specialists in a single master–detail module
+ *  (their list on the left, one manual open on the right — never six cards
+ *  fighting down the page), and the FAQ in two quiet columns. Everything
+ *  operational lives where it belongs — what needs you on Issues, what is
+ *  running on Runs — and the two links at the foot go there.
  *
  *  Nothing here is fetched. The guide is authored (`../guide`), so the front
  *  page opens instantly and can never greet somebody with an error card.
@@ -49,40 +44,26 @@ export function HomeView() {
             You have <b>{word(mine.length)} specialist{mine.length === 1 ? "" : "s"}</b> on staff.
           </>
         }
-        lede="Each one is a colleague with a single job. Below: how the hub works, how to put each specialist to work, and the questions everyone asks."
+        lede={
+          <span className="hgw">
+            <span><b>1</b> Brief one</span>
+            <i aria-hidden="true" />
+            <span><b>2</b> Watch the run on Runs</span>
+            <i aria-hidden="true" />
+            <span><b>3</b> Collect it in the workspace</span>
+          </span>
+        }
       />
 
-      <section className="band">
-        <div className="hgw">
-          <div className="hgw__s">
-            <span className="hgw__n" aria-hidden="true">1</span>
-            <b>Brief it</b>
-            <p>Pick a specialist and hand it work — a ready-made job, or a brief in your own words.</p>
-          </div>
-          <div className="hgw__s">
-            <span className="hgw__n" aria-hidden="true">2</span>
-            <b>It runs</b>
-            <p>Every job files a run you can watch on Runs — queued, running, done. Failures are kept and say where they stopped.</p>
-          </div>
-          <div className="hgw__s">
-            <span className="hgw__n" aria-hidden="true">3</span>
-            <b>Collect the work</b>
-            <p>The finished thing waits in the specialist's workspace — creatives are archived to the Library as well.</p>
-          </div>
-        </div>
-      </section>
-
-      <section className="band">
-        <RuleHead
-          title="The specialists"
-          note="Open a manual for the path through a first run — each one takes about a minute to read."
-        />
-        <div className="hg">
-          {mine.map((a) => (
-            <GuideCard key={a.id} agent={a} onBrief={openBrief} onOpen={openSlug} />
-          ))}
-        </div>
-      </section>
+      {mine.length > 0 && (
+        <section className="band">
+          <RuleHead
+            title="The specialists"
+            note="Pick one — its manual opens beside the list, and takes a minute to read."
+          />
+          <GuideModule agents={mine} onBrief={openBrief} onOpen={openSlug} />
+        </section>
+      )}
 
       <section className="band">
         <RuleHead title="Questions everyone asks" note="The first-week questions, answered once." />
@@ -99,37 +80,58 @@ export function HomeView() {
   );
 }
 
-/* ------------------------------------------------------------ one manual -- */
+/* -------------------------------------------------- the specialists module -- */
 
-function GuideCard({
-  agent, onBrief, onOpen,
+function GuideModule({
+  agents, onBrief, onOpen,
 }: {
-  agent: HubAgent;
+  agents: HubAgent[];
   onBrief: (agentId: string) => void;
   onOpen: (agentId: string, section?: string) => void;
 }) {
+  const [who, setWho] = useState(agents[0].id);
+  const agent = agents.find((a) => a.id === who) || agents[0];
   const guide = GUIDES[agent.id];
   const jobs = JOBS[agent.id] || [];
 
   return (
-    <article className="hg__card">
-      <header className="hg__top">
-        <Mono agent={agent} size="lg" />
-        <div className="hg__id">
-          <b>{agent.name}</b>
-          <em>{agent.role}</em>
-        </div>
-      </header>
+    <div className="hgm">
+      <nav className="hgm__list" aria-label="Specialists">
+        {agents.map((a) => (
+          <button
+            type="button"
+            key={a.id}
+            className={`hgm__row${a.id === agent.id ? " is-on" : ""}`}
+            aria-current={a.id === agent.id ? "true" : undefined}
+            onClick={() => setWho(a.id)}
+          >
+            <Mono agent={a} />
+            <span className="hgm__who">
+              <b>{a.name}</b>
+              <em>{a.role}</em>
+            </span>
+          </button>
+        ))}
+      </nav>
 
-      <p className="hg__what">{agent.desc}</p>
+      <article className="hgm__detail" key={agent.id}>
+        <header className="hgm__head">
+          <div className="hgm__id">
+            <b>{agent.name}</b>
+            <em>{agent.desc}</em>
+          </div>
+          <span className="hgm__acts">
+            <button type="button" className="btn btn--quiet btn--sm" onClick={() => onOpen(agent.id)}>
+              Open workspace
+            </button>
+            <button type="button" className="btn btn--mark btn--sm" onClick={() => onBrief(agent.id)}>
+              <Ic name="send" />
+              Give it work
+            </button>
+          </span>
+        </header>
 
-      {guide && (
-        <details className="hg__more">
-          <summary>
-            <Ic name="chevron" />
-            How to use it
-          </summary>
-
+        {guide && (
           <div className="hg__manual">
             <p className="hg__when">
               <b>Reach for it when:</b> {guide.when}
@@ -168,19 +170,9 @@ function GuideCard({
               </div>
             )}
           </div>
-        </details>
-      )}
-
-      <footer className="hg__acts">
-        <button type="button" className="btn btn--quiet btn--sm" onClick={() => onOpen(agent.id)}>
-          Open workspace
-        </button>
-        <button type="button" className="btn btn--mark btn--sm" onClick={() => onBrief(agent.id)}>
-          <Ic name="send" />
-          Give it work
-        </button>
-      </footer>
-    </article>
+        )}
+      </article>
+    </div>
   );
 }
 
