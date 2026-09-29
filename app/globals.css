@@ -16,6 +16,9 @@
 
 /* Archivo, worked across its width axis — the new system's only typeface. */
 @import url("https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,400..800;1,62..125,400..800&display=swap");
+/* Inter is the revamp shell's typeface (hub-topnav.css scopes it to `.app2`)
+   and is self-hosted from /public/fonts — no third-party fetch in the render
+   path, and it loads in any environment. */
 
 /* --- the old system, for the panels still on it -------------------------- */
 @import url("../styles.css");

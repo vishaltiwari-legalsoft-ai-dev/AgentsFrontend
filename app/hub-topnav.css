@@ -1,20 +1,41 @@
 /* The revamped top-nav shell (panel views only; workspaces still use the rail).
  *
- * The premium read comes from restraint, not decoration: true white, one
- * accent used once (the marigold bar under the active section), text-only
- * navigation, and generous vertical rhythm. Three quiet layers keep the
- * white reading as paper rather than a void — a graphite glow falling from
- * the top-left, a warm marigold breath from the top-right, and a whisper of
- * photographic grain — plus an engineered dot grid that lives only in the
- * hero zone and scrolls away with it.
+ * Three decisions carry the whole look:
+ *
+ *   1. The page is engineering paper — true white under a full-page grid of
+ *      graphite dots, vignetted so it is present everywhere and loud nowhere.
+ *   2. The type is Inter, set quiet: medium weights, tight tracking, no width
+ *      games. Archivo keeps the rail shell and the workspaces; this shell
+ *      re-fonts itself at the `.app2` boundary.
+ *   3. The header is a floating glass capsule over the dots, not a bar nailed
+ *      across the top: hairline edge, top highlight, long soft shadow. The
+ *      active section is a raised white chip with a marigold point — the one
+ *      place the brand colour appears in the chrome.
  *
  * Inside `.app2` the page colour token is re-pinned to true white so every
  * rule that paints `--bg` agrees with the page behind it. Dark theme keeps
- * its own palette; the paper layers fade to almost nothing there.
+ * its own palette; the paper flips to white dots on graphite.
  *
  * Class names are namespaced (tnav / app2) because the two older systems in
  * this stylesheet stack already own the plain words (`.stage`, `.head`).
  */
+
+/* Inter 4, variable and self-hosted: one file covers 100–900, so every weight
+   below is the real cut, never a synthesized bold. */
+@font-face {
+  font-family: "InterVariable";
+  src: url("/fonts/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "InterVariable";
+  src: url("/fonts/InterVariable-Italic.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
 
 .app2 {
   position: relative;
@@ -23,34 +44,27 @@
   flex-direction: column;
   --bg: #FFFFFF;
   background:
-    radial-gradient(900px 380px at 16% -160px, rgba(13, 15, 18, 0.045), transparent 65%),
-    radial-gradient(1100px 460px at 84% -200px, rgba(255, 216, 77, 0.09), transparent 62%),
+    radial-gradient(1300px 520px at 50% -240px, rgba(13, 15, 18, 0.035), transparent 70%),
     var(--bg);
+  font-family: "InterVariable", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-optical-sizing: auto;
+  letter-spacing: -0.011em;
+  font-feature-settings: "cv11" 1, "ss01" 1;
 }
 
-/* The grain: one 160px tile of monochrome turbulence at 3% ink, fixed so it
-   does not swim under the content while scrolling. */
+/* The dotted paper: one dot every 22px, everywhere, fading a little with
+   depth so long pages end quieter than they begin. Fixed, so the paper holds
+   still while the work scrolls over it. */
 .app2::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
-}
-
-/* The dot grid: hero zone only, dissolving before the first section. */
-.app2::after {
-  content: "";
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 540px;
-  z-index: 0;
-  pointer-events: none;
-  background-image: radial-gradient(circle, rgba(13, 15, 18, 0.06) 1px, transparent 1.1px);
-  background-size: 24px 24px;
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.5) 55%, transparent 100%);
-  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.5) 55%, transparent 100%);
+  background-image: radial-gradient(circle, rgba(13, 15, 18, 0.085) 1px, transparent 1.1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: linear-gradient(180deg, #000, rgba(0, 0, 0, 0.45));
+  mask-image: linear-gradient(180deg, #000, rgba(0, 0, 0, 0.45));
 }
 
 .app2 > * { position: relative; z-index: 1; }
@@ -59,92 +73,120 @@
   --bg: #101318;
   background: var(--bg);
 }
-[data-theme="dark"] .app2::before { opacity: 0.4; }
-[data-theme="dark"] .app2::after { display: none; }
+[data-theme="dark"] .app2::before {
+  background-image: radial-gradient(circle, rgba(211, 216, 222, 0.07) 1px, transparent 1.1px);
+}
 
-/* ---------- the header ---------- */
+/* ---------- the floating header ---------- */
 
 .tnav {
   position: sticky; top: 0; z-index: 40;
-  background: color-mix(in srgb, var(--bg) 80%, transparent);
-  backdrop-filter: blur(18px) saturate(1.4);
-  border-bottom: 1px solid var(--rule-soft);
-  box-shadow: 0 12px 32px -28px rgba(13, 15, 18, 0.3);
+  padding: 12px 24px 8px;
+}
+
+/* A soft veil above the capsule, so content sliding through the gap over it
+   dissolves instead of scraping the viewport edge. */
+.tnav::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 24px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 94%, transparent), transparent);
+  pointer-events: none;
 }
 
 .tnav__in {
+  position: relative;
   display: flex; align-items: center; gap: var(--s4);
-  max-width: calc(var(--measure) + 64px);
+  max-width: calc(var(--measure) + 48px);
   margin: 0 auto;
-  min-height: 64px;
-  padding: 0 32px;
+  min-height: 56px;
+  padding: 0 10px 0 20px;
+  background: color-mix(in srgb, var(--bg) 74%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--fg) 9%, transparent);
+  border-radius: var(--r-pill);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    0 1px 2px rgba(13, 15, 18, 0.04),
+    0 20px 48px -28px rgba(13, 15, 18, 0.35);
+}
+[data-theme="dark"] .tnav__in {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 20px 48px -28px rgba(0, 0, 0, 0.7);
 }
 
 /* brand */
 
-.tnav__brand { display: flex; align-items: center; gap: 11px; padding: 6px 2px; border-radius: var(--r-ctl); }
+.tnav__brand { display: flex; align-items: center; gap: 10px; padding: 4px 2px; border-radius: var(--r-pill); }
 
 .tnav__glyph {
-  width: 25px; height: 25px; flex: 0 0 auto;
-  border-radius: 7px; background: var(--mark);
-  box-shadow: inset 0 -9px 0 var(--fg), inset 0 0 0 1px rgba(13, 15, 18, 0.08);
+  width: 24px; height: 24px; flex: 0 0 auto;
+  border-radius: 8px; background: var(--mark);
+  box-shadow: inset 0 -8px 0 var(--fg), inset 0 0 0 1px rgba(13, 15, 18, 0.08);
 }
 
-.tnav__names { display: flex; flex-direction: column; gap: 1px; line-height: 1.15; text-align: left; min-width: 0; }
-.tnav__names b { color: var(--fg); font-size: 15px; font-stretch: 115%; font-weight: 800; letter-spacing: -0.01em; }
+.tnav__names { display: flex; flex-direction: column; gap: 1px; line-height: 1.1; text-align: left; min-width: 0; }
+.tnav__names b { color: var(--fg); font-size: 14px; font-weight: 650; letter-spacing: -0.02em; }
 .tnav__names em {
-  font-style: normal; font-size: 8.5px; font-weight: 700; font-stretch: 92%;
-  letter-spacing: 0.14em; text-transform: uppercase;
+  font-style: normal; font-size: 8px; font-weight: 600;
+  letter-spacing: 0.16em; text-transform: uppercase;
   color: var(--fg-3); white-space: nowrap;
 }
 
-/* nav — text only, ink on paper; the one marigold in the shell is the bar
-   under the section you are on. No overflow rule here, on purpose: the
-   Setup and account menus hang below this row as absolutely-positioned
-   children, and any overflow value but `visible` would clip them. Small
-   screens swap the labels for their icons instead (media block below). */
+/* nav — quiet text; the section you are on is a raised white chip carrying a
+   marigold point. No overflow rule here, on purpose: the Setup and account
+   menus hang below this row as absolutely-positioned children, and any
+   overflow value but `visible` would clip them. Small screens swap the
+   labels for their icons instead (media block below). */
 
 .tnav__nav {
-  display: flex; align-items: center; gap: 4px;
-  min-width: 0; margin-left: var(--s4);
+  display: flex; align-items: center; gap: 2px;
+  min-width: 0; margin-left: var(--s3);
 }
 
 .tnav__item {
   position: relative;
   display: inline-flex; align-items: center; gap: 7px;
-  height: 36px; padding: 0 12px;
+  height: 36px; padding: 0 13px;
+  border: 1px solid transparent;
   border-radius: var(--r-pill);
-  font-size: 13.5px; font-weight: 600; font-stretch: 102%;
+  font-size: 13px; font-weight: 500;
   color: var(--fg-2);
   white-space: nowrap;
-  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
 .tnav__item svg { display: none; width: 17px; height: 17px; flex: 0 0 auto; }
 .tnav__item:hover, .tnav__item.is-open { color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); }
 
-.tnav__item.is-on { color: var(--fg); font-weight: 700; }
-
-/* The active bar sits on the header's baseline, meeting the hairline.
-   36px control centred in 64px leaves 14px below it. */
-.tnav__item.is-on::after {
-  content: "";
-  position: absolute;
-  left: 11px; right: 11px; bottom: -14px;
-  height: 2px;
-  border-radius: 2px 2px 0 0;
-  background: linear-gradient(90deg, var(--mark-line), var(--mark));
+.tnav__item.is-on {
+  color: var(--fg); font-weight: 600;
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--fg) 8%, transparent);
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.06), 0 6px 16px -10px rgba(13, 15, 18, 0.25);
 }
+.tnav__item.is-on::before {
+  content: "";
+  width: 5px; height: 5px; flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--mark);
+  box-shadow: inset 0 0 0 1px rgba(13, 15, 18, 0.12);
+}
+[data-theme="dark"] .tnav__item.is-on { background: var(--surface-2); }
 
 .tnav__count {
   margin-left: 1px;
-  font-size: 10.5px; font-weight: 650; font-variant-numeric: tabular-nums;
+  font-size: 10px; font-weight: 550; font-variant-numeric: tabular-nums;
   color: var(--fg-3);
   transform: translateY(-4px);
 }
 
 /* The sprite's chevron points right; closed reads "opens downward", open
    flips it. */
-.tnav__caret { display: inline-flex; margin: 2px 0 0 -1px; opacity: 0.55; }
+.tnav__caret { display: inline-flex; margin: 1px 0 0 -1px; opacity: 0.5; }
 .tnav__caret svg { display: block; width: 11px; height: 11px; transform: rotate(90deg); transition: transform var(--t-fast) var(--ease); }
 .tnav__item.is-open .tnav__caret svg { transform: rotate(-90deg); }
 
@@ -153,19 +195,22 @@
 .tnav__drop { position: relative; }
 
 .tnav__menu {
-  position: absolute; top: calc(100% + 14px);
-  min-width: 244px; padding: 7px;
-  background: var(--surface);
-  border: 1px solid var(--rule-soft);
-  border-radius: var(--r-pane);
+  position: absolute; top: calc(100% + 12px);
+  min-width: 248px; padding: 7px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid color-mix(in srgb, var(--fg) 9%, transparent);
+  border-radius: 16px;
   box-shadow:
-    0 32px 72px -28px rgba(13, 15, 18, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 32px 72px -28px rgba(13, 15, 18, 0.35),
     0 6px 18px -8px rgba(13, 15, 18, 0.12);
   display: grid; gap: 1px;
   z-index: 50;
   animation: tnav-pop var(--t-fast) var(--ease) both;
 }
-@keyframes tnav-pop { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
+[data-theme="dark"] .tnav__menu { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 32px 72px -28px rgba(0, 0, 0, 0.8); }
+@keyframes tnav-pop { from { opacity: 0; transform: translateY(-5px) scale(0.99); } to { opacity: 1; transform: none; } }
 
 .tnav__menu--nav { left: 0; }
 .tnav__menu--user { right: 0; }
@@ -173,33 +218,38 @@
 .tnav__mi {
   display: flex; align-items: center; gap: 11px;
   width: 100%; min-height: 37px; padding: 0 11px;
-  border-radius: 9px;
-  font-size: 13px; font-weight: 570; color: var(--fg);
+  border-radius: 10px;
+  font-size: 13px; font-weight: 500; color: var(--fg);
   text-align: left;
   transition: background var(--t-fast) var(--ease);
 }
 .tnav__mi svg { width: 16px; height: 16px; flex: 0 0 auto; color: var(--fg-3); }
-.tnav__mi:hover { background: var(--surface-2); }
+.tnav__mi:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
 .tnav__mi:hover svg { color: var(--fg); }
 .tnav__mi.is-on { background: var(--mark-row); }
 .tnav__mi.is-on svg { color: var(--mark-ink); }
 .tnav__mi .tnav__count { margin-left: auto; transform: none; }
 
-.tnav__who { display: flex; flex-direction: column; gap: 1px; padding: 10px 11px 12px; margin-bottom: 6px; border-bottom: 1px solid var(--rule-soft); line-height: 1.35; }
-.tnav__who b { font-size: 13px; }
+.tnav__who {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 10px 11px 12px; margin-bottom: 6px;
+  border-bottom: 1px solid var(--rule-soft);
+  line-height: 1.35;
+}
+.tnav__who b { font-size: 13px; font-weight: 600; }
 .tnav__who em { font-style: normal; font-size: 11px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; }
 .tnav__tier {
   align-self: start;
-  margin-top: 7px; padding: 2px 8px;
+  margin-top: 7px; padding: 2.5px 9px;
   border: 1px solid var(--rule); border-radius: var(--r-pill);
-  font-size: 9px; font-stretch: 88%; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase;
+  font-size: 8.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--fg-2);
   background: var(--surface-2);
 }
 
 /* right-side ops */
 
-.tnav__ops { margin-left: auto; display: flex; align-items: center; gap: 9px; flex: 0 0 auto; }
+.tnav__ops { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 
 .tnav__ic {
   position: relative;
@@ -216,19 +266,19 @@
 .tnav__search {
   width: auto; min-width: 168px;
   justify-content: flex-start; gap: 8px;
-  padding: 0 7px 0 11px;
-  border-color: var(--rule);
-  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  padding: 0 7px 0 12px;
+  border-color: color-mix(in srgb, var(--fg) 9%, transparent);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
   color: var(--fg-3);
-  font-size: 12.5px; font-weight: 500;
+  font-size: 12.5px; font-weight: 450;
 }
 .tnav__search svg { width: 14px; height: 14px; }
-.tnav__search:hover { border-color: var(--rule-hard); background: var(--surface); color: var(--fg-2); }
+.tnav__search:hover { border-color: color-mix(in srgb, var(--fg) 18%, transparent); background: var(--surface); color: var(--fg-2); }
 .tnav__search .tnav__slabel { flex: 1 1 auto; text-align: left; }
 .tnav__search kbd {
-  font: inherit; font-size: 10px; font-weight: 650; letter-spacing: 0.02em; color: var(--fg-3);
+  font: inherit; font-size: 10px; font-weight: 550; letter-spacing: 0.02em; color: var(--fg-3);
   padding: 2px 6px;
-  border: 1px solid var(--rule); border-radius: 5px;
+  border: 1px solid var(--rule); border-radius: 6px;
   background: var(--surface);
   box-shadow: inset 0 -1px 0 var(--rule-soft);
 }
@@ -241,30 +291,30 @@
 
 .tnav__av {
   display: grid; place-items: center;
-  width: 33px; height: 33px;
+  width: 34px; height: 34px;
   border-radius: 50%;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--fg) 86%, #fff), var(--fg));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--fg) 84%, #fff), var(--fg));
   color: var(--bg);
-  font-size: 11px; font-weight: 800; font-stretch: 80%; letter-spacing: 0.05em;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 1px 2px rgba(13, 15, 18, 0.2);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1px 2px rgba(13, 15, 18, 0.25);
   transition: box-shadow var(--t-fast) var(--ease);
 }
 .tnav__av:hover, .tnav__av.is-open {
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 1px 2px rgba(13, 15, 18, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 1px 2px rgba(13, 15, 18, 0.25),
     0 0 0 3px color-mix(in srgb, var(--fg) 12%, transparent);
 }
 
-/* Scoped button refinements: same vocabulary, finer cut. */
-.app2 .btn { border-radius: 9px; }
+/* Chrome buttons go fully round to sit in the capsule. */
+.tnav .btn--sm { min-height: 36px; padding: 0 16px; font-size: 12.5px; font-weight: 600; border-radius: var(--r-pill); }
 .app2 .btn--solid {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 2px rgba(13, 15, 18, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 1px 2px rgba(13, 15, 18, 0.25);
 }
 .app2 .btn--mark {
   box-shadow: inset 0 -1px 0 rgba(13, 15, 18, 0.14), 0 1px 2px rgba(13, 15, 18, 0.12);
 }
-.tnav .btn--sm { min-height: 34px; padding: 0 15px; font-size: 12.5px; }
+.app2 .btn { border-radius: 9px; }
 
 /* ---------- the stage under it ---------- */
 
@@ -272,52 +322,66 @@
   flex: 1; width: 100%;
   max-width: calc(var(--measure) + 64px);
   margin: 0 auto;
-  padding: 42px 32px 96px;
+  padding: 40px 32px 110px;
 }
 
 /* The eyebrow: where you are and what the panel is doing, said once, small,
    above the hero — with the account's spend kept quietly to the right. */
 .app2__head {
   display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s4);
-  margin-bottom: 38px;
+  margin-bottom: 40px;
 }
 .app2__head h1 {
-  font-size: 10.5px; font-weight: 800; font-stretch: 96%;
-  letter-spacing: 0.16em; text-transform: uppercase;
+  font-size: 10px; font-weight: 650;
+  letter-spacing: 0.18em; text-transform: uppercase;
   color: var(--fg-3);
 }
-.app2__head p { margin: 4px 0 0; font-size: 12px; color: var(--fg-3); font-variant-numeric: tabular-nums; }
+.app2__head p { margin: 5px 0 0; font-size: 12px; color: var(--fg-3); font-variant-numeric: tabular-nums; }
 
 .app2__head .spend { gap: 22px; }
-.app2__head .spend b { font-size: 13px; }
-.app2__head .spend span { font-size: 8.5px; letter-spacing: 0.1em; }
+.app2__head .spend b { font-size: 13px; font-weight: 600; }
+.app2__head .spend span { font-size: 8px; font-weight: 600; letter-spacing: 0.12em; }
 
 /* `.canvas` pads itself for the old frame; the stage already owns those
    margins, so inside it the canvas is just the content column. */
 .app2__stage .canvas { padding: 0; max-width: none; }
 
-/* ---------- editorial scale for the panels on this shell ---------- */
+/* ---------- editorial scale, set in Inter ---------- */
 
-.app2 .phead { margin-bottom: 58px; }
+.app2 h1, .app2 h2, .app2 h3, .app2 h4 { letter-spacing: -0.02em; }
+
+.app2 .phead { margin-bottom: 64px; }
 
 .app2 .statement {
-  max-width: 30ch;
-  font-size: clamp(26px, 2.6vw, 36px);
-  line-height: 1.08;
-  letter-spacing: -0.035em;
+  max-width: 26ch;
+  font-size: clamp(27px, 2.8vw, 38px);
+  font-weight: 560;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
 }
 
-.app2 .lede { margin-top: 14px; font-size: 14px; max-width: 64ch; }
+/* The prototype's marigold swipe filled the phrase; here it thins to a
+   marker underline — same reveal, a tenth of the ink. */
+.app2 .statement b { color: inherit; }
+.app2 .statement b::before {
+  top: auto; bottom: 0.03em; height: 0.14em;
+  transform: none;
+  border-radius: 2px;
+  opacity: 0.95;
+}
 
-.app2 .band { margin-bottom: 88px; }
+.app2 .lede { margin-top: 16px; font-size: 14.5px; font-weight: 450; max-width: 62ch; color: var(--fg-2); }
 
-.app2 .rule-head { padding-bottom: 10px; margin-bottom: var(--s4); border-bottom-color: var(--rule); }
+.app2 .band { margin-bottom: 96px; }
+
+.app2 .rule-head { padding-bottom: 11px; margin-bottom: var(--s4); border-bottom-color: var(--rule); }
 .app2 .rule-head h2 {
-  font-size: 11.5px; font-weight: 800; font-stretch: 96%;
-  letter-spacing: 0.13em; text-transform: uppercase;
+  font-size: 11px; font-weight: 650;
+  letter-spacing: 0.15em; text-transform: uppercase;
   color: var(--fg-2);
 }
 .app2 .rule-head p { font-size: 13px; }
+.app2 .rule-head .aside { font-weight: 550; }
 
 /* Interactive cards lift; paper stays still. */
 .app2 .job {
@@ -333,25 +397,27 @@
   transform: translateY(-1px);
   box-shadow: 0 14px 30px -18px rgba(13, 15, 18, 0.3);
 }
+.app2 .job b { font-weight: 600; }
 
 .app2 .add {
   border-radius: var(--r-card);
   padding: 11px 13px;
+  background: var(--surface);
   box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04);
 }
 
 /* ---------- small screens ---------- */
 
 @media (max-width: 900px) {
-  .tnav__in { padding: 0 16px; gap: var(--s3); min-height: 56px; }
+  .tnav { padding: 8px 12px 6px; }
+  .tnav__in { padding: 0 8px 0 14px; gap: var(--s3); min-height: 50px; }
   .tnav__names em { display: none; }
   /* labels become their icons */
   .tnav__item span:not(.tnav__count) { display: none; }
   .tnav__item svg { display: block; }
   .tnav__item { padding: 0 10px; }
-  .tnav__item.is-on::after { bottom: -10px; }
   .tnav__search { min-width: 0; width: 36px; padding: 0; justify-content: center; }
   .tnav__search .tnav__slabel, .tnav__search kbd { display: none; }
-  .app2__stage { padding: var(--s5) 16px 64px; }
-  .app2 .statement { font-size: clamp(22px, 6vw, 28px); }
+  .app2__stage { padding: var(--s5) 16px 72px; }
+  .app2 .statement { font-size: clamp(24px, 6.5vw, 30px); }
 }
