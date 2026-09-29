@@ -90,35 +90,43 @@ export interface Faq {
 
 export const FAQS: Faq[] = [
   {
-    q: "I pressed “Give it work”. What happens now?",
-    a: "It files a run. You can watch it on Runs — queued, running, then done. When it finishes, the result is waiting in that specialist's workspace, and finished creatives are also archived to the Library.",
+    q: "If I close the tab while something is running, does the run die?",
+    a: "No. Runs execute on the backend, not in your browser — close the tab, go to lunch, come back. The run will have carried on without you; Runs shows where it landed.",
   },
   {
-    q: "Where do finished things end up?",
-    a: "Each workspace keeps its own record of what it made. Beyond that: creatives land in the Library as PNGs, research reports come with a PDF, and blog drafts export as Markdown or HTML.",
+    q: "The result is 90% right. Do I have to start over for the last 10%?",
+    a: "Rarely. The Graphic Designer takes a retouch instruction on the finished creative, and any of its four stages can be regenerated alone. The Blog Writer updates an existing post rather than rewriting it. Starting over is for a different brief, not a different detail.",
   },
   {
     q: "A run failed. Did I lose the work?",
     a: "No. A failed run is kept on purpose — open it on Runs to see exactly where it stopped and why. Fix what it names (often an integration or a missing input) and run it again.",
   },
   {
-    q: "What are brands and kits?",
-    a: "The brand registry is shared by the whole team. A kit is everything a brand owns — colours, fonts, logos, reference creatives — and the Graphic Designer pulls from it so nothing goes out off-brand. Kits are managed in the Library.",
+    q: "How do I make sure everything comes out on-brand?",
+    a: "Keep the brand's kit complete in the Library — colours, fonts, logos, and real reference creatives. The Graphic Designer pulls from the kit on every run, so the kit is where “on-brand” is defined. When output drifts, a thin kit is usually why.",
+  },
+  {
+    q: "Will teammates and I step on each other's work?",
+    a: "Runs are personal — the record you see is your own work, and nobody can touch it. Brands and kits are shared by the whole team, so editing a kit changes what everyone's next creative pulls. Run things freely; change kits deliberately.",
+  },
+  {
+    q: "What is this costing us?",
+    a: "The figures beside the page title are the account's live numbers — tokens used, credits left, and 30-day spend. A single run's cost is not recorded anywhere, so no per-run price is shown; the 30-day figure is the one to watch.",
+  },
+  {
+    q: "Is Inbox Triage safe to point at a real mailbox?",
+    a: "Yes — its access is read-only. It cannot send, label, delete or mark mail. The only thing it writes is rows in a Google Sheet you own: one per message, refreshed every five minutes, deadlines gathered on the Upcoming tab.",
+  },
+  {
+    q: "Something looks broken. Where do I look first?",
+    a: "Issues. Every problem the hub knows about is there in plain words, most severe first, each with a button to the place it gets fixed. If a connection is the culprit, its state also shows under Setup → Integrations.",
   },
   {
     q: "Why can't I see Models, Schedule or Admin?",
-    a: "They are gated by role. Models and Schedule belong to the creator account, Admin to admins. A GEO-only account sees just the GEO surface. If you need more, ask the account owner.",
+    a: "They are gated by role: Models and Schedule belong to the creator account, Admin to admins, and a GEO-only account sees just the GEO surface. Needing one of them is a request to the account owner, not a bug.",
   },
   {
-    q: "How do integrations connect?",
-    a: "Under Setup → Integrations. Each connection says what it is for — Gmail powers Inbox Triage, search data powers the SEO Analyst — and what state it is in. Anything broken there also shows up as an issue.",
-  },
-  {
-    q: "What is the fastest way to move around?",
-    a: "Ctrl K. It searches every panel and specialist from anywhere — type where you want to be and press Enter.",
-  },
-  {
-    q: "What does the bell in the header mean?",
-    a: "Announcements from the account owner. A dot on the bell means there is one you haven't seen; it opens in Settings.",
+    q: "What is the fastest way to get anywhere?",
+    a: "Ctrl K, from any screen. Type the panel or specialist you want and press Enter — it beats any amount of clicking.",
   },
 ];
