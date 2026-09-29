@@ -573,3 +573,140 @@
   .hgm__head { flex-direction: column; }
   .hgfaq { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---------- the hero (Home) ---------- */
+
+/* Copy on the left, the staff afloat on the right. The choreography: the two
+   headline lines rise out of their own clip, the marker underline draws,
+   the three steps land one by one, and on the stage a marigold ring passes
+   from specialist to specialist for as long as the page is open. */
+
+.hero {
+  display: grid; grid-template-columns: minmax(0, 1fr) 400px;
+  align-items: center; gap: 48px;
+  margin-bottom: 46px;
+}
+.hero__copy { min-width: 0; }
+
+.hero__line { display: block; overflow: hidden; padding-bottom: 0.09em; margin-bottom: -0.09em; }
+.hero__line > span {
+  display: inline-block;
+  transform: translateY(115%);
+  animation: hero-rise 700ms var(--ease) both;
+}
+.hero__line:nth-child(1) > span { animation-delay: 80ms; }
+.hero__line:nth-child(2) > span { animation-delay: 220ms; }
+@keyframes hero-rise { to { transform: none; } }
+
+/* The marker underline waits for its line to land before it draws. */
+.app2 .hero .statement b::before { animation-delay: 950ms; }
+
+/* The three steps land after the headline, left to right; each rule between
+   them draws itself. */
+.hero .hgw > span { opacity: 0; animation: hero-step 460ms var(--ease) both; }
+.hero .hgw > span:nth-of-type(1) { animation-delay: 700ms; }
+.hero .hgw > span:nth-of-type(2) { animation-delay: 900ms; }
+.hero .hgw > span:nth-of-type(3) { animation-delay: 1100ms; }
+.hero .hgw > i { transform: scaleX(0); transform-origin: left; animation: hero-rule 380ms var(--ease) both; }
+.hero .hgw > i:nth-of-type(1) { animation-delay: 860ms; }
+.hero .hgw > i:nth-of-type(2) { animation-delay: 1060ms; }
+@keyframes hero-step { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes hero-rule { to { transform: none; } }
+
+/* the stage */
+
+.hero__stage { position: relative; height: 272px; }
+
+.hero__halo {
+  position: absolute; left: 50%; top: 50%;
+  width: 340px; height: 300px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, rgba(255, 216, 77, 0.16), transparent 72%);
+  animation: halo-breathe 7s ease-in-out infinite alternate;
+}
+@keyframes halo-breathe {
+  from { transform: translate(-50%, -50%) scale(0.94); opacity: 0.8; }
+  to { transform: translate(-50%, -50%) scale(1.06); opacity: 1; }
+}
+
+.orb {
+  position: absolute;
+  opacity: 0;
+  animation: orb-in 640ms var(--ease) both;
+}
+.orb--1 { top: 6%;  left: 10%; animation-delay: 350ms; }
+.orb--2 { top: 0%;  left: 56%; animation-delay: 440ms; }
+.orb--3 { top: 40%; left: 82%; animation-delay: 530ms; }
+.orb--4 { top: 42%; left: 36%; animation-delay: 620ms; }
+.orb--5 { top: 74%; left: 62%; animation-delay: 710ms; }
+.orb--6 { top: 70%; left: 8%;  animation-delay: 800ms; }
+@keyframes orb-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.86); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Each stamp floats on its own slow tide… */
+.orb__f {
+  position: relative;
+  display: grid; justify-items: center; gap: 6px;
+  animation: orb-float 6.2s ease-in-out infinite alternate;
+}
+.orb--2 .orb__f { animation-duration: 7.1s; animation-delay: -2.1s; }
+.orb--3 .orb__f { animation-duration: 5.6s; animation-delay: -1.2s; }
+.orb--4 .orb__f { animation-duration: 6.8s; animation-delay: -3.4s; }
+.orb--5 .orb__f { animation-duration: 5.9s; animation-delay: -0.7s; }
+.orb--6 .orb__f { animation-duration: 7.4s; animation-delay: -4.2s; }
+@keyframes orb-float { from { transform: translateY(4px); } to { transform: translateY(-7px); } }
+
+.orb__f em {
+  font-style: normal; font-size: 10px; font-weight: 550;
+  color: var(--fg-3); white-space: nowrap; letter-spacing: 0.01em;
+}
+
+/* …and the marigold ring makes its rounds: twelve seconds a lap, two per
+   specialist, matching the order they entered in. */
+.orb__f::before {
+  content: "";
+  position: absolute; top: -7px; left: 50%; margin-left: -24px;
+  width: 48px; height: 48px;
+  border: 2px solid var(--mark);
+  border-radius: 14px;
+  opacity: 0;
+  animation: orb-ring 12s var(--ease) infinite;
+  animation-delay: 1s;
+}
+.orb--2 .orb__f::before { animation-delay: 3s; }
+.orb--3 .orb__f::before { animation-delay: 5s; }
+.orb--4 .orb__f::before { animation-delay: 7s; }
+.orb--5 .orb__f::before { animation-delay: 9s; }
+.orb--6 .orb__f::before { animation-delay: 11s; }
+@keyframes orb-ring {
+  0% { opacity: 0; transform: scale(0.78); }
+  3% { opacity: 1; transform: scale(1); }
+  13% { opacity: 1; transform: scale(1.04); }
+  17% { opacity: 0; transform: scale(1.22); }
+  100% { opacity: 0; transform: scale(0.78); }
+}
+
+/* The rest of the page follows the hero in, band by band. */
+.app2 .band { animation: rise 560ms var(--ease) both; }
+.app2 .view .band:nth-of-type(1) { animation-delay: 320ms; }
+.app2 .view .band:nth-of-type(2) { animation-delay: 460ms; }
+.app2 .view .band:nth-of-type(3) { animation-delay: 600ms; }
+
+/* Every movement above is decoration; none of it survives a request for
+   less motion. Elements land in their settled state. */
+@media (prefers-reduced-motion: reduce) {
+  .hero__line > span, .hero .hgw > span, .hero .hgw > i,
+  .orb, .orb__f, .orb__f::before, .hero__halo, .app2 .band {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
+  .orb__f::before { opacity: 0; }
+}
+
+@media (max-width: 1000px) {
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .hero__stage { display: none; }
+}

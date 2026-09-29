@@ -19,7 +19,7 @@ import { FAQS, GUIDES } from "../guide";
 import { JOBS } from "../jobs";
 import { WORKSPACE_SLUG, agentsFor, greeting, word, type HubAgent } from "../model";
 import { Ic } from "../Sprite";
-import { Mono, PageHead, RuleHead } from "../ui";
+import { Mono, RuleHead } from "../ui";
 
 export function HomeView() {
   const { user, openWork, openBrief, go, toast } = useHub();
@@ -37,23 +37,44 @@ export function HomeView() {
 
   return (
     <>
-      <PageHead
-        statement={
-          <>
-            {greeting()}, {firstName}.<br />
-            You have <b>{word(mine.length)} specialist{mine.length === 1 ? "" : "s"}</b> on staff.
-          </>
-        }
-        lede={
-          <span className="hgw">
-            <span><b>1</b> Brief one</span>
-            <i aria-hidden="true" />
-            <span><b>2</b> Watch the run on Runs</span>
-            <i aria-hidden="true" />
-            <span><b>3</b> Collect it in the workspace</span>
-          </span>
-        }
-      />
+      {/* The hero: the greeting choreographed line by line on the left, and on
+          the right the staff itself — six stamps afloat on the paper, a
+          marigold ring passing from one to the next. Decoration only, so the
+          stage is aria-hidden and every movement stops under
+          prefers-reduced-motion. */}
+      <div className="hero">
+        <div className="hero__copy">
+          <p className="statement">
+            <span className="hero__line"><span>{greeting()}, {firstName}.</span></span>
+            <span className="hero__line">
+              <span>You have <b>{word(mine.length)} specialist{mine.length === 1 ? "" : "s"}</b> on staff.</span>
+            </span>
+          </p>
+          <p className="lede">
+            <span className="hgw">
+              <span><b>1</b> Brief one</span>
+              <i aria-hidden="true" />
+              <span><b>2</b> Watch the run on Runs</span>
+              <i aria-hidden="true" />
+              <span><b>3</b> Collect it in the workspace</span>
+            </span>
+          </p>
+        </div>
+
+        {mine.length > 1 && (
+          <div className="hero__stage" aria-hidden="true">
+            <span className="hero__halo" />
+            {mine.slice(0, 6).map((a, i) => (
+              <span className={`orb orb--${i + 1}`} key={a.id}>
+                <span className="orb__f">
+                  <Mono agent={a} size="lg" />
+                  <em>{a.name}</em>
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
 
       {mine.length > 0 && (
         <section className="band">
