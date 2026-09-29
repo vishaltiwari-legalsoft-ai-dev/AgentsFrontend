@@ -3816,6 +3816,12 @@ export const getAgentsHealth = (req?: RequestOptions) =>
 export type InboxSheetCheck =
   | "ok" | "not_shared" | "not_found" | "not_editable" | "not_yours" | "mr_source";
 
+/** What the agent did about putting the Inbox tab in newest-first order.
+ *  `applied` and `already` mean it is in order; `pending` that the sort has
+ *  not been tried yet; `blocked` that it was tried and something in the sheet
+ *  is in the way — mail is still written, and `ordering_note` says what. */
+export type InboxSheetOrdering = "applied" | "already" | "pending" | "blocked";
+
 /** One account's pipe, whole. Every write below answers with this same
  *  object, so a workspace never has to re-read after acting. */
 export interface InboxStatus {
@@ -3836,6 +3842,11 @@ export interface InboxStatus {
     title: string | null;
     check: InboxSheetCheck | null;
     checked_at: string | null;
+    /** Both optional: a backend from before the rule sends neither key, and
+     *  the frontend deploys ahead of the backend. Absent is read as null. */
+    ordering?: InboxSheetOrdering | null;
+    /** The backend's own sentence, present when `ordering` is `blocked`. */
+    ordering_note?: string | null;
   };
   /** The first pass over the last 90 days. `total` is null until it is known. */
   backfill: {

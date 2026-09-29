@@ -3438,6 +3438,10 @@ textarea { resize: vertical; line-height: 1.55; }
    inside the note must stay in its sentence. */
 .inbox .srow__t span b { display: inline; font-size: inherit; color: inherit; }
 .inbox .sa { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; margin-top: 8px; }
+/* The server's sentence about the Inbox tab's row order. It is a setting row's
+   own note (`.srow__t span`) set apart by a rule in the amber the console uses
+   for "look at this", never the red of a failure: mail is still landing. */
+.inbox .srow__t .onote { margin-top: var(--s2); padding-left: var(--s3); border-left: 2px solid var(--proxy); }
 .inbox .sa code { font-family: inherit; font-size: 12px; font-weight: 650; color: var(--fg); word-break: break-all; }
 .inbox a { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
 .inbox .facts + a { font-size: 13px; font-weight: 650; }

@@ -112,6 +112,25 @@ export function sheetCheckShort(check: InboxSheetCheck | null): string {
   }
 }
 
+/** The backend's sentence for an Inbox tab it could not put in newest-first
+ *  order, exactly as sent, or `null` when there is nothing to say.
+ *
+ *  Both fields are read as possibly missing: a backend from before the rule
+ *  sends neither, and this page is deployed ahead of it. `blocked` without a
+ *  sentence says nothing, because the reason is the server's to give and is
+ *  not guessed at here.
+ *
+ *  It is only said while mail is landing — Gmail connected and the sheet
+ *  writable. The server keeps the sheet, and this note with it, through a
+ *  disconnect, and the note's own words ("New mail is still added at the
+ *  top") would not be true then. */
+export function orderingNotice(s: InboxStatus): string | null {
+  if (!isConnected(s) || !isSheetOk(s)) return null;
+  if (s.sheet.ordering !== "blocked") return null;
+  const note: unknown = s.sheet.ordering_note;
+  return typeof note === "string" && note.trim() !== "" ? note : null;
+}
+
 /* ------------------------------------------------------------- backfill -- */
 
 /** Minutes until the backfill is done at the backend's cadence. A backfill
