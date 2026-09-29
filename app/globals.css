@@ -34,6 +34,9 @@
    prototype's, and fills three tokens agenthub.css uses but never defines. */
 @import url("./hub-theme.css");
 @import url("./hub-live.css");
+/* The revamp, screen by screen: the top-nav shell that replaces the rail on
+   panel views. Last on purpose, so its rules win over both systems above. */
+@import url("./hub-topnav.css");
 
 @keyframes spin {
   to {

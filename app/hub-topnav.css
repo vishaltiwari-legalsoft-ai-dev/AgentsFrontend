@@ -1,0 +1,221 @@
+/* The revamped top-nav shell (panel views only; workspaces still use the rail).
+ *
+ * Pure white, with two quiet layers that keep the white reading as paper
+ * rather than a void: a soft graphite glow falling from the top edge, and a
+ * whisper of photographic grain. Both are decoration on the *shell*, so they
+ * live here and nowhere near the panels' own rules.
+ *
+ * Inside `.app2` the page colour token is re-pinned to true white so every
+ * rule that paints `--bg` (the sticky header's wash, scrollbar borders)
+ * agrees with the page behind it. Dark theme keeps its own palette — the
+ * texture fades to almost nothing there.
+ */
+
+.app2 {
+  position: relative;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  --bg: #FFFFFF;
+  background:
+    radial-gradient(1100px 420px at 50% -160px, rgba(13, 15, 18, 0.05), transparent 70%),
+    var(--bg);
+}
+
+/* The grain: one 160px tile of monochrome turbulence at 3.5% ink, fixed so it
+   does not swim under the content while scrolling. */
+.app2::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+}
+
+.app2 > * { position: relative; z-index: 1; }
+
+[data-theme="dark"] .app2 {
+  --bg: #101318;
+  background: var(--bg);
+}
+[data-theme="dark"] .app2::before { opacity: 0.4; }
+
+/* ---------- the header ---------- */
+
+.tnav {
+  position: sticky; top: 0; z-index: 40;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(12px) saturate(1.15);
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.tnav__in {
+  display: flex; align-items: center; gap: var(--s4);
+  max-width: calc(var(--measure) + 64px);
+  margin: 0 auto;
+  min-height: 58px;
+  padding: 0 32px;
+}
+
+/* brand */
+
+.tnav__brand { display: flex; align-items: center; gap: 10px; padding: 6px 2px; border-radius: var(--r-ctl); }
+
+.tnav__glyph {
+  width: 26px; height: 26px; flex: 0 0 auto;
+  border-radius: 8px; background: var(--mark);
+  box-shadow: inset 0 -10px 0 var(--fg);
+}
+
+.tnav__names { display: flex; flex-direction: column; line-height: 1.2; text-align: left; min-width: 0; }
+.tnav__names b { color: var(--fg); font-size: 14px; font-stretch: 115%; font-weight: 800; letter-spacing: 0.01em; }
+.tnav__names em { font-style: normal; font-size: 10px; color: var(--fg-3); white-space: nowrap; }
+
+/* nav pills */
+
+/* No overflow rule here, on purpose: the Setup and account menus hang below
+   this row as absolutely-positioned children, and any overflow value but
+   `visible` on an ancestor would clip them. Small screens shed the labels
+   instead (see the media block at the end). */
+.tnav__nav {
+  display: flex; align-items: center; gap: 2px;
+  min-width: 0; margin-left: var(--s3);
+}
+
+.tnav__item {
+  display: inline-flex; align-items: center; gap: 7px;
+  min-height: 34px; padding: 0 13px;
+  border-radius: var(--r-pill);
+  font-size: 13px; font-weight: 600;
+  color: var(--fg-2);
+  white-space: nowrap;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.tnav__item svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.tnav__item:hover, .tnav__item.is-open { color: var(--fg); background: color-mix(in srgb, var(--fg) 6%, transparent); }
+
+/* The active section takes the marigold swipe — the one brand mark this
+   console allows itself, same ink rules as `.statement b`. */
+.tnav__item.is-on { background: var(--mark); color: var(--mark-ink); }
+
+.tnav__count { margin-left: 2px; font-size: 11px; font-variant-numeric: tabular-nums; color: inherit; opacity: 0.62; }
+
+/* The sprite's chevron points right; closed reads "opens downward", open
+   flips it. */
+.tnav__caret { display: inline-flex; margin: 2px 0 0 -2px; opacity: 0.7; }
+.tnav__caret svg { width: 12px; height: 12px; transform: rotate(90deg); transition: transform var(--t-fast) var(--ease); }
+.tnav__item.is-open .tnav__caret svg { transform: rotate(-90deg); }
+
+/* menus */
+
+.tnav__drop { position: relative; }
+
+.tnav__menu {
+  position: absolute; top: calc(100% + 10px);
+  min-width: 232px; padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-float);
+  display: grid; gap: 1px;
+  z-index: 50;
+  animation: tnav-pop var(--t-fast) var(--ease) both;
+}
+@keyframes tnav-pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+.tnav__menu--nav { left: 0; }
+.tnav__menu--user { right: 0; }
+
+.tnav__mi {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; min-height: 34px; padding: 0 10px;
+  border-radius: var(--r-ctl);
+  font-size: 13px; font-weight: 550; color: var(--fg);
+  text-align: left;
+  transition: background var(--t-fast) var(--ease);
+}
+.tnav__mi svg { width: 16px; height: 16px; flex: 0 0 auto; color: var(--fg-2); }
+.tnav__mi:hover { background: var(--surface-2); }
+.tnav__mi.is-on { background: var(--mark-row); }
+.tnav__mi.is-on svg { color: var(--mark-ink); }
+.tnav__mi .tnav__count { margin-left: auto; color: var(--fg-3); opacity: 1; }
+
+.tnav__who { display: flex; flex-direction: column; gap: 1px; padding: 9px 10px 10px; margin-bottom: 5px; border-bottom: 1px solid var(--rule-soft); line-height: 1.3; }
+.tnav__who b { font-size: 13px; }
+.tnav__who em { font-style: normal; font-size: 11px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; }
+.tnav__tier {
+  justify-self: start; align-self: start;
+  margin-top: 6px; padding: 2px 8px;
+  border: 1px solid var(--rule); border-radius: var(--r-pill);
+  font-size: 10px; font-stretch: 84%; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+/* right-side ops */
+
+.tnav__ops { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+
+.tnav__ic {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 34px; min-width: 34px; padding: 0 9px;
+  border: 1px solid transparent; border-radius: var(--r-pill);
+  color: var(--fg-2);
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.tnav__ic svg { width: 16px; height: 16px; }
+.tnav__ic:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 6%, transparent); }
+
+.tnav__search kbd {
+  font: inherit; font-size: 10px; font-weight: 650; color: var(--fg-3);
+  padding: 1px 6px; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 5px;
+  background: var(--surface);
+}
+
+.tnav__dot {
+  position: absolute; top: 6px; right: 7px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--gap); border: 1px solid var(--bg);
+}
+
+.tnav__av {
+  display: grid; place-items: center;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--fg); color: var(--bg);
+  font-size: 11px; font-weight: 800; font-stretch: 76%; letter-spacing: 0.04em;
+  transition: box-shadow var(--t-fast) var(--ease);
+}
+.tnav__av:hover, .tnav__av.is-open { box-shadow: 0 0 0 3px color-mix(in srgb, var(--fg) 14%, transparent); }
+
+/* ---------- the stage under it ---------- */
+
+.app2__stage {
+  flex: 1; width: 100%;
+  max-width: calc(var(--measure) + 64px);
+  margin: 0 auto;
+  padding: var(--s5) 32px 84px;
+}
+
+.app2__head {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s4);
+  margin-bottom: var(--s5);
+}
+.app2__head h1 { font-size: 14px; font-stretch: 104%; letter-spacing: -0.015em; }
+.app2__head p { margin: 2px 0 0; font-size: 11px; color: var(--fg-3); font-variant-numeric: tabular-nums; }
+
+/* `.canvas` pads itself for the old frame; the stage already owns those
+   margins, so inside it the canvas is just the content column. */
+.app2__stage .canvas { padding: 0; max-width: none; }
+
+/* ---------- small screens ---------- */
+
+@media (max-width: 900px) {
+  .tnav__in { padding: 0 16px; gap: var(--s3); min-height: 54px; }
+  .tnav__names em { display: none; }
+  .tnav__item span:not(.tnav__count) { display: none; }
+  .tnav__item { padding: 0 11px; }
+  .tnav__search kbd { display: none; }
+  .app2__stage { padding: var(--s4) 16px 64px; }
+}

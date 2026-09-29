@@ -25,6 +25,7 @@ import {
   routeFromHash, routeToHash,
   type PanelId, type Route,
 } from "./model";
+import TopNav from "./TopNav";
 import { HubProvider, type Headline, type HubContextValue, type ToastFn, type WorkNav } from "./context";
 import { HubToasts, useToasts } from "./Toasts";
 import { HubPalette } from "./Palette";
@@ -341,6 +342,47 @@ export default function HubApp() {
   return (
     <HubProvider value={ctx}>
       <Sprite />
+      {/* The revamp, screen by screen: panel views live under the new white
+          top-nav shell; a workspace still gets the rail, whose section list
+          has no home in the header yet. One conditional, so each screen can
+          move across without breaking the ones that have not. */}
+      {!route.work ? (
+        <div className="app2">
+          <TopNav
+            route={route}
+            panels={panels}
+            counts={stats.counts}
+            onGo={go}
+            onOpenPalette={() => setPaletteOpen(true)}
+            dark={dark}
+            onTheme={toggleTheme}
+            user={user}
+            onLogout={logout}
+            hasNews={stats.hasNews}
+            onBell={() => go("settings")}
+            onNewWork={() => openBrief()}
+          />
+          <div className="app2__stage">
+            <header className="app2__head">
+              <div>
+                <h1>{title}</h1>
+                <p>{head.sub}</p>
+              </div>
+              <div className="spend" aria-label="OpenRouter account">
+                {stats.spend.map((s) => (
+                  <div key={s.label}>
+                    <b>{s.value}</b>
+                    <span>{s.label}</span>
+                  </div>
+                ))}
+              </div>
+            </header>
+            <main className="canvas" id="canvas" tabIndex={-1}>
+              <PanelSwitch route={route} />
+            </main>
+          </div>
+        </div>
+      ) : (
       <div className="app">
         <Rail
           route={route}
@@ -354,7 +396,7 @@ export default function HubApp() {
           user={user}
           onLogout={logout}
           workRail={
-            route.work && workNav
+            workNav
               ? <WorkRail nav={workNav} backLabel={activePanel.label} onBack={closeWork} />
               : null
           }
@@ -392,6 +434,7 @@ export default function HubApp() {
           </main>
         </div>
       </div>
+      )}
 
       <HubPalette
         open={paletteOpen}
