@@ -613,141 +613,139 @@
 @keyframes hero-step { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes hero-rule { to { transform: none; } }
 
-/* the stage: a living vignette of the product itself — a brief typed, a
-   run filing, the finished artifact landing. Drawn fresh for the revamp;
-   it shares no component with the old console. */
+/* the stage: the cosmos — AI at the centre, the staff in orbit. Drawn
+   fresh for the revamp; it shares no component with the old console. Each
+   orbit spins +360° per lap while the satellite inside spins −360° on the
+   same clock, so every label stays upright the whole way round. */
 
 .hero__stage { display: flex; justify-content: flex-end; }
 
-.demo {
+.cosmos {
   position: relative;
-  width: 100%; max-width: 430px;
-  padding: 16px 20px 20px;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
-  backdrop-filter: blur(14px) saturate(1.3);
-  border: 1px solid color-mix(in srgb, var(--fg) 9%, transparent);
-  border-radius: 20px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.7),
-    0 1px 2px rgba(13, 15, 18, 0.05),
-    0 34px 68px -38px rgba(13, 15, 18, 0.42);
-  animation: demo-float 7s ease-in-out infinite alternate;
+  width: 408px; height: 384px;
+  margin-right: 8px;
 }
-@keyframes demo-float { from { transform: translateY(3px); } to { transform: translateY(-6px); } }
 
-/* the warm breath behind the card */
-.demo::before {
+/* the warm breath behind the system */
+.cosmos::before {
   content: "";
-  position: absolute; inset: -70px -90px; z-index: -1;
-  background: radial-gradient(closest-side, rgba(255, 216, 77, 0.15), transparent 70%);
+  position: absolute; left: 50%; top: 50%;
+  width: 330px; height: 330px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, rgba(255, 216, 77, 0.14), transparent 72%);
+  animation: cosmos-breathe 6.5s ease-in-out infinite alternate;
+}
+@keyframes cosmos-breathe {
+  from { transform: translate(-50%, -50%) scale(0.94); opacity: 0.75; }
+  to { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
 }
 
-.demo__bar {
-  display: flex; align-items: center; gap: 9px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--rule-soft);
+/* the orbits: three hairlines on the paper */
+.cosmos__ring {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  border: 1px solid color-mix(in srgb, var(--fg) 11%, transparent);
+  border-radius: 50%;
+  animation: ring-in 800ms var(--ease) backwards;
 }
-.demo__glyph { width: 18px; height: 18px; flex: 0 0 auto; border-radius: 6px; background: var(--mark); box-shadow: inset 0 -6px 0 var(--fg); }
-.demo__bar b { font-size: 12.5px; font-weight: 600; letter-spacing: -0.01em; }
-.demo__state {
-  margin-left: auto;
-  padding: 3px 10px;
-  border: 1px solid var(--rule); border-radius: var(--r-pill);
-  font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
-  color: var(--fg-3);
-  transition: background var(--t) var(--ease), color var(--t) var(--ease), border-color var(--t) var(--ease);
-}
-.demo__state--running { background: var(--mark); border-color: var(--mark-line); color: var(--mark-ink); }
-.demo__state--done { background: var(--live); border-color: var(--live); color: var(--live-ink); }
+.cosmos__ring--1 { width: 150px; height: 150px; animation-delay: 150ms; }
+.cosmos__ring--2 { width: 262px; height: 262px; opacity: 0.8; animation-delay: 280ms; }
+.cosmos__ring--3 { width: 372px; height: 372px; opacity: 0.6; animation-delay: 410ms; }
+@keyframes ring-in { from { opacity: 0; scale: 0.86; } }
 
-.demo__brief { padding: 13px 0 4px; min-height: 60px; }
-.demo__brief p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--fg); }
-.demo__caret {
-  display: inline-block; width: 2px; height: 1em;
-  margin-left: 2px; vertical-align: -0.15em;
-  background: var(--fg);
-  animation: demo-caret 1s steps(1) infinite;
+/* the core */
+.cosmos__core {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  display: grid; place-items: center; gap: 1px;
+  width: 86px; height: 86px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, #FFE894, var(--mark) 62%, #EFC23F);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 0 0 7px color-mix(in srgb, var(--mark) 16%, transparent),
+    0 16px 40px -14px rgba(233, 194, 74, 0.7);
+  animation: core-in 700ms var(--ease) backwards, core-breathe 5s ease-in-out 1s infinite alternate;
 }
-.demo--done .demo__caret { display: none; }
-@keyframes demo-caret { 50% { opacity: 0; } }
+.cosmos__core b { font-size: 19px; font-weight: 750; letter-spacing: -0.02em; color: var(--mark-ink); line-height: 1; }
+.cosmos__core em { margin-right: -0.22em; }
+.cosmos__core em {
+  font-style: normal; font-size: 6.5px; font-weight: 700;
+  letter-spacing: 0.22em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--mark-ink) 72%, transparent);
+}
+@keyframes core-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.6); } }
+@keyframes core-breathe {
+  from { box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 0 0 7px color-mix(in srgb, var(--mark) 16%, transparent), 0 16px 40px -14px rgba(233,194,74,.7); }
+  to { box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 0 0 11px color-mix(in srgb, var(--mark) 10%, transparent), 0 20px 48px -14px rgba(233,194,74,.85); }
+}
 
-.demo__run {
-  height: 3px; margin: 6px 0 14px;
+/* an orbit: a spinning square the size of its ring; the satellite rides its
+   top edge */
+.cosmos__orbit {
+  position: absolute; left: 50%; top: 50%;
+  translate: -50% -50%;
+  transform: rotate(var(--a, 0deg));
+  animation: cosmos-spin var(--d, 60s) linear infinite;
+}
+@keyframes cosmos-spin {
+  from { transform: rotate(var(--a, 0deg)); }
+  to { transform: rotate(calc(var(--a, 0deg) + 360deg)); }
+}
+
+.cosmos__sat {
+  position: absolute; left: 50%; top: 0;
+  translate: -50% -50%;
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 12px 5px 8px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(6px);
+  border: 1px solid color-mix(in srgb, var(--fg) 11%, transparent);
   border-radius: var(--r-pill);
-  background: var(--rule-soft);
-  overflow: hidden;
-  opacity: 0;
-  transition: opacity var(--t-fast) var(--ease);
+  font-size: 11px; font-weight: 570; letter-spacing: -0.005em; color: var(--fg);
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.06), 0 8px 20px -14px rgba(13, 15, 18, 0.35);
+  transform: rotate(calc(-1 * var(--a, 0deg)));
+  animation: cosmos-counter var(--d, 60s) linear infinite, sat-in 520ms var(--ease) backwards;
+  animation-delay: 0s, var(--delay, 0s);
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
-.demo__run i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--mark-line), var(--mark)); }
-.demo--running .demo__run { opacity: 1; }
-.demo--running .demo__run i { animation: demo-run 1.75s var(--ease) forwards; }
-@keyframes demo-run { from { width: 0; } 65% { width: 78%; } to { width: 100%; } }
-
-.demo__out { min-height: 178px; }
-.demo__file { margin: 10px 0 0; font-size: 11px; color: var(--fg-3); font-variant-numeric: tabular-nums; animation: hero-step 400ms var(--ease) 480ms both; }
-
-/* The three artifacts — pictures of the idea, drawn, not fetched. */
-
-.art { border-radius: 12px; animation: art-in 520ms var(--ease) both; }
-@keyframes art-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
-
-/* a creative: warm gradient, headline bars drawing on, a CTA pill */
-.art--creative {
-  position: relative; height: 148px;
-  background: linear-gradient(120deg, #FFE894, var(--mark) 46%, #E9A23B);
-  overflow: hidden;
-  box-shadow: inset 0 0 0 1px rgba(13, 15, 18, 0.08);
+@keyframes cosmos-counter {
+  from { transform: rotate(calc(-1 * var(--a, 0deg))); }
+  to { transform: rotate(calc(-1 * var(--a, 0deg) - 360deg)); }
 }
-.art--creative i { position: absolute; display: block; height: 13px; border-radius: 5px; background: rgba(255, 255, 255, 0.94); width: 0; }
-.art--creative i:nth-of-type(1) { left: 16px; top: 20px; --w: 56%; animation: bar-draw 460ms var(--ease) 240ms forwards; }
-.art--creative i:nth-of-type(2) { left: 16px; top: 42px; --w: 36%; animation: bar-draw 460ms var(--ease) 380ms forwards; }
-.art--creative b {
-  position: absolute; left: 16px; bottom: 16px;
-  width: 86px; height: 24px; border-radius: var(--r-pill);
+@keyframes sat-in { from { opacity: 0; } }
+
+.cosmos__sat i {
+  width: 9px; height: 9px; flex: 0 0 auto;
+  border-radius: 50%;
   background: var(--fg);
-  transform: scale(0);
-  animation: cta-pop 380ms var(--ease) 640ms forwards;
+  transition: background var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
-@keyframes bar-draw { to { width: var(--w, 50%); } }
-@keyframes cta-pop { to { transform: none; } }
-
-/* a report: title, two lines, a small chart growing column by column */
-.art--report { border: 1px solid var(--rule); background: var(--surface); padding: 16px; }
-.art--report > i { display: block; height: 9px; border-radius: 4px; background: var(--rule-soft); margin-bottom: 9px; opacity: 0; animation: line-in 300ms var(--ease) forwards; }
-.art--report .art__title { height: 11px; width: 46%; background: var(--rule); animation-delay: 180ms; }
-.art--report > i:nth-of-type(2) { width: 92%; animation-delay: 300ms; }
-.art--report > i:nth-of-type(3) { width: 78%; animation-delay: 400ms; }
-.art__chart { display: flex; align-items: flex-end; gap: 8px; height: 54px; margin-top: 14px; }
-.art__chart i { flex: 0 0 24px; height: 0; border-radius: 4px 4px 0 0; background: var(--mark); box-shadow: inset 0 0 0 1px rgba(13, 15, 18, 0.06); }
-.art__chart i:nth-of-type(1) { --h: 42%; animation: col-grow 420ms var(--ease) 500ms forwards; }
-.art__chart i:nth-of-type(2) { --h: 68%; animation: col-grow 420ms var(--ease) 590ms forwards; }
-.art__chart i:nth-of-type(3) { --h: 50%; animation: col-grow 420ms var(--ease) 680ms forwards; }
-.art__chart i:nth-of-type(4) { --h: 92%; animation: col-grow 420ms var(--ease) 770ms forwards; background: var(--fg); }
-.art__chart i:nth-of-type(5) { --h: 60%; animation: col-grow 420ms var(--ease) 860ms forwards; }
-@keyframes col-grow { to { height: var(--h, 50%); } }
-@keyframes line-in { to { opacity: 1; } }
-
-/* a draft: prose lines arriving, citations tagging on */
-.art--draft { border: 1px solid var(--rule); background: var(--surface); padding: 16px 16px 14px; }
-.art--draft > i { display: block; height: 9px; border-radius: 4px; background: var(--rule-soft); margin-bottom: 9px; opacity: 0; animation: line-in 300ms var(--ease) forwards; }
-.art--draft > i:nth-of-type(1) { width: 42%; height: 11px; background: var(--rule); animation-delay: 180ms; }
-.art--draft > i:nth-of-type(2) { width: 96%; animation-delay: 300ms; }
-.art--draft > i:nth-of-type(3) { width: 90%; animation-delay: 400ms; }
-.art--draft > i:nth-of-type(4) { width: 64%; animation-delay: 500ms; }
-.art__cites { display: flex; gap: 6px; margin-top: 12px; }
-.art__cites u {
-  text-decoration: none;
-  padding: 2px 7px;
-  border: 1px solid var(--rule); border-radius: 6px;
-  font-size: 9.5px; font-weight: 650; color: var(--fg-2);
-  background: var(--surface-2);
-  opacity: 0;
-  animation: line-in 300ms var(--ease) forwards;
+.cosmos__sat:hover {
+  border-color: var(--mark-line);
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.06), 0 10px 26px -14px rgba(13, 15, 18, 0.4), 0 0 0 4px color-mix(in srgb, var(--mark) 22%, transparent);
 }
-.art__cites u:nth-of-type(1) { animation-delay: 620ms; }
-.art__cites u:nth-of-type(2) { animation-delay: 720ms; }
-.art__cites u:nth-of-type(3) { animation-delay: 820ms; }
+.cosmos__sat:hover i { background: var(--mark); box-shadow: inset 0 0 0 1.5px var(--mark-ink); }
+
+/* Reaching in pauses the sky: a still target is a courteous one. */
+.cosmos:hover .cosmos__orbit, .cosmos:hover .cosmos__sat { animation-play-state: paused; }
+
+/* the signal: one marigold point running the middle ring, retrograde */
+.cosmos__orbit--spark {
+  width: 262px; height: 262px;
+  --a: 0deg;
+  animation: cosmos-spin-back 21s linear infinite;
+}
+@keyframes cosmos-spin-back { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+.cosmos__spark {
+  position: absolute; left: 50%; top: 0;
+  translate: -50% -50%;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--mark);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mark) 30%, transparent), 0 0 14px 2px rgba(255, 216, 77, 0.8);
+}
 
 /* The rest of the page follows the hero in, band by band. */
 .app2 .band { animation: rise 560ms var(--ease) both; }
@@ -758,15 +756,13 @@
 /* Every movement above is decoration; none of it survives a request for
    less motion. Elements land in their settled state. */
 @media (prefers-reduced-motion: reduce) {
-  .hero__line > span, .hero .hgw > span, .hero .hgw > i,
-  .demo, .demo *, .demo::before, .app2 .band {
-    animation: none !important;
+  .hero__line > span, .hero .hgw > span, .hero .hgw > i, .app2 .band {
+    animation: none;
     transform: none;
     opacity: 1;
   }
-  .art--creative i { width: var(--w, 50%); }
-  .art--creative b { transform: none; }
-  .art__chart i { height: var(--h, 50%); }
+  .cosmos, .cosmos *, .cosmos::before { animation: none !important; }
+  .cosmos__orbit--spark { display: none; }
 }
 
 @media (max-width: 1000px) {

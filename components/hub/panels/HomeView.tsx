@@ -15,7 +15,7 @@
 
 import { useState } from "react";
 import { useHeadline, useHub } from "../context";
-import HeroDemo from "../HeroDemo";
+import Cosmos from "../Cosmos";
 import { FAQS, GUIDES } from "../guide";
 import { JOBS } from "../jobs";
 import { WORKSPACE_SLUG, agentsFor, greeting, word, type HubAgent } from "../model";
@@ -30,6 +30,15 @@ export function HomeView() {
   const firstName = (user.name || user.email || "").split(/[\s@]/)[0] || "there";
   const mine = agentsFor(user);
 
+  // The cosmos and the manual share one selection: picking a planet up in
+  // the hero opens that specialist's manual below — the decoration is also
+  // a door.
+  const [picked, setPicked] = useState<string | null>(null);
+  const pickFromCosmos = (id: string) => {
+    setPicked(id);
+    document.getElementById("specialists")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const openSlug = (agentId: string, section?: string) => {
     const slug = WORKSPACE_SLUG[agentId];
     if (slug) openWork(slug, "", section || "");
@@ -39,8 +48,8 @@ export function HomeView() {
   return (
     <>
       {/* The hero: the greeting choreographed line by line on the left, and
-          on the right the product demonstrating itself — a brief typed, a
-          run filed, the artifact landing, on a loop (see HeroDemo). */}
+          on the right the cosmos — AI at the centre, the staff in orbit
+          around it (see Cosmos). */}
       <div className="hero">
         <div className="hero__copy">
           <p className="statement">
@@ -61,17 +70,23 @@ export function HomeView() {
         </div>
 
         <div className="hero__stage">
-          <HeroDemo />
+          <Cosmos agents={mine} onPick={pickFromCosmos} />
         </div>
       </div>
 
       {mine.length > 0 && (
-        <section className="band">
+        <section className="band" id="specialists">
           <RuleHead
             title="The specialists"
             note="Pick one — its manual opens beside the list, and takes a minute to read."
           />
-          <GuideModule agents={mine} onBrief={openBrief} onOpen={openSlug} />
+          <GuideModule
+            agents={mine}
+            selected={picked ?? mine[0].id}
+            onSelect={setPicked}
+            onBrief={openBrief}
+            onOpen={openSlug}
+          />
         </section>
       )}
 
@@ -93,14 +108,15 @@ export function HomeView() {
 /* -------------------------------------------------- the specialists module -- */
 
 function GuideModule({
-  agents, onBrief, onOpen,
+  agents, selected, onSelect, onBrief, onOpen,
 }: {
   agents: HubAgent[];
+  selected: string;
+  onSelect: (id: string) => void;
   onBrief: (agentId: string) => void;
   onOpen: (agentId: string, section?: string) => void;
 }) {
-  const [who, setWho] = useState(agents[0].id);
-  const agent = agents.find((a) => a.id === who) || agents[0];
+  const agent = agents.find((a) => a.id === selected) || agents[0];
   const guide = GUIDES[agent.id];
   const jobs = JOBS[agent.id] || [];
 
@@ -113,7 +129,7 @@ function GuideModule({
             key={a.id}
             className={`hgm__row${a.id === agent.id ? " is-on" : ""}`}
             aria-current={a.id === agent.id ? "true" : undefined}
-            onClick={() => setWho(a.id)}
+            onClick={() => onSelect(a.id)}
           >
             <Mono agent={a} />
             <span className="hgm__who">
