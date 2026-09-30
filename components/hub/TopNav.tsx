@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { AvatarDialog, UserAvatar, useAvatarStyle } from "./avatar";
 import { Ic } from "./Sprite";
 import type { panelsFor } from "./model";
 import type { PanelId, Route } from "./model";
@@ -33,6 +34,8 @@ export default function TopNav({
   onNewWork: () => void;
 }) {
   const [menu, setMenu] = useState<"setup" | "user" | null>(null);
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const [avatarStyle, saveAvatarStyle] = useAvatarStyle(user.email);
   const barRef = useRef<HTMLElement>(null);
 
   // Any press outside the bar, or Escape, closes whichever menu is open.
@@ -59,7 +62,6 @@ export default function TopNav({
   const tier = user.is_geo_only
     ? "GEO only"
     : user.is_creator ? "creator" : user.is_admin ? "admin" : "member";
-  const avatar = (user.name || user.email || "?").slice(0, 2).toUpperCase();
 
   const go = (id: PanelId) => {
     setMenu(null);
@@ -160,7 +162,7 @@ export default function TopNav({
               title={user.email}
               onClick={() => setMenu(menu === "user" ? null : "user")}
             >
-              {avatar}
+              <UserAvatar name={user.name} email={user.email} style={avatarStyle} size={33} />
             </button>
             {menu === "user" && (
               <div className="tnav__menu tnav__menu--user" role="menu">
@@ -169,6 +171,15 @@ export default function TopNav({
                   <em>{user.email}</em>
                   <span className="tnav__tier">{tier}</span>
                 </div>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="tnav__mi"
+                  onClick={() => { setMenu(null); setAvatarOpen(true); }}
+                >
+                  <Ic name="kit" />
+                  <span>Customize avatar</span>
+                </button>
                 <button type="button" role="menuitem" className="tnav__mi" aria-pressed={dark} onClick={onTheme}>
                   <Ic name={dark ? "sun" : "moon"} />
                   <span>Appearance</span>
@@ -183,6 +194,15 @@ export default function TopNav({
           </div>
         </div>
       </div>
+
+      <AvatarDialog
+        open={avatarOpen}
+        name={user.name}
+        email={user.email}
+        style={avatarStyle}
+        onSave={saveAvatarStyle}
+        onClose={() => setAvatarOpen(false)}
+      />
     </header>
   );
 }
