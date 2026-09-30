@@ -15,6 +15,7 @@
 
 import { useState } from "react";
 import { useHeadline, useHub } from "../context";
+import HeroDemo from "../HeroDemo";
 import { FAQS, GUIDES } from "../guide";
 import { JOBS } from "../jobs";
 import { WORKSPACE_SLUG, agentsFor, greeting, word, type HubAgent } from "../model";
@@ -37,11 +38,9 @@ export function HomeView() {
 
   return (
     <>
-      {/* The hero: the greeting choreographed line by line on the left, and on
-          the right the staff itself — six stamps afloat on the paper, a
-          marigold ring passing from one to the next. Decoration only, so the
-          stage is aria-hidden and every movement stops under
-          prefers-reduced-motion. */}
+      {/* The hero: the greeting choreographed line by line on the left, and
+          on the right the product demonstrating itself — a brief typed, a
+          run filed, the artifact landing, on a loop (see HeroDemo). */}
       <div className="hero">
         <div className="hero__copy">
           <p className="statement">
@@ -61,19 +60,9 @@ export function HomeView() {
           </p>
         </div>
 
-        {mine.length > 1 && (
-          <div className="hero__stage" aria-hidden="true">
-            <span className="hero__halo" />
-            {mine.slice(0, 6).map((a, i) => (
-              <span className={`orb orb--${i + 1}`} key={a.id}>
-                <span className="orb__f">
-                  <Mono agent={a} size="lg" />
-                  <em>{a.name}</em>
-                </span>
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="hero__stage">
+          <HeroDemo />
+        </div>
       </div>
 
       {mine.length > 0 && (

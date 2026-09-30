@@ -613,80 +613,141 @@
 @keyframes hero-step { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes hero-rule { to { transform: none; } }
 
-/* the stage */
+/* the stage: a living vignette of the product itself — a brief typed, a
+   run filing, the finished artifact landing. Drawn fresh for the revamp;
+   it shares no component with the old console. */
 
-.hero__stage { position: relative; height: 272px; }
+.hero__stage { display: flex; justify-content: flex-end; }
 
-.hero__halo {
-  position: absolute; left: 50%; top: 50%;
-  width: 340px; height: 300px;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(closest-side, rgba(255, 216, 77, 0.16), transparent 72%);
-  animation: halo-breathe 7s ease-in-out infinite alternate;
-}
-@keyframes halo-breathe {
-  from { transform: translate(-50%, -50%) scale(0.94); opacity: 0.8; }
-  to { transform: translate(-50%, -50%) scale(1.06); opacity: 1; }
-}
-
-.orb {
-  position: absolute;
-  opacity: 0;
-  animation: orb-in 640ms var(--ease) both;
-}
-.orb--1 { top: 6%;  left: 10%; animation-delay: 350ms; }
-.orb--2 { top: 0%;  left: 56%; animation-delay: 440ms; }
-.orb--3 { top: 40%; left: 82%; animation-delay: 530ms; }
-.orb--4 { top: 42%; left: 36%; animation-delay: 620ms; }
-.orb--5 { top: 74%; left: 62%; animation-delay: 710ms; }
-.orb--6 { top: 70%; left: 8%;  animation-delay: 800ms; }
-@keyframes orb-in {
-  from { opacity: 0; transform: translateY(16px) scale(0.86); }
-  to { opacity: 1; transform: none; }
-}
-
-/* Each stamp floats on its own slow tide… */
-.orb__f {
+.demo {
   position: relative;
-  display: grid; justify-items: center; gap: 6px;
-  animation: orb-float 6.2s ease-in-out infinite alternate;
+  width: 100%; max-width: 430px;
+  padding: 16px 20px 20px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(14px) saturate(1.3);
+  border: 1px solid color-mix(in srgb, var(--fg) 9%, transparent);
+  border-radius: 20px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 1px 2px rgba(13, 15, 18, 0.05),
+    0 34px 68px -38px rgba(13, 15, 18, 0.42);
+  animation: demo-float 7s ease-in-out infinite alternate;
 }
-.orb--2 .orb__f { animation-duration: 7.1s; animation-delay: -2.1s; }
-.orb--3 .orb__f { animation-duration: 5.6s; animation-delay: -1.2s; }
-.orb--4 .orb__f { animation-duration: 6.8s; animation-delay: -3.4s; }
-.orb--5 .orb__f { animation-duration: 5.9s; animation-delay: -0.7s; }
-.orb--6 .orb__f { animation-duration: 7.4s; animation-delay: -4.2s; }
-@keyframes orb-float { from { transform: translateY(4px); } to { transform: translateY(-7px); } }
+@keyframes demo-float { from { transform: translateY(3px); } to { transform: translateY(-6px); } }
 
-.orb__f em {
-  font-style: normal; font-size: 10px; font-weight: 550;
-  color: var(--fg-3); white-space: nowrap; letter-spacing: 0.01em;
-}
-
-/* …and the marigold ring makes its rounds: twelve seconds a lap, two per
-   specialist, matching the order they entered in. */
-.orb__f::before {
+/* the warm breath behind the card */
+.demo::before {
   content: "";
-  position: absolute; top: -7px; left: 50%; margin-left: -24px;
-  width: 48px; height: 48px;
-  border: 2px solid var(--mark);
-  border-radius: 14px;
+  position: absolute; inset: -70px -90px; z-index: -1;
+  background: radial-gradient(closest-side, rgba(255, 216, 77, 0.15), transparent 70%);
+}
+
+.demo__bar {
+  display: flex; align-items: center; gap: 9px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.demo__glyph { width: 18px; height: 18px; flex: 0 0 auto; border-radius: 6px; background: var(--mark); box-shadow: inset 0 -6px 0 var(--fg); }
+.demo__bar b { font-size: 12.5px; font-weight: 600; letter-spacing: -0.01em; }
+.demo__state {
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid var(--rule); border-radius: var(--r-pill);
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--fg-3);
+  transition: background var(--t) var(--ease), color var(--t) var(--ease), border-color var(--t) var(--ease);
+}
+.demo__state--running { background: var(--mark); border-color: var(--mark-line); color: var(--mark-ink); }
+.demo__state--done { background: var(--live); border-color: var(--live); color: var(--live-ink); }
+
+.demo__brief { padding: 13px 0 4px; min-height: 60px; }
+.demo__brief p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--fg); }
+.demo__caret {
+  display: inline-block; width: 2px; height: 1em;
+  margin-left: 2px; vertical-align: -0.15em;
+  background: var(--fg);
+  animation: demo-caret 1s steps(1) infinite;
+}
+.demo--done .demo__caret { display: none; }
+@keyframes demo-caret { 50% { opacity: 0; } }
+
+.demo__run {
+  height: 3px; margin: 6px 0 14px;
+  border-radius: var(--r-pill);
+  background: var(--rule-soft);
+  overflow: hidden;
   opacity: 0;
-  animation: orb-ring 12s var(--ease) infinite;
-  animation-delay: 1s;
+  transition: opacity var(--t-fast) var(--ease);
 }
-.orb--2 .orb__f::before { animation-delay: 3s; }
-.orb--3 .orb__f::before { animation-delay: 5s; }
-.orb--4 .orb__f::before { animation-delay: 7s; }
-.orb--5 .orb__f::before { animation-delay: 9s; }
-.orb--6 .orb__f::before { animation-delay: 11s; }
-@keyframes orb-ring {
-  0% { opacity: 0; transform: scale(0.78); }
-  3% { opacity: 1; transform: scale(1); }
-  13% { opacity: 1; transform: scale(1.04); }
-  17% { opacity: 0; transform: scale(1.22); }
-  100% { opacity: 0; transform: scale(0.78); }
+.demo__run i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--mark-line), var(--mark)); }
+.demo--running .demo__run { opacity: 1; }
+.demo--running .demo__run i { animation: demo-run 1.75s var(--ease) forwards; }
+@keyframes demo-run { from { width: 0; } 65% { width: 78%; } to { width: 100%; } }
+
+.demo__out { min-height: 178px; }
+.demo__file { margin: 10px 0 0; font-size: 11px; color: var(--fg-3); font-variant-numeric: tabular-nums; animation: hero-step 400ms var(--ease) 480ms both; }
+
+/* The three artifacts — pictures of the idea, drawn, not fetched. */
+
+.art { border-radius: 12px; animation: art-in 520ms var(--ease) both; }
+@keyframes art-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
+
+/* a creative: warm gradient, headline bars drawing on, a CTA pill */
+.art--creative {
+  position: relative; height: 148px;
+  background: linear-gradient(120deg, #FFE894, var(--mark) 46%, #E9A23B);
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(13, 15, 18, 0.08);
 }
+.art--creative i { position: absolute; display: block; height: 13px; border-radius: 5px; background: rgba(255, 255, 255, 0.94); width: 0; }
+.art--creative i:nth-of-type(1) { left: 16px; top: 20px; --w: 56%; animation: bar-draw 460ms var(--ease) 240ms forwards; }
+.art--creative i:nth-of-type(2) { left: 16px; top: 42px; --w: 36%; animation: bar-draw 460ms var(--ease) 380ms forwards; }
+.art--creative b {
+  position: absolute; left: 16px; bottom: 16px;
+  width: 86px; height: 24px; border-radius: var(--r-pill);
+  background: var(--fg);
+  transform: scale(0);
+  animation: cta-pop 380ms var(--ease) 640ms forwards;
+}
+@keyframes bar-draw { to { width: var(--w, 50%); } }
+@keyframes cta-pop { to { transform: none; } }
+
+/* a report: title, two lines, a small chart growing column by column */
+.art--report { border: 1px solid var(--rule); background: var(--surface); padding: 16px; }
+.art--report > i { display: block; height: 9px; border-radius: 4px; background: var(--rule-soft); margin-bottom: 9px; opacity: 0; animation: line-in 300ms var(--ease) forwards; }
+.art--report .art__title { height: 11px; width: 46%; background: var(--rule); animation-delay: 180ms; }
+.art--report > i:nth-of-type(2) { width: 92%; animation-delay: 300ms; }
+.art--report > i:nth-of-type(3) { width: 78%; animation-delay: 400ms; }
+.art__chart { display: flex; align-items: flex-end; gap: 8px; height: 54px; margin-top: 14px; }
+.art__chart i { flex: 0 0 24px; height: 0; border-radius: 4px 4px 0 0; background: var(--mark); box-shadow: inset 0 0 0 1px rgba(13, 15, 18, 0.06); }
+.art__chart i:nth-of-type(1) { --h: 42%; animation: col-grow 420ms var(--ease) 500ms forwards; }
+.art__chart i:nth-of-type(2) { --h: 68%; animation: col-grow 420ms var(--ease) 590ms forwards; }
+.art__chart i:nth-of-type(3) { --h: 50%; animation: col-grow 420ms var(--ease) 680ms forwards; }
+.art__chart i:nth-of-type(4) { --h: 92%; animation: col-grow 420ms var(--ease) 770ms forwards; background: var(--fg); }
+.art__chart i:nth-of-type(5) { --h: 60%; animation: col-grow 420ms var(--ease) 860ms forwards; }
+@keyframes col-grow { to { height: var(--h, 50%); } }
+@keyframes line-in { to { opacity: 1; } }
+
+/* a draft: prose lines arriving, citations tagging on */
+.art--draft { border: 1px solid var(--rule); background: var(--surface); padding: 16px 16px 14px; }
+.art--draft > i { display: block; height: 9px; border-radius: 4px; background: var(--rule-soft); margin-bottom: 9px; opacity: 0; animation: line-in 300ms var(--ease) forwards; }
+.art--draft > i:nth-of-type(1) { width: 42%; height: 11px; background: var(--rule); animation-delay: 180ms; }
+.art--draft > i:nth-of-type(2) { width: 96%; animation-delay: 300ms; }
+.art--draft > i:nth-of-type(3) { width: 90%; animation-delay: 400ms; }
+.art--draft > i:nth-of-type(4) { width: 64%; animation-delay: 500ms; }
+.art__cites { display: flex; gap: 6px; margin-top: 12px; }
+.art__cites u {
+  text-decoration: none;
+  padding: 2px 7px;
+  border: 1px solid var(--rule); border-radius: 6px;
+  font-size: 9.5px; font-weight: 650; color: var(--fg-2);
+  background: var(--surface-2);
+  opacity: 0;
+  animation: line-in 300ms var(--ease) forwards;
+}
+.art__cites u:nth-of-type(1) { animation-delay: 620ms; }
+.art__cites u:nth-of-type(2) { animation-delay: 720ms; }
+.art__cites u:nth-of-type(3) { animation-delay: 820ms; }
 
 /* The rest of the page follows the hero in, band by band. */
 .app2 .band { animation: rise 560ms var(--ease) both; }
@@ -698,12 +759,14 @@
    less motion. Elements land in their settled state. */
 @media (prefers-reduced-motion: reduce) {
   .hero__line > span, .hero .hgw > span, .hero .hgw > i,
-  .orb, .orb__f, .orb__f::before, .hero__halo, .app2 .band {
-    animation: none;
+  .demo, .demo *, .demo::before, .app2 .band {
+    animation: none !important;
     transform: none;
     opacity: 1;
   }
-  .orb__f::before { opacity: 0; }
+  .art--creative i { width: var(--w, 50%); }
+  .art--creative b { transform: none; }
+  .art__chart i { height: var(--h, 50%); }
 }
 
 @media (max-width: 1000px) {
