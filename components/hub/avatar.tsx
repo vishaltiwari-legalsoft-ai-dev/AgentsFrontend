@@ -1,60 +1,77 @@
 "use client";
 
-/** The avatar studio: every user gets a face of their own making.
+/** The avatar studio: every user gets a face of their own choosing.
  *
- *  An avatar here is a choice, not an upload: one of eight curated duotone
- *  gradients and one of four quiet patterns, with the wearer's initials on
- *  top — so every combination stays on the console's level, and no picture
- *  moderation problem is invented. The choice is kept in this browser
- *  (like the theme and Your list), keyed by account, and the storage shape
- *  is one tiny JSON — ready to move server-side whenever a profile API
- *  exists.
+ *  The faces come from DiceBear's designed collections — real illustrated
+ *  avatars, not initials on a wash. Four sets ship, all CC0 (no attribution
+ *  owed): Notionists, Lorelei, Open Peeps and Thumbs. Everything renders
+ *  client-side to an SVG data URI from a seed string, so no request leaves
+ *  the page and the same seed is the same face for ever.
+ *
+ *  A choice is three small values — set, seed, backdrop — kept in this
+ *  browser keyed by account (like the theme and Your list), ready to move
+ *  server-side whenever a profile API exists. Old saves from the studio's
+ *  first draft (gradient + pattern) fall back to a default face rather
+ *  than crashing the read.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createAvatar, type Style } from "@dicebear/core";
+import { lorelei, notionists, openPeeps, thumbs } from "@dicebear/collection";
 import { Ic } from "./Sprite";
 
-export interface AvatarStyle {
-  /** index into AVATAR_GRADIENTS */
-  g: number;
-  /** index into AVATAR_PATTERNS */
-  p: number;
-}
-
-export const AVATAR_GRADIENTS: { name: string; css: string; ink: string }[] = [
-  { name: "Graphite", css: "linear-gradient(135deg, #3E4756, #14161C)", ink: "#FFFFFF" },
-  { name: "Cobalt", css: "linear-gradient(135deg, #6D7CFF, #2A3AAB)", ink: "#FFFFFF" },
-  { name: "Ocean", css: "linear-gradient(135deg, #3FA7D6, #145C8E)", ink: "#FFFFFF" },
-  { name: "Emerald", css: "linear-gradient(135deg, #34C08B, #0A6B4D)", ink: "#FFFFFF" },
-  { name: "Bronze", css: "linear-gradient(135deg, #E3BC70, #8F6B2E)", ink: "#2E2306" },
-  { name: "Rose", css: "linear-gradient(135deg, #F08FA4, #A33B57)", ink: "#FFFFFF" },
-  { name: "Violet", css: "linear-gradient(135deg, #9B86E8, #54409F)", ink: "#FFFFFF" },
-  { name: "Marigold", css: "linear-gradient(135deg, #FFE894, #E9A23B)", ink: "#45340A" },
+/* Each collection ships its own option type; this studio only ever passes a
+   seed, so the sets are held at the common `Style<object>` altitude. */
+export const AVATAR_SETS: { key: string; name: string; style: Style<object> }[] = [
+  { key: "notionists", name: "Notion", style: notionists as unknown as Style<object> },
+  { key: "lorelei", name: "Lorelei", style: lorelei as unknown as Style<object> },
+  { key: "peeps", name: "Peeps", style: openPeeps as unknown as Style<object> },
+  { key: "thumbs", name: "Thumbs", style: thumbs as unknown as Style<object> },
 ];
 
-export const AVATAR_PATTERNS = ["Plain", "Orbits", "Dots", "Beam"] as const;
+export const AVATAR_GRADIENTS: { name: string; css: string }[] = [
+  { name: "Paper", css: "linear-gradient(135deg, #F4F5F7, #DDE0E5)" },
+  { name: "Graphite", css: "linear-gradient(135deg, #3E4756, #14161C)" },
+  { name: "Cobalt", css: "linear-gradient(135deg, #6D7CFF, #2A3AAB)" },
+  { name: "Ocean", css: "linear-gradient(135deg, #3FA7D6, #145C8E)" },
+  { name: "Emerald", css: "linear-gradient(135deg, #34C08B, #0A6B4D)" },
+  { name: "Bronze", css: "linear-gradient(135deg, #E3BC70, #8F6B2E)" },
+  { name: "Rose", css: "linear-gradient(135deg, #F08FA4, #A33B57)" },
+  { name: "Marigold", css: "linear-gradient(135deg, #FFE894, #E9A23B)" },
+];
 
-const DEFAULT: AvatarStyle = { g: 0, p: 0 };
+export interface AvatarStyle {
+  /** index into AVATAR_SETS */
+  s: number;
+  /** the DiceBear seed — same seed, same face, for ever */
+  v: string;
+  /** index into AVATAR_GRADIENTS (the backdrop) */
+  g: number;
+}
+
 const key = (email: string) => `agentos.avatar.${email}`;
+const defaultFor = (email: string): AvatarStyle => ({ s: 0, v: `${email}|0|0`, g: 0 });
 
 const clamp = (v: unknown, max: number) =>
   typeof v === "number" && Number.isInteger(v) && v >= 0 && v < max ? v : 0;
 
 export function useAvatarStyle(email: string): [AvatarStyle, (s: AvatarStyle) => void] {
-  const [style, setStyle] = useState<AvatarStyle>(DEFAULT);
+  const [style, setStyle] = useState<AvatarStyle>(() => defaultFor(email));
 
   useEffect(() => {
+    setStyle(defaultFor(email));
     try {
       const raw = localStorage.getItem(key(email));
       if (raw) {
-        const parsed = JSON.parse(raw) as Partial<AvatarStyle>;
+        const p = JSON.parse(raw) as Partial<AvatarStyle>;
         setStyle({
-          g: clamp(parsed.g, AVATAR_GRADIENTS.length),
-          p: clamp(parsed.p, AVATAR_PATTERNS.length),
+          s: clamp(p.s, AVATAR_SETS.length),
+          v: typeof p.v === "string" && p.v ? p.v : defaultFor(email).v,
+          g: clamp(p.g, AVATAR_GRADIENTS.length),
         });
       }
     } catch {
-      /* storage off or corrupt — the default face is a fine face */
+      /* storage off or an old save — the default face is a fine face */
     }
   }, [email]);
 
@@ -75,6 +92,11 @@ export function useAvatarStyle(email: string): [AvatarStyle, (s: AvatarStyle) =>
 
 /* ------------------------------------------------------------- the face -- */
 
+function faceUri(setIndex: number, seed: string): string {
+  const set = AVATAR_SETS[setIndex] ?? AVATAR_SETS[0];
+  return createAvatar(set.style, { seed }).toDataUri();
+}
+
 export function UserAvatar({
   name, email, style, size = 33,
 }: {
@@ -83,38 +105,19 @@ export function UserAvatar({
   style: AvatarStyle;
   size?: number;
 }) {
+  const uri = useMemo(() => faceUri(style.s, style.v || `${email}|0|0`), [style.s, style.v, email]);
   const g = AVATAR_GRADIENTS[style.g] ?? AVATAR_GRADIENTS[0];
-  const initials = (name || email || "?").slice(0, 2).toUpperCase();
   return (
-    <span
-      className="uav"
-      style={{ width: size, height: size, background: g.css, color: g.ink, fontSize: Math.max(9, Math.round(size / 3)) }}
-    >
-      {style.p === 1 && (
-        <svg viewBox="0 0 100 100" aria-hidden="true">
-          <circle cx="26" cy="108" r="58" />
-          <circle cx="26" cy="108" r="84" />
-        </svg>
-      )}
-      {style.p === 2 && (
-        <svg viewBox="0 0 100 100" aria-hidden="true">
-          <circle cx="20" cy="22" r="3.5" fill="currentColor" stroke="none" opacity="0.35" />
-          <circle cx="80" cy="30" r="2.6" fill="currentColor" stroke="none" opacity="0.28" />
-          <circle cx="68" cy="80" r="3.2" fill="currentColor" stroke="none" opacity="0.3" />
-          <circle cx="26" cy="72" r="2.2" fill="currentColor" stroke="none" opacity="0.24" />
-        </svg>
-      )}
-      {style.p === 3 && (
-        <svg viewBox="0 0 100 100" aria-hidden="true">
-          <path d="M -12 78 L 78 -12 L 108 18 L 18 108 Z" fill="currentColor" stroke="none" opacity="0.16" />
-        </svg>
-      )}
-      <b>{initials}</b>
+    <span className="uav" style={{ width: size, height: size, background: g.css }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={uri} alt={`${name || email}'s avatar`} width={size} height={size} />
     </span>
   );
 }
 
 /* ----------------------------------------------------------- the studio -- */
+
+const GRID = 12;
 
 export function AvatarDialog({
   open, name, email, style, onSave, onClose,
@@ -127,9 +130,13 @@ export function AvatarDialog({
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState<AvatarStyle>(style);
+  const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
-    if (open) setDraft(style);
+    if (open) {
+      setDraft(style);
+      setNonce(0);
+    }
   }, [open, style]);
 
   useEffect(() => {
@@ -140,6 +147,11 @@ export function AvatarDialog({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  const seeds = useMemo(
+    () => Array.from({ length: GRID }, (_, k) => `${email}|${draft.s}|${nonce}|${k}`),
+    [email, draft.s, nonce],
+  );
 
   if (!open) return null;
 
@@ -155,8 +167,47 @@ export function AvatarDialog({
           <UserAvatar name={name} email={email} style={draft} size={76} />
         </div>
 
-        <p className="avd__label">Colour</p>
-        <div className="avd__swatches" role="radiogroup" aria-label="Avatar colour">
+        <p className="avd__label">Style</p>
+        <div className="avd__pats" role="radiogroup" aria-label="Avatar style">
+          {AVATAR_SETS.map((s, i) => (
+            <button
+              type="button"
+              key={s.key}
+              role="radio"
+              aria-checked={i === draft.s}
+              className={i === draft.s ? "is-on" : ""}
+              onClick={() => setDraft((d) => ({ ...d, s: i, v: `${email}|${i}|0|0` }))}
+            >
+              <UserAvatar name={name} email={email} style={{ s: i, v: `${email}|${i}|0|0`, g: draft.g }} size={40} />
+              <span>{s.name}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="avd__row">
+          <p className="avd__label">Face</p>
+          <button type="button" className="avd__shuffle" onClick={() => setNonce((n) => n + 1)}>
+            <Ic name="tries" />
+            Shuffle
+          </button>
+        </div>
+        <div className="avd__grid" role="radiogroup" aria-label="Pick a face">
+          {seeds.map((seed) => (
+            <button
+              type="button"
+              key={seed}
+              role="radio"
+              aria-checked={seed === draft.v}
+              className={seed === draft.v ? "is-on" : ""}
+              onClick={() => setDraft((d) => ({ ...d, v: seed }))}
+            >
+              <UserAvatar name={name} email={email} style={{ ...draft, v: seed }} size={42} />
+            </button>
+          ))}
+        </div>
+
+        <p className="avd__label">Backdrop</p>
+        <div className="avd__swatches" role="radiogroup" aria-label="Backdrop colour">
           {AVATAR_GRADIENTS.map((g, i) => (
             <button
               type="button"
@@ -169,23 +220,6 @@ export function AvatarDialog({
               style={{ background: g.css }}
               onClick={() => setDraft((d) => ({ ...d, g: i }))}
             />
-          ))}
-        </div>
-
-        <p className="avd__label">Pattern</p>
-        <div className="avd__pats" role="radiogroup" aria-label="Avatar pattern">
-          {AVATAR_PATTERNS.map((p, i) => (
-            <button
-              type="button"
-              key={p}
-              role="radio"
-              aria-checked={i === draft.p}
-              className={i === draft.p ? "is-on" : ""}
-              onClick={() => setDraft((d) => ({ ...d, p: i }))}
-            >
-              <UserAvatar name={name} email={email} style={{ ...draft, p: i }} size={40} />
-              <span>{p}</span>
-            </button>
           ))}
         </div>
 

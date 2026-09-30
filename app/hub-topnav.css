@@ -783,10 +783,7 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 0 0 1px rgba(13, 15, 18, 0.1);
   flex: 0 0 auto;
 }
-.uav svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-/* the Orbits pattern draws with the ink colour, kept faint */
-.uav svg circle:not([fill]) { opacity: 0.24; }
-.uav b { position: relative; z-index: 1; }
+.uav img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
 /* The header button is now just the face with a hover ring. */
 .tnav__av {
@@ -855,6 +852,25 @@
 }
 .avd__pats button:hover { border-color: var(--rule-hard); }
 .avd__pats button.is-on { border-color: var(--fg); color: var(--fg); background: var(--surface-2); }
+
+.avd__row { display: flex; align-items: baseline; justify-content: space-between; }
+.avd__shuffle {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600; color: var(--fg-2);
+  transition: color var(--t-fast) var(--ease);
+}
+.avd__shuffle svg { width: 12px; height: 12px; }
+.avd__shuffle:hover { color: var(--fg); }
+
+.avd__grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.avd__grid button {
+  display: grid; place-items: center;
+  padding: 3px;
+  border: 1px solid transparent; border-radius: 50%;
+  transition: border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+.avd__grid button:hover { transform: scale(1.07); }
+.avd__grid button.is-on { border-color: var(--fg); box-shadow: 0 0 0 1px var(--fg) inset; }
 
 .avd__acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 

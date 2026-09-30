@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@dicebear/collection": "^9.4.2",
+    "@dicebear/core": "^9.4.3",
     "google-auth-library": "^11.0.2",
     "konva": "^10.3.0",
     "lucide-react": "^0.460.0",
