@@ -877,3 +877,158 @@
 @media (prefers-reduced-motion: reduce) {
   .avd, .avd__card { animation: none; }
 }
+
+/* ---------- the panel vocabulary, re-set on the new paper ----------
+   The old system drew every list as a ledger: a hard top rule, rows cut by
+   lines, ink numerals. On the dotted white paper the same bones read better
+   as contained cards — soft hairlines, quiet radius, lift on hover — so the
+   primitives every panel shares (specs, hooks, issue rows, the run ledger,
+   tables, facets, assets) are re-dressed here, markup untouched. */
+
+/* filter chips */
+.app2 .facets { gap: 7px; margin-bottom: var(--s4); }
+.app2 .facet {
+  min-height: 31px; padding: 0 13px;
+  border: 1px solid var(--rule); border-radius: var(--r-pill);
+  background: var(--surface);
+  font-size: 12.5px; font-weight: 550;
+  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.app2 .facet:hover { border-color: var(--rule-hard); color: var(--fg); }
+.app2 .facet.is-on { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+
+/* the search field reads as the control it is */
+.app2 .find {
+  min-height: 34px; padding: 0 13px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+}
+.app2 .find:focus-within { background: var(--surface); border-color: var(--fg); }
+
+/* tags become quiet pills */
+.app2 .tag {
+  padding: 2px 9px;
+  border: 1px solid var(--rule-soft); border-radius: var(--r-pill);
+  background: var(--surface-2);
+  font-weight: 600;
+}
+
+/* the specialists' roster (Agents): each spec is a card now */
+.app2 .roster { border-top: 0; display: grid; gap: 12px; }
+.app2 .spec {
+  border: 1px solid var(--rule); border-bottom-color: var(--rule);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 18px;
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04);
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.app2 .spec:hover {
+  border-color: var(--rule-hard);
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04), 0 18px 40px -30px rgba(13, 15, 18, 0.35);
+}
+.app2 .spec__runs b { font-weight: 650; letter-spacing: -0.03em; }
+
+/* integrations & schedule: each hook is a card */
+.app2 .hooks { border-top: 0; display: grid; gap: 10px; }
+.app2 .hook {
+  border: 1px solid var(--rule); border-bottom-color: var(--rule);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 14px 16px;
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04);
+}
+.app2 .hook__g { border-radius: 10px; border-color: var(--rule); }
+
+/* issue rows become cards; the bang becomes a badge */
+.app2 .prio { gap: 10px; }
+.app2 .prio__i {
+  border: 1px solid var(--rule); border-bottom-color: var(--rule);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 13px 15px;
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04);
+}
+.app2 .prio__i.is-bad { border-left: 3px solid var(--gap); padding-left: 13px; }
+.app2 .prio__n { width: 21px; height: 21px; border-radius: 50%; }
+.app2 .prio__i > button {
+  padding: 5px 13px;
+  border: 1px solid var(--rule); border-radius: var(--r-pill);
+  background: var(--surface);
+  text-decoration: none;
+  font-weight: 600; font-size: 12px;
+  transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.app2 .prio__i > button:hover { border-color: var(--fg); color: var(--fg); }
+
+/* the run ledger becomes one contained card */
+.app2 .rledger {
+  border: 1px solid var(--rule); border-top: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--surface);
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04);
+}
+.app2 .rday { padding-left: 16px; padding-right: 16px; background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.app2 .rrow__btn { padding-left: 14px; padding-right: 14px; }
+.app2 .rrow:last-child { border-bottom: 0; }
+
+/* the runs table: its wrapper is the card */
+.app2 .tw {
+  border: 1px solid var(--rule); border-radius: 14px;
+  background: var(--surface);
+  padding-bottom: 0; margin-top: var(--s4);
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04);
+}
+.app2 .rt thead th { padding-top: 12px; }
+.app2 .rt thead th:first-child, .app2 .rt tbody td:first-child { padding-left: 16px; }
+.app2 .rt thead th:last-child, .app2 .rt tbody td:last-child { padding-right: 16px; }
+.app2 .rt tbody tr:last-child td { border-bottom: 0; }
+.app2 .rt tbody tr:hover td { background: color-mix(in srgb, var(--fg) 3%, transparent); }
+
+/* plain tables (Admin) breathe the same air */
+.app2 .tbl th { border-bottom-color: var(--rule); font-weight: 650; letter-spacing: 0.1em; color: var(--fg-3); }
+.app2 .tbl td { border-bottom-color: var(--rule-soft); }
+.app2 .tbl tbody tr:hover td { background: color-mix(in srgb, var(--fg) 3%, transparent); }
+
+/* settings / models / admin rows */
+.app2 .rows { border-top: 0; }
+.app2 .srow { border-bottom-color: var(--rule-soft); padding: 14px 2px; }
+
+/* the library's shelves */
+.app2 .assets { gap: 14px; }
+.app2 .asset {
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04);
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+.app2 .asset:hover {
+  border-color: var(--rule-hard);
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px -20px rgba(13, 15, 18, 0.3);
+}
+
+/* the 44px stamp tiles soften with everything else */
+.app2 .tile { border-radius: 10px; }
+
+/* fields */
+.app2 .sel, .app2 .inp, .app2 textarea {
+  border-radius: 10px;
+  border-color: var(--rule);
+  background: var(--surface);
+}
+.app2 .sel:focus-visible, .app2 .inp:focus-visible, .app2 textarea:focus-visible {
+  border-color: var(--fg);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fg) 10%, transparent);
+  outline: none;
+}
+
+/* the three states */
+.app2 .empty {
+  border: 1px dashed var(--rule-hard); border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-2) 40%, transparent);
+}
+.app2 .oops { border-radius: 14px; }
+.app2 .blank { border-radius: 14px; }
+
+.app2 .soon-note { color: var(--fg-3); }
