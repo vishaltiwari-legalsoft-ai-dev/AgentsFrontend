@@ -23,7 +23,7 @@ export const GUIDES: Record<string, AgentGuide> = {
   a1: {
     when: "You need an on-brand visual — a social creative, a hero banner, an ad set, a brochure page — from a written brief.",
     steps: [
-      "Press Give it work and say what the creative is for, or pick a ready job like Social creative.",
+      "Press New work in the header and say what the creative is for, or pick a ready job like Social creative.",
       "Pick the brand, so it pulls the right kit — colours, fonts, logo, references.",
       "Approve the four stages one at a time — background, element, text, logo — regenerating any attempt you don't like.",
       "Collect the finished PNG. If one detail is off, ask for a retouch instead of starting over.",
@@ -53,7 +53,7 @@ export const GUIDES: Record<string, AgentGuide> = {
   a9: {
     when: "You want a blog post that survives scrutiny — researched in depth, with every claim carrying its citation.",
     steps: [
-      "Press Give it work with the topic, or pick a job — research post, comparison piece, FAQ page.",
+      "Press New work with the topic, or pick a job — research post, comparison piece, FAQ page.",
       "It researches first, then drafts: every claim in the draft is tied to a source.",
       "Review the draft beside its evidence ledger, then export Markdown or HTML.",
     ],
