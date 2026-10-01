@@ -1,0 +1,462 @@
+/* The per-brand SEO dashboard (`.sdb-*`), drawn fresh for the revamp.
+ *
+ * It keeps the shell's card grammar — hairline rule, 14px corners, true-white
+ * surface, the quiet lift — and adds the one thing panels did not need yet:
+ * data marks. The marks follow the house chart rules:
+ *
+ *   - One hue for magnitude. The data hue is the marigold family worked
+ *     darker (`--viz`), because the chrome's #FFD84D cannot hold a 2px line
+ *     against white. Light steps of the same hue carry fills and remainders.
+ *   - Status colours mean state and nothing else: the fix queue's
+ *     done/assigned/open and the position track's quality bands.
+ *   - Text wears ink tokens, never the series colour.
+ *   - Thin marks, rounded ends, 2px surface gaps between adjacent fills,
+ *     a 2px surface ring on dots that sit on other marks.
+ */
+
+.sdb {
+  display: grid;
+  gap: 16px;
+  animation: rise 560ms var(--ease) both;
+  /* the data hue: marigold, dark step (≈3.8:1 on white) */
+  --viz: #B8860B;
+  /* the light steps of the same hue, for fills and remainders */
+  --viz-area: color-mix(in srgb, var(--mark) 15%, transparent);
+  --viz-soft: var(--mark-2);
+}
+[data-theme="dark"] .sdb {
+  --viz: #F0C64A;
+  --viz-area: color-mix(in srgb, var(--mark) 10%, transparent);
+  --viz-soft: #5C4A12;
+}
+
+/* ---------- the four headline figures ---------- */
+
+.sdb-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.sdb-tile {
+  display: grid;
+  gap: 3px;
+  padding: 16px 18px 15px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04);
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.sdb-tile:hover {
+  border-color: var(--rule-hard);
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04), 0 18px 40px -30px rgba(13, 15, 18, 0.35);
+}
+.sdb-tile > span {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.sdb-tile > b {
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+.sdb-tile > em {
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--fg-3);
+  font-variant-numeric: tabular-nums;
+}
+.sdb-tile > em.is-up { color: var(--live); font-weight: 600; }
+.sdb-tile > em.is-down { color: var(--gap); font-weight: 600; }
+
+/* ---------- the bento ---------- */
+
+.sdb-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.sdb-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04);
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.sdb-card:hover {
+  border-color: var(--rule-hard);
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04), 0 18px 40px -30px rgba(13, 15, 18, 0.35);
+}
+.sdb-card > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sdb-card > header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+}
+.sdb-card > header p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--fg-3);
+  text-align: right;
+}
+
+.sdb-card--trend { grid-column: span 2; }
+.sdb-card--track { grid-column: span 2; }
+/* the track floats mid-card, so the slim mark never hugs the bottom edge */
+.sdb-card--track .sdb-track { margin: auto 0; }
+.sdb-card--opps { grid-column: span 2; }
+
+.sdb-link {
+  padding: 4px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--fg-2);
+  transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.sdb-link:hover { border-color: var(--fg); color: var(--fg); }
+
+.sdb-calm { margin: 0; font-size: 12.5px; color: var(--fg-3); }
+
+/* ---------- the dial ---------- */
+
+.sdb-dial {
+  position: relative;
+  width: min(100%, 240px);
+  margin: 2px auto 0;
+}
+.sdb-dial svg { display: block; width: 100%; height: auto; }
+.sdb-dial__track {
+  fill: none;
+  stroke: var(--rule-soft);
+  stroke-width: 10;
+  stroke-linecap: round;
+}
+.sdb-dial__arc {
+  fill: none;
+  stroke: var(--viz);
+  stroke-width: 10;
+  stroke-linecap: round;
+}
+.sdb-dial__tick { stroke: var(--rule-hard); stroke-width: 1; }
+.sdb-dial__dot {
+  fill: var(--fg);
+  stroke: var(--surface);
+  stroke-width: 2.5;
+}
+.sdb-dial__read {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 34%;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  pointer-events: none;
+}
+.sdb-dial__read b {
+  font-size: 38px;
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+.sdb-dial__read span {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.sdb-dial__read em {
+  margin-top: 7px;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--fg-2);
+  text-align: center;
+  max-width: 24ch;
+}
+
+/* ---------- the trend ---------- */
+
+.sdb-trend { position: relative; padding-bottom: 16px; }
+.sdb-trend svg { display: block; width: 100%; height: 180px; }
+.sdb-gline { stroke: var(--rule-soft); stroke-width: 1; stroke-dasharray: 2 4; }
+.sdb-axis { stroke: var(--rule); stroke-width: 1; }
+.sdb-area { fill: var(--viz-area); stroke: none; }
+.sdb-line {
+  fill: none;
+  stroke: var(--viz);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.sdb-cross { stroke: var(--rule-hard); stroke-width: 1; stroke-dasharray: 3 3; }
+.sdb-enddot {
+  fill: var(--viz);
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+.sdb-hoverdot {
+  fill: var(--fg);
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+.sdb-endlabel {
+  position: absolute;
+  /* just right of the end dot (the plot ends at 506/560 of the width) */
+  left: calc(90.4% + 12px);
+  transform: translateY(-50%);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+.sdb-xlabel {
+  position: absolute;
+  bottom: -4px;
+  font-size: 10.5px;
+  color: var(--fg-3);
+}
+.sdb-xlabel.is-first { left: 1.4%; }
+.sdb-xlabel.is-last { right: 9.6%; transform: translateX(50%); }
+.sdb-tip {
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 1px;
+  padding: 6px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lift);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 2;
+}
+.sdb-tip b { font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--fg); }
+.sdb-tip span { font-size: 10.5px; color: var(--fg-3); }
+
+/* ---------- the share ring ---------- */
+
+.sdb-ring {
+  position: relative;
+  width: 148px;
+  margin: 0 auto;
+}
+.sdb-ring svg { display: block; width: 100%; height: auto; }
+.sdb-ring__a {
+  fill: none;
+  stroke: var(--viz);
+  stroke-width: 14;
+  stroke-linecap: round;
+}
+.sdb-ring__b {
+  fill: none;
+  stroke: var(--viz-soft);
+  stroke-width: 14;
+  stroke-linecap: round;
+}
+.sdb-ring__read {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1px;
+  pointer-events: none;
+}
+.sdb-ring__read b {
+  font-size: 26px;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+.sdb-ring__read span {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.sdb-ring__legend {
+  display: grid;
+  gap: 6px;
+  margin-top: 2px;
+}
+.sdb-ring__legend span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--fg-2);
+}
+.sdb-ring__legend b { margin-left: auto; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--fg); }
+.sdb-ring__legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+.sdb-ring__legend i.is-a { background: var(--viz); }
+.sdb-ring__legend i.is-b { background: var(--viz-soft); }
+
+/* ---------- the position track ---------- */
+
+.sdb-track { display: grid; gap: 7px; padding: 18px 2px 4px; }
+.sdb-track__bar {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  border-radius: var(--r-pill);
+}
+.sdb-track__zone { border-radius: 3px; }
+.sdb-track__zone:first-child { border-radius: var(--r-pill) 3px 3px var(--r-pill); }
+.sdb-track__zone:nth-of-type(3) { border-radius: 3px var(--r-pill) var(--r-pill) 3px; }
+/* quality bands, quiet tints of the status colours: page one, striking
+   distance, the long tail */
+.sdb-track__zone.is-a { flex: 0 0 31%; background: color-mix(in srgb, var(--live) 16%, transparent); }
+.sdb-track__zone.is-b { flex: 0 0 34.5%; background: color-mix(in srgb, var(--proxy) 15%, transparent); }
+.sdb-track__zone.is-c { flex: 1; background: color-mix(in srgb, var(--gap) 11%, transparent); }
+.sdb-track__pin {
+  position: absolute;
+  top: -5px;
+  bottom: -5px;
+  width: 2.5px;
+  border-radius: 2px;
+  background: var(--fg);
+  transform: translateX(-50%);
+}
+.sdb-track__pin b {
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.06);
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+  white-space: nowrap;
+}
+.sdb-track__scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: var(--fg-3);
+  font-variant-numeric: tabular-nums;
+  padding: 0 1px;
+}
+
+/* ---------- the fix queue ---------- */
+
+.sdb-queue { display: grid; gap: 12px; padding-top: 4px; }
+.sdb-queue__bar {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+.sdb-queue__bar i { min-width: 6px; }
+.sdb-queue__bar i.is-done { background: var(--live); }
+.sdb-queue__bar i.is-assigned { background: var(--proxy); }
+.sdb-queue__bar i.is-open { background: var(--rule-hard); }
+.sdb-queue__legend { display: grid; gap: 6px; }
+.sdb-queue__legend span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--fg-2);
+}
+.sdb-queue__legend b { margin-left: auto; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--fg); }
+.sdb-queue__legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+.sdb-queue__legend i.is-done { background: var(--live); }
+.sdb-queue__legend i.is-assigned { background: var(--proxy); }
+.sdb-queue__legend i.is-open { background: var(--rule-hard); }
+
+/* ---------- the opportunity bars ---------- */
+
+.sdb-opps { display: grid; gap: 10px; }
+.sdb-opp {
+  display: grid;
+  grid-template-columns: minmax(0, 34%) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+.sdb-opp__name {
+  font-size: 12px;
+  color: var(--fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sdb-opp__bar {
+  height: 10px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+  overflow: hidden;
+}
+.sdb-opp__bar i {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: var(--r-pill);
+  background: var(--viz);
+}
+.sdb-opp__val {
+  font-size: 11.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+/* ---------- small screens ---------- */
+
+@media (max-width: 1060px) {
+  .sdb-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sdb-grid { grid-template-columns: 1fr; }
+  .sdb-card--trend, .sdb-card--track, .sdb-card--opps { grid-column: auto; }
+}
+@media (max-width: 520px) {
+  .sdb-tiles { grid-template-columns: 1fr; }
+  .sdb-opp { grid-template-columns: minmax(0, 42%) minmax(0, 1fr) auto; gap: 8px; }
+}

@@ -147,34 +147,40 @@ export default function HubApp() {
    *  account this is the whole live roster. */
   const agents = useMemo(() => agentsFor(viewer), [viewer]);
 
+  // The headline is a panel's voice: it resets whenever the route moves, so a
+  // panel that has not spoken yet never wears the last one's sub-line. The
+  // reset rides the same state update as the route — doing it in an effect on
+  // `route` instead would run *after* the new panel's own `useHeadline` effect
+  // (child effects fire before the parent's) and wipe what it just said.
+  const applyRoute = useCallback((next: Route) => {
+    setHeadState({ sub: "" });
+    setRoute(next);
+  }, []);
+
   // The hash is the address bar's copy of `route`; `route` is the truth. Writing
   // it with pushState means Back returns to the previous panel instead of
   // leaving the console — the one thing Back must never do.
   useEffect(() => {
     if (!user) return;
-    setRoute(routeFromHash(window.location.hash, viewer));
-    const onPop = () => setRoute(routeFromHash(window.location.hash, viewer));
+    applyRoute(routeFromHash(window.location.hash, viewer));
+    const onPop = () => applyRoute(routeFromHash(window.location.hash, viewer));
     window.addEventListener("popstate", onPop);
     window.addEventListener("hashchange", onPop);
     return () => {
       window.removeEventListener("popstate", onPop);
       window.removeEventListener("hashchange", onPop);
     };
-  }, [user, viewer]);
+  }, [user, viewer, applyRoute]);
 
   useEffect(() => setDark(readTheme()), []);
 
-  // The headline is a panel's voice. On every route change it resets, so a
-  // workspace that has not spoken yet never wears the last panel's sub-line.
-  useEffect(() => { setHeadState({ sub: "" }); }, [route]);
-
   const navigate = useCallback((next: Route) => {
-    setRoute(next);
+    applyRoute(next);
     const hash = routeToHash(next);
     if (typeof window !== "undefined" && window.location.hash !== hash) {
       window.history.pushState(null, "", hash);
     }
-  }, []);
+  }, [applyRoute]);
 
   const go = useCallback((panel: PanelId) => navigate({ panel, work: null }), [navigate]);
 

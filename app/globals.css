@@ -43,6 +43,8 @@
 /* And the bridge that re-skins the three legacy workspaces onto the same
    decisions — token overrides only, scoped to `.legacy`. */
 @import url("./hub-legacy-bridge.css");
+/* The SEO workspace's per-brand dashboard — the first all-new data surface. */
+@import url("./hub-seodash.css");
 
 @keyframes spin {
   to {

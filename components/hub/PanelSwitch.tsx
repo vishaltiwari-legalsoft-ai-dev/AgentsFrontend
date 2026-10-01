@@ -28,13 +28,14 @@ import { AdminView } from "./panels/AdminView";
 import { GeoWorkspace } from "./work/GeoWorkspace";
 import { MrWorkspace } from "./work/MrWorkspace";
 import { InboxWorkspace } from "./work/InboxWorkspace";
+import { SeoWorkspace } from "./work/SeoWorkspace";
 
 import { GraphicsStudioV2 } from "@/components/console/gd2/GraphicsStudioV2";
-import { SeoAgent } from "@/components/console/seo/SeoAgent";
 import { BlogWriter } from "@/components/console/blogwriter/BlogWriter";
 
-/** The surfaces still rendering their pre-revamp markup. */
-export const LEGACY = ["w/art", "w/seo", "w/blog"] as const;
+/** The surfaces still rendering their pre-revamp markup. (SEO keeps its
+ *  classic console too, but behind the new dashboard inside SeoWorkspace.) */
+export const LEGACY = ["w/art", "w/blog"] as const;
 
 function Legacy({ children }: { children: React.ReactNode }) {
   return <div className="legacy">{children}</div>;
@@ -61,6 +62,9 @@ export function PanelSwitch({ route }: { route: Route }) {
     if (agent.id === "a6") {
       return <MrWorkspace subject={route.work.subject} section={route.work.section} />;
     }
+    if (agent.id === "a2") {
+      return <SeoWorkspace subject={route.work.subject} section={route.work.section} />;
+    }
     // One account, one sheet, one section: the route carries nothing it needs.
     if (agent.id === "a12") {
       return <InboxWorkspace />;
@@ -69,7 +73,6 @@ export function PanelSwitch({ route }: { route: Route }) {
     return (
       <Legacy>
         {agent.id === "a1" && <GraphicsStudioV2 onToast={toast} onBack={back} />}
-        {agent.id === "a2" && <SeoAgent onToast={toast} onBack={back} />}
         {agent.id === "a9" && <BlogWriter onToast={toast} onBack={back} />}
       </Legacy>
     );
