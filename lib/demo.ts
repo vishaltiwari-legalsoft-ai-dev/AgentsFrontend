@@ -475,6 +475,58 @@ const STATIC: Record<string, Fix> = {
     ],
     default: "ls",
   }),
+  "/api/gd/config": () => ({
+    brand_id: "ls", brand_name: "LegalSoft",
+    stage1_variants: [
+      { id: "g1", title: "Marigold sweep", desc: "Warm gradient, left-lit.", css_gradient: "linear-gradient(120deg,#FFE894,#E9A23B)", prompt_file: "g1.txt" },
+      { id: "g2", title: "Ink fade", desc: "Deep neutral, quiet.", css_gradient: "linear-gradient(120deg,#3E4756,#14161C)", prompt_file: "g2.txt" },
+      { id: "g3", title: "Counsel blue", desc: "Steady, institutional.", css_gradient: "linear-gradient(120deg,#3FA7D6,#145C8E)", prompt_file: "g3.txt" },
+    ],
+    stage2_variants: [
+      { id: "e1", title: "Scales of justice", desc: "Classic mark, modern cut.", subject: "scales of justice", category: "icon" },
+      { id: "e2", title: "Signing hands", desc: "A deal closing.", subject: "hands signing a contract", category: "photo" },
+      { id: "e3", title: "Gavel", desc: "Authority, sparingly.", subject: "wooden gavel", category: "icon" },
+    ],
+    stage2_categories: ["icon", "photo"],
+    stage2_placements: [
+      { key: "left", label: "Left", row: 1, col: 1 }, { key: "center", label: "Center", row: 1, col: 2 }, { key: "right", label: "Right", row: 1, col: 3 },
+    ],
+    fonts: ["Inter", "Archivo"], font_family: "Inter",
+    font_variants: [{ name: "Inter", weight: 600, style: "normal", file: "inter-600.woff2" }],
+    text_placements: [{ key: "top-left", label: "Top left", phrase: "top left" }, { key: "center", label: "Center", phrase: "centered" }],
+    cta_placements: [{ key: "bottom-left", label: "Bottom left", phrase: "bottom left" }],
+    text_colors: [
+      { key: "ink", label: "Ink", swatch: "#0D0F12", phrase: "near-black ink" },
+      { key: "white", label: "White", swatch: "#FFFFFF", phrase: "white" },
+    ],
+    stage3_elements: [
+      { key: "headline", label: "Headline", token: "{HEADLINE}", placeable: true, colorable: true, sizable: true, placement_kind: "text" },
+      { key: "cta", label: "CTA", token: "{CTA}", placeable: true, colorable: false, sizable: true, placement_kind: "cta" },
+    ],
+    text_size_pct_min: 3, text_size_pct_max: 14,
+    default_text_size_pct: { headline: 8, cta: 4 },
+    text_offset_px_range: 60, subheading_min: 0, subheading_max: 5,
+    anchors: ["top-left", "center", "bottom-right"],
+    shape_kinds: ["rect", "circle", "arrow"],
+    icon_keys: ["star", "check", "shield"],
+    logo_positions: [{ key: "br", label: "Bottom right", row: 3, col: 3 }],
+    logo_size_pct_min: 4, logo_size_pct_max: 18, logo_offset_px_range: 40,
+    aspect_ratios: [
+      { ar: "1:1", label: "Square", dimensions: "1080\u00d71080", w: 1080, h: 1080, orientation: "square", default: true },
+      { ar: "3:2", label: "Banner", dimensions: "1620\u00d71080", w: 1620, h: 1080, orientation: "landscape", default: false },
+      { ar: "9:16", label: "Story", dimensions: "1080\u00d71920", w: 1080, h: 1920, orientation: "portrait", default: false },
+    ],
+    brand_kit_block: "LegalSoft \u2014 ink & marigold; Inter; speak plainly.",
+    locked_colors: {
+      gradient: ["#FFE894", "#E9A23B"], text: "#0D0F12", accent: "#FFD84D",
+      headline_highlight: { from: "#FFE894", to: "#FFD84D", direction: "90deg" },
+      cta: { from: "#14161C", to: "#14161C", direction: "90deg", shadow: "0 10px 24px -12px rgba(13,15,18,.5)" },
+    },
+    stage1_source_note: "Backgrounds come from the brand kit\u2019s gradient library.",
+    onboarding_questions: [],
+    discovery_questions: [],
+    content_tokens: ["{HEADLINE}", "{SUBTEXT}", "{CTA}"],
+  }),
   "/api/gd/ingested-brands": () => ({
     brands: [
       { id: "ls", name: "LegalSoft", logo_url: null, primary_colors: ["#14161C", "#FFD84D"], counts: { fonts: 2, logos: 3, reference_assets: 12 }, source: "user" },

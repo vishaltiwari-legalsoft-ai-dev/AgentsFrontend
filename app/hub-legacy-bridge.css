@@ -1,0 +1,200 @@
+/* The legacy bridge.
+ *
+ * The three pre-revamp workspaces (SEO Analyst, Blog Writer, the Graphics
+ * Studio) still render their old markup inside `.legacy`. Their design
+ * system — Ensemble — is token-driven, and this file re-points those tokens
+ * at the revamp's own decisions, so every screen built on them changes skin
+ * at once, markup untouched:
+ *
+ *   · one typeface: Poppins / Plus Jakarta / Geist Mono all become Inter,
+ *     with tabular figures standing in for the mono columns;
+ *   · one accent: grape and royal retire — controls and links go ink, and
+ *     the shell's marigold stays the only colour that isn't state;
+ *   · the revamp's cut: softer radii, calmer shadows, a white page.
+ *
+ * Status colours (success / warning / danger) and the category palette are
+ * deliberately left alone: colour that means state keeps meaning state.
+ */
+
+.app2 .legacy {
+  /* ---- type ---- */
+  --font-display: "InterVariable", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "InterVariable", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "InterVariable", "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.011em;
+
+  /* ---- the page ---- */
+  --bg-app: #FFFFFF;
+  --ink: #0D0F12;
+  --gray-900: #0D0F12;
+  --text-primary: #0D0F12;
+  --text-link: #0D0F12;
+
+  /* ---- brand & action: grape retires, controls go ink ---- */
+  --blue-50: rgba(13, 15, 18, 0.04);
+  --blue-100: rgba(13, 15, 18, 0.07);
+  --blue-200: rgba(13, 15, 18, 0.12);
+  --blue-300: #9AA1AB;
+  --blue-400: #4C535D;
+  --blue-500: #2A2E36;
+  --blue-600: #14161C;
+  --blue-700: #14161C;
+  --blue-800: #0D0F12;
+  --blue-900: #0D0F12;
+
+  --brand: #14161C;
+  --brand-hover: #2A2E36;
+  --brand-active: #0D0F12;
+  --brand-light: #4C535D;
+  --brand-subtle: rgba(13, 15, 18, 0.04);
+  --brand-bg: rgba(13, 15, 18, 0.07);
+  --brand-border: rgba(13, 15, 18, 0.14);
+  --on-brand: #FFFFFF;
+
+  --action: #14161C;
+  --action-hover: #2A2E36;
+  --action-active: #0D0F12;
+  --on-action: #FFFFFF;
+
+  /* ---- the second accent retires too ---- */
+  --accent-50: rgba(13, 15, 18, 0.04);
+  --accent-100: rgba(13, 15, 18, 0.08);
+  --accent-200: rgba(13, 15, 18, 0.12);
+  --accent-400: #4C535D;
+  --accent-500: #14161C;
+  --accent-600: #0D0F12;
+  --accent-700: #0D0F12;
+  --accent: #14161C;
+  --accent-hover: #2A2E36;
+  --accent-active: #0D0F12;
+  --accent-subtle: rgba(13, 15, 18, 0.05);
+  --on-accent: #FFFFFF;
+
+  --focus-ring: rgba(13, 15, 18, 0.12);
+
+  /* ---- gradients flatten into the revamp's warmth ---- */
+  --grad-brand: linear-gradient(135deg, #14161C 0%, #14161C 100%);
+  --grad-brand-soft: linear-gradient(135deg, rgba(255, 216, 77, 0.14) 0%, #FFFFFF 100%);
+  --grad-duo: linear-gradient(135deg, #14161C 0%, #4C535D 100%);
+  --grad-accent: linear-gradient(135deg, #14161C 0%, #14161C 100%);
+  --grad-hero: radial-gradient(120% 90% at 85% 0%, rgba(255, 216, 77, 0.08) 0%, #FFFFFF 60%, #FFFFFF 100%);
+
+  /* ---- the revamp's cut ---- */
+  --radius-sm: 7px;
+  --radius-md: 9px;
+  --radius-lg: 11px;
+  --radius-xl: 14px;
+  --radius-2xl: 16px;
+
+  --shadow-xs: 0 1px 2px rgba(13, 15, 18, 0.04);
+  --shadow-sm: 0 1px 2px rgba(13, 15, 18, 0.05);
+  --shadow-md: 0 10px 24px -16px rgba(13, 15, 18, 0.25);
+  --shadow-lg: 0 18px 40px -28px rgba(13, 15, 18, 0.35);
+  --shadow-xl: 0 32px 72px -32px rgba(13, 15, 18, 0.4);
+
+  --border-subtle: rgba(13, 15, 18, 0.08);
+  --border: rgba(13, 15, 18, 0.13);
+  --border-strong: rgba(13, 15, 18, 0.2);
+
+  /* the frosted finish matches the shell's capsule */
+  --glass: rgba(255, 255, 255, 0.74);
+  --glass-strong: rgba(255, 255, 255, 0.85);
+}
+
+/* Headings in the old system lean on Poppins' weight; Inter carries the same
+   rank with the revamp's tracking instead. */
+.app2 .legacy h1, .app2 .legacy h2, .app2 .legacy h3 {
+  letter-spacing: -0.02em;
+}
+
+/* ---- primitives, re-cut ---- */
+
+/* The workspaces' own top bar duplicated the shell's work bar — back arrow,
+   name, role, all said twice. Its identity half retires; its right-hand
+   actions survive as one quiet row above the content. */
+.app2 .legacy .mr-top {
+  background: transparent;
+  border-bottom: 0;
+  padding: 0 0 10px;
+  justify-content: flex-end;
+}
+.app2 .legacy .mr-top__back,
+.app2 .legacy .mr-top__id { display: none; }
+
+/* Cards take the shell's cut, and the openable ones lift. */
+.app2 .legacy .mr-section,
+.app2 .legacy .seo-card,
+.app2 .legacy .seo-hero,
+.app2 .legacy .seo-fold {
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04);
+}
+.app2 .legacy .seo-card {
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+.app2 .legacy .seo-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04), 0 18px 40px -30px rgba(13, 15, 18, 0.35);
+}
+
+/* Buttons sit inline the way the shell's do — never as full-width slabs a
+   grid happened to stretch. */
+.app2 .legacy .seo-card > .seo-btn { justify-self: start; }
+.app2 .legacy .seo-btn { min-height: 33px; padding: 0 14px; border-radius: 9px; }
+.app2 .legacy .seo-btn--primary {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 2px rgba(13, 15, 18, 0.24);
+}
+
+/* ---- the Graphics Studio ---- */
+
+/* The studio's intake screen carried a lavender sub-brand of its own —
+   purple gradients, violet tints, a glowing CTA. It now stands on the same
+   paper as everything else: ink controls, marigold the only warmth. The
+   four stage hues inside the pipeline are state and stay. */
+.app2 .legacy .gdx-scroll {
+  --gdx-page-bg: #FFFFFF;
+  --gdx-grad: linear-gradient(96deg, #14161C 0%, #14161C 100%);
+  --gdx-grad-text: linear-gradient(92deg, #0D0F12 0%, #0D0F12 100%);
+  --gdx-ink: #0D0F12;
+  --gdx-ink2: #56606C;
+  --gdx-label: #646D79;
+  --gdx-muted: #646D79;
+  --gdx-border: rgba(13, 15, 18, 0.1);
+  --gdx-field-border: rgba(13, 15, 18, 0.12);
+  --gdx-field-border-hover: rgba(13, 15, 18, 0.24);
+  --gdx-strip: #FAFAF8;
+  --gdx-strip-border: rgba(13, 15, 18, 0.08);
+  --gdx-accent: #0D0F12;
+  --gdx-ring: rgba(13, 15, 18, 0.14);
+  --gdx-tv: #FFF6D8;
+  --gdx-tvi: #7E5509;
+  --gdx-dots: rgba(233, 194, 74, 0.5);
+  --gdx-badge-bg: #FFF6D8;
+  --gdx-card-shadow: 0 24px 56px -40px rgba(13, 15, 18, 0.35), 0 1px 2px rgba(13, 15, 18, 0.05);
+  --gdx-cta-glow: 0 16px 32px -18px rgba(13, 15, 18, 0.5);
+  --gdx-cta-glow-hover: 0 22px 40px -18px rgba(13, 15, 18, 0.55);
+}
+
+/* And the studio chrome itself: porcelain becomes our white, royal/grape
+   controls become ink, the AI affordances warm to marigold. */
+.app2 .legacy .gd2 {
+  --gd2-paper: #FFFFFF;
+  --gd2-ink: #0D0F12;
+  --gd2-line: rgba(13, 15, 18, 0.1);
+  --gd2-line2: rgba(13, 15, 18, 0.18);
+  --gd2-accent: #14161C;
+  --gd2-royal: #14161C;
+  --gd2-accent-ring: rgba(13, 15, 18, 0.14);
+  --gd2-accent-tint: rgba(13, 15, 18, 0.05);
+  --gd2-btn-bg: #14161C;
+  --gd2-btn-hover: #2A2E36;
+  --gd2-inkwell: #14161C;
+  --gd2-ai-border: rgba(233, 194, 74, 0.5);
+  --gd2-ai-tint: rgba(255, 216, 77, 0.1);
+  --gd2-remix-bg: rgba(255, 216, 77, 0.16);
+  --gd2-remix-border: rgba(233, 194, 74, 0.5);
+  --gd2-dotgrid: rgba(31, 36, 44, 0.055);
+}

@@ -40,6 +40,9 @@
 /* The revamp, screen by screen: the top-nav shell that replaces the rail on
    panel views. Last on purpose, so its rules win over both systems above. */
 @import url("./hub-topnav.css");
+/* And the bridge that re-skins the three legacy workspaces onto the same
+   decisions — token overrides only, scoped to `.legacy`. */
+@import url("./hub-legacy-bridge.css");
 
 @keyframes spin {
   to {

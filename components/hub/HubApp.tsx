@@ -164,6 +164,10 @@ export default function HubApp() {
 
   useEffect(() => setDark(readTheme()), []);
 
+  // The headline is a panel's voice. On every route change it resets, so a
+  // workspace that has not spoken yet never wears the last panel's sub-line.
+  useEffect(() => { setHeadState({ sub: "" }); }, [route]);
+
   const navigate = useCallback((next: Route) => {
     setRoute(next);
     const hash = routeToHash(next);
