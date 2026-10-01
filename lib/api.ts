@@ -10,6 +10,12 @@ import {
   createDeadline, deadlineFor, RequestTimeoutError,
   type Deadline, type RequestOptions,
 } from "./requestPolicy";
+import { demoAnswer } from "./demo";
+
+/** The UI lab's demo mode (see lib/demo.ts): reads the preview flag the lab
+ *  already builds with, so the live deployment — which never sets it — never
+ *  touches the fixtures. */
+const DEMO_MODE = process.env.NEXT_PUBLIC_PREVIEW_NO_AUTH === "1";
 
 export { isAbortError, isTimeoutError, NO_TIMEOUT, RequestSequence, RequestTimeoutError } from "./requestPolicy";
 export type { RequestOptions, RequestTicket } from "./requestPolicy";
@@ -83,6 +89,15 @@ async function send(
   const deadline = createDeadline(path, init.method, opts);
   const timedOut = () => new RequestTimeoutError(deadlineFor(path, init.method, opts.timeoutMs));
   let response: Response;
+  // Demo mode answers known GETs locally before the network is asked —
+  // writes and unknown paths fall through and fail as honestly as ever.
+  const demo = DEMO_MODE ? demoAnswer(path, init.method || "GET") : null;
+  if (demo) {
+    response = new Response(JSON.stringify(demo.body), {
+      status: demo.status ?? 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } else {
   try {
     response = await fetch(`${API_URL}${path}`, { ...init, headers, signal: deadline.signal });
   } catch (e) {
@@ -91,6 +106,7 @@ async function send(
     // both surface as the same AbortError out of fetch.
     if (deadline.expired) throw timedOut();
     throw e;
+  }
   }
   if (response.status === 401) {
     deadline.clear();

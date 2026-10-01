@@ -19,11 +19,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { Sprite, Ic } from "./Sprite";
+import { Mono } from "./ui";
 import {
   HOME, PANELS,
-  agentById, agentBySlug, agentsFor, canOpen, canOpenWorkspace, panelsFor,
+  agentBySlug, agentsFor, canOpen, canOpenWorkspace, panelsFor,
   routeFromHash, routeToHash,
-  type PanelId, type Route,
+  type HubAgent, type PanelId, type Route,
 } from "./model";
 import TopNav from "./TopNav";
 import { HubProvider, type Headline, type HubContextValue, type ToastFn, type WorkNav } from "./context";
@@ -56,161 +57,66 @@ function writeTheme(dark: boolean): void {
 
 /* -------------------------------------------------------------------- rail -- */
 
-function Rail({
-  route, panels, counts, stat, onGo, onOpenPalette, dark, onTheme, user, onLogout, workRail,
+/** The work bar: what the dark rail used to hold for a workspace, laid as
+ *  one row under the header — the way back, the specialist's identity, its
+ *  subjects when it has more than one, and its sections. Workspaces that
+ *  have not registered a WorkNav (the legacy three) get back and identity
+ *  and keep their own internal navigation. */
+function WorkBar({
+  agent, nav, backLabel, onBack,
 }: {
-  route: Route;
-  panels: ReturnType<typeof panelsFor>;
-  counts: Partial<Record<PanelId, number>>;
-  stat: string;
-  onGo: (id: PanelId) => void;
-  onOpenPalette: () => void;
-  dark: boolean;
-  onTheme: () => void;
-  user: { name: string; email: string; is_admin?: boolean; is_creator?: boolean; is_geo_only?: boolean };
-  onLogout: () => void;
-  workRail: React.ReactNode;
+  agent?: HubAgent;
+  nav: WorkNav | null;
+  backLabel: string;
+  onBack: () => void;
 }) {
-  const groups = useMemo(() => [...new Set(panels.map((p) => p.group))], [panels]);
-  // A scoped account is not a "member" with fewer links — it has a different
-  // allowance, and the chip that names its access should say which.
-  const tier = user.is_geo_only
-    ? "GEO only"
-    : user.is_creator ? "creator" : user.is_admin ? "admin" : "member";
-  const avatar = (user.name || user.email || "?").slice(0, 2).toUpperCase();
-
+  if (!agent) return null;
   return (
-    <aside className="rail" aria-label="Sections">
-      <div className="rail__brand">
-        <span className="rail__glyph" aria-hidden="true" />
-        <span className="rail__names">
-          <b>AgentHub</b>
-          <em>Legal Soft · Marketing</em>
-        </span>
-      </div>
-
-      <nav className="nav" aria-label="Panels">
-        {workRail}
-        {groups.map((g) => (
-          <div className="nav__group" key={g}>
-            <p className="nav__label">{g}</p>
-            {panels.filter((p) => p.group === g).map((p) => {
-              const on = !route.work && p.id === route.panel;
-              const c = counts[p.id];
-              return (
-                <button
-                  type="button"
-                  key={p.id}
-                  className={`nav__item${on ? " is-on" : ""}`}
-                  aria-current={on ? "page" : undefined}
-                  title={p.label}
-                  onClick={() => onGo(p.id)}
-                >
-                  <Ic name={p.icon} />
-                  <span>{p.label}</span>
-                  {c !== undefined && c > 0 && <span className="nav__count">{c.toLocaleString("en-US")}</span>}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </nav>
-
-      <div className="rail__foot">
-        <p className="rail__stat">{stat}</p>
-        <button type="button" className="rail__btn" onClick={onOpenPalette} aria-label="Search" title="Search — Ctrl K">
-          <Ic name="search" />
-          <span>Search</span>
-          <kbd>Ctrl K</kbd>
-        </button>
-        <button
-          type="button"
-          className="rail__btn"
-          aria-pressed={dark}
-          aria-label="Appearance"
-          title="Switch between light and dark"
-          onClick={onTheme}
-        >
-          <Ic name={dark ? "sun" : "moon"} />
-          <span>Appearance</span>
-          <span className="swap">{dark ? "Dark" : "Light"}</span>
-        </button>
-        <div className="whoami">
-          <span className="whoami__av" aria-hidden="true">{avatar}</span>
-          <span className="whoami__who">
-            <b>{user.name || user.email}</b>
-            <em>{user.email}</em>
-          </span>
-          <span className="whoami__tier">{tier}</span>
-        </div>
-        <button type="button" className="rail__btn" onClick={onLogout} title="Sign out of AgentHub">
-          <Ic name="x" />
-          <span>Sign out</span>
-        </button>
-      </div>
-    </aside>
-  );
-}
-
-
-/** The workspace group at the head of the rail.
- *
- *  It is inserted *above* the console's own groups rather than replacing them:
- *  the record stays one keystroke away and the rail remembers the panel you
- *  left. That arrangement is the reason no workspace in this product needs a
- *  second tab bar of its own — the sections are the rail.
- */
-function WorkRail({ nav, backLabel, onBack }: { nav: WorkNav; backLabel: string; onBack: () => void }) {
-  const agent = agentById(nav.agentId);
-  return (
-    <div className="nav__group nav__group--work">
-      <button type="button" className="nav__back" onClick={onBack} title={`Back to ${backLabel}`}>
+    <div className="wbar">
+      <button type="button" className="wbar__back" onClick={onBack} title={`Back to ${backLabel}`}>
         <Ic name="chevron" />
-        <span>{backLabel}</span>
+        {backLabel}
       </button>
-
-      <div className="nav__ws">
-        <span className="mono" aria-hidden="true">{agent?.mono || "??"}</span>
-        <span className="nav__wsid">
-          <b>{agent?.name || nav.agentId}</b>
-          <em>{agent?.role || ""}</em>
-        </span>
-      </div>
-
-      {nav.subjects.length > 1 && (
-        <div className="nav__sites">
+      <span className="wbar__id">
+        <Mono agent={agent} />
+        <b>{agent.name}</b>
+        <em>{agent.role}</em>
+      </span>
+      {nav && nav.subjects.length > 1 && (
+        <span className="wbar__subjects">
           {nav.subjects.map((s) => (
             <button
               type="button"
               key={s.id}
-              className={`nav__site${s.id === nav.subject ? " is-on" : ""}`}
+              className={`wbar__subject${s.id === nav.subject ? " is-on" : ""}`}
               title={s.name}
               onClick={() => nav.onSubject(s.id)}
             >
-              <u className="nav__ab" aria-hidden="true">{s.ab}</u>
+              <u aria-hidden="true">{s.ab}</u>
               <span>{s.name}</span>
-              {s.busy && (<><i className="nav__go" aria-hidden="true" /><span className="sr">running now</span></>)}
+              {s.busy && (<><i className="wbar__go" aria-hidden="true" /><span className="sr">running now</span></>)}
             </button>
           ))}
-        </div>
+        </span>
       )}
-
-      {nav.sections.map((sec) => (
-        <button
-          type="button"
-          key={sec.id}
-          className={`nav__item${sec.id === nav.section ? " is-on" : ""}`}
-          aria-current={sec.id === nav.section ? "page" : undefined}
-          title={sec.label}
-          onClick={() => nav.onSection(sec.id)}
-        >
-          <Ic name={sec.icon} />
-          <span>{sec.label}</span>
-          {sec.count != null && sec.count > 0 && (
-            <span className="nav__count">{sec.count.toLocaleString("en-US")}</span>
-          )}
-        </button>
-      ))}
+      {nav && nav.sections.length > 0 && (
+        <nav className="wbar__sections" aria-label="Workspace sections">
+          {nav.sections.map((sec) => (
+            <button
+              type="button"
+              key={sec.id}
+              className={`wbar__sec${sec.id === nav.section ? " is-on" : ""}`}
+              aria-current={sec.id === nav.section ? "page" : undefined}
+              title={sec.label}
+              onClick={() => nav.onSection(sec.id)}
+            >
+              <Ic name={sec.icon} />
+              <span>{sec.label}</span>
+              {sec.count != null && sec.count > 0 && <u>{sec.count.toLocaleString("en-US")}</u>}
+            </button>
+          ))}
+        </nav>
+      )}
     </div>
   );
 }
@@ -342,99 +248,53 @@ export default function HubApp() {
   return (
     <HubProvider value={ctx}>
       <Sprite />
-      {/* The revamp, screen by screen: panel views live under the new white
-          top-nav shell; a workspace still gets the rail, whose section list
-          has no home in the header yet. One conditional, so each screen can
-          move across without breaking the ones that have not. */}
-      {!route.work ? (
-        <div className="app2">
-          <TopNav
-            route={route}
-            panels={panels}
-            counts={stats.counts}
-            onGo={go}
-            onOpenPalette={() => setPaletteOpen(true)}
-            dark={dark}
-            onTheme={toggleTheme}
-            user={user}
-            onLogout={logout}
-            hasNews={stats.hasNews}
-            onBell={() => go("settings")}
-            onNewWork={() => openBrief()}
-          />
-          <div className="app2__stage">
-            <header className="app2__head">
-              <div>
-                <h1>{title}</h1>
-                <p>{head.sub}</p>
-              </div>
-              <div className="spend" aria-label="OpenRouter account">
-                {stats.spend.map((s) => (
-                  <div key={s.label}>
-                    <b>{s.value}</b>
-                    <span>{s.label}</span>
-                  </div>
-                ))}
-              </div>
-            </header>
-            <main className="canvas" id="canvas" tabIndex={-1}>
-              <PanelSwitch route={route} />
-            </main>
-          </div>
-        </div>
-      ) : (
-      <div className="app">
-        <Rail
+      {/* One shell for everything: panels and workspaces share the white
+          top-nav stage. A workspace adds the work bar — the way back, the
+          specialist's identity, its subjects and sections — where the old
+          dark rail used to stand. */}
+      <div className="app2">
+        <TopNav
           route={route}
           panels={panels}
           counts={stats.counts}
-          stat={stats.railStat}
           onGo={go}
           onOpenPalette={() => setPaletteOpen(true)}
           dark={dark}
           onTheme={toggleTheme}
           user={user}
           onLogout={logout}
-          workRail={
-            workNav
-              ? <WorkRail nav={workNav} backLabel={activePanel.label} onBack={closeWork} />
-              : null
-          }
+          hasNews={stats.hasNews}
+          onBell={() => go("settings")}
+          onNewWork={() => openBrief()}
         />
-
-        <div className="frame">
-          <header className="head">
-            <div className="head__title">
+        <div className="app2__stage">
+          {route.work && (
+            <WorkBar
+              agent={agentBySlug(route.work.slug)}
+              nav={workNav}
+              backLabel={activePanel.label}
+              onBack={closeWork}
+            />
+          )}
+          <header className="app2__head">
+            <div>
               <h1>{title}</h1>
               <p>{head.sub}</p>
             </div>
-            <div className="head__ops">
-              <div className="spend" aria-label="OpenRouter account">
-                {stats.spend.map((s) => (
-                  <div key={s.label}>
-                    <b>{s.value}</b>
-                    <span>{s.label}</span>
-                  </div>
-                ))}
-              </div>
-              <button type="button" className="btn btn--quiet btn--sm" id="bell-btn" onClick={() => go("settings")}>
-                <Ic name="bell" />
-                <span className="sr">Announcements</span>
-                {stats.hasNews && <i className="dot" aria-hidden="true" />}
-              </button>
-              <button type="button" className="btn btn--solid btn--sm" onClick={() => openBrief()}>
-                <Ic name="plus" />
-                New work
-              </button>
+            <div className="spend" aria-label="OpenRouter account">
+              {stats.spend.map((s) => (
+                <div key={s.label}>
+                  <b>{s.value}</b>
+                  <span>{s.label}</span>
+                </div>
+              ))}
             </div>
           </header>
-
           <main className="canvas" id="canvas" tabIndex={-1}>
             <PanelSwitch route={route} />
           </main>
         </div>
       </div>
-      )}
 
       <HubPalette
         open={paletteOpen}
