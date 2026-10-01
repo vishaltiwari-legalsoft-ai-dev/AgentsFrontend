@@ -41,7 +41,12 @@ export function HubPalette({
 
   const all = useMemo<Entry[]>(() => [
     ...panels.map((p) => ({ label: p.title, hint: p.group, run: () => onGo(p.id) })),
-    ...agents.map((a) => ({ label: a.name, hint: "Give it work", run: () => onBrief(a.id) })),
+    ...agents.map((a) => {
+      const w = WORKSPACES.find((x) => x.agentId === a.id);
+      return w
+        ? { label: a.name, hint: "Open workspace", run: () => onOpenWork(w.slug, "", "") }
+        : { label: a.name, hint: a.role, run: () => onGo("agents") };
+    }),
     // A workspace section is a place, so it is reachable the way every other
     // place is — and named by what is in it, because "Fix list" is what someone
     // types when they want the fix list.

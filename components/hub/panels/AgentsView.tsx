@@ -136,9 +136,6 @@ export function AgentsView() {
                       Open workspace
                     </button>
                   )}
-                  <button type="button" className="btn btn--quiet btn--sm" onClick={() => openBrief(a.id)}>
-                    Give it work
-                  </button>
                 </div>
               </article>
             );
