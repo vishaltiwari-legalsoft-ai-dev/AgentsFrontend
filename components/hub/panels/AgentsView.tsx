@@ -1,33 +1,21 @@
 "use client";
 
-/** Agents — a specialist is defined by what it hands back.
+/** Agents — the roster, reduced to the three things a reader actually needs:
+ *  who the specialist is, what it does, and the button that launches it.
  *
- *  So that is what this page leads with, alongside the last three things each
- *  one actually produced, read off the record rather than described.
- *
- *  The prototype also printed a 30-day spend per specialist. Nothing in this
- *  backend records one: the activity trail stores who ran what, and OpenRouter
- *  bills the account, not the agent. Splitting an account total across agents by
- *  run count would look like a measurement and be arithmetic on a guess, so the
- *  card carries what is real — how many runs are stored, and how many landed
- *  this week.
+ *  Each card wears the specialist's own mark (one Lucide face per agent, keyed
+ *  by id in the sprite map) instead of a letter stamp, and carries nothing
+ *  else: no run counts, no artifact strips, no section chips. The record of
+ *  what each one produced lives on Runs, where the record belongs.
  */
 
-import { useState } from "react";
-import type { RunRow } from "@/lib/api";
 import { useHeadline, useHub } from "../context";
-import { AGENTS, Cap, LIVE_AGENTS, WORKSPACE_SLUG, agentsFor, n, word } from "../model";
-import { Mono, Oops, PageHead, RuleHead, Tile, Wait } from "../ui";
-import { useRuns } from "../useRuns";
-import { workspaceByAgent } from "../workspaces";
+import { AGENTS, Cap, LIVE_AGENTS, WORKSPACE_SLUG, agentsFor, word } from "../model";
+import { Ic } from "../Sprite";
+import { PageHead, RuleHead } from "../ui";
 
 export function AgentsView() {
-  const { user, revision, openWork, openBrief, toast } = useHub();
-  const { state: feed, reload } = useRuns({ limit: 200 }, revision);
-  const page = feed.data;
-
-  const [openId] = useState<string | null>(null);
-  void openId;
+  const { user, openWork, toast } = useHub();
 
   // This rail entry is how GEO is reached, so it stays for a scoped account —
   // but the four specialists it cannot open are not drawn as cards it can
@@ -41,13 +29,7 @@ export function AgentsView() {
       : `${LIVE_AGENTS.length} live · ${soon.length} not built yet`,
   );
 
-  const recent = (id: string): RunRow[] =>
-    (page?.runs || []).filter((r) => r.agent_id === id && r.state === "done").slice(0, 3);
-
-  const runsFor = (id: string) => page?.facets.agents.find((a) => a.id === id)?.count ?? null;
-  const weekFor = (id: string) => page?.week.by_agent.find((a) => a.id === id)?.count ?? 0;
-
-  const open = (agentId: string) => {
+  const launch = (agentId: string) => {
     const slug = WORKSPACE_SLUG[agentId];
     if (slug) openWork(slug);
     else toast("That specialist has no workspace yet.", "warn");
@@ -68,78 +50,28 @@ export function AgentsView() {
             </>
           )
         }
-        lede={
-          scoped
-            ? "A specialist is defined by what it hands back, so that is what this page leads with — alongside the last three things it actually produced."
-            : "A specialist is defined by what it hands back, so that is what this page leads with — alongside the last three things each one actually produced."
-        }
+        lede="Each one takes a brief in plain words and hands back one kind of finished thing. Launch the one whose work you need."
       />
 
       <section className="band">
         <RuleHead
           title="Working now"
-          note="Each takes a brief in plain words and returns one kind of artifact."
+          note="Launch opens the specialist's workspace."
           aside={<span className="aside">{scoped ? `${mine.length} of ${LIVE_AGENTS.length} live` : `${LIVE_AGENTS.length} of ${AGENTS.length}`}</span>}
         />
 
-        {feed.phase === "failed" && !page && (
-          <Oops what="Could not read what each one has made." error={feed.error || ""} onRetry={reload} />
-        )}
-
-        <div className="roster">
-          {mine.map((a) => {
-            const made = recent(a.id);
-            const stored = runsFor(a.id);
-            const wk = weekFor(a.id);
-            const ws = workspaceByAgent(a.id);
-            return (
-              <article className="spec" key={a.id}>
-                <Mono agent={a} size="lg" />
-                <div className="spec__id">
-                  <h3>{a.name}</h3>
-                  <p>{a.desc}</p>
-                  {ws && (
-                    <div className="spec__models">
-                      {ws.sections.map((s) => <span key={s.id}>{s.label}</span>)}
-                    </div>
-                  )}
-                </div>
-
-                <div className="spec__makes"><b>Hands back</b>{a.makes}</div>
-
-                <div>
-                  <div className="strip">
-                    {!page ? (
-                      <span className="tile is-queued" aria-hidden="true" />
-                    ) : made.length ? (
-                      made.map((r) => (
-                        <Tile key={r.id} state={r.state} image={r.image} alt={r.title} mono={a.mono} />
-                      ))
-                    ) : (
-                      <span className="tile is-queued" aria-hidden="true" />
-                    )}
-                  </div>
-                  <span className="strip__cap">
-                    {!page ? "Reading the record" : made.length ? `Last ${made.length} handed back` : "Nothing handed back yet"}
-                  </span>
-                </div>
-
-                <div className="spec__runs">
-                  <u>Stored</u>
-                  <b>{stored === null ? <Wait what="" /> : n(stored)}</b>
-                  <em>{wk === 0 ? "none this week" : `${n(wk)} this week`}</em>
-                </div>
-
-                <div className="spec__ops">
-                  {ws && (
-                    <button type="button" className="btn btn--solid btn--sm" onClick={() => open(a.id)}>
-                      Open workspace
-                    </button>
-                  )}
-                </div>
-              </article>
-            );
-          })}
+        <div className="acards">
+          {mine.map((a) => (
+            <article className="acard" key={a.id}>
+              <span className="acard__ic"><Ic name={a.id} /></span>
+              <h3>{a.name}</h3>
+              <p>{a.desc}</p>
+              <button type="button" className="acard__go" onClick={() => launch(a.id)}>
+                Launch
+                <Ic name="chevron" />
+              </button>
+            </article>
+          ))}
         </div>
 
         {scoped && (
@@ -157,16 +89,13 @@ export function AgentsView() {
           note="Listed so you know what is coming and can stop waiting for what is not."
           aside={<span className="aside">{soon.length} planned</span>}
         />
-        <div className="roster">
+        <div className="acards">
           {soon.map((a) => (
-            <article className="spec spec--soon" key={a.id}>
-              <Mono agent={a} size="lg" tone="is-soon" />
-              <div className="spec__id">
-                <h3>{a.name}</h3>
-                <p>{a.desc}</p>
-              </div>
-              <div className="spec__makes"><b>Would hand back</b>{a.makes}</div>
-              <span className="tag">Not available</span>
+            <article className="acard is-soon" key={a.id}>
+              <span className="acard__ic"><Ic name={a.id} /></span>
+              <h3>{a.name}</h3>
+              <p>{a.desc}</p>
+              <span className="acard__soon">Not available yet</span>
             </article>
           ))}
         </div>

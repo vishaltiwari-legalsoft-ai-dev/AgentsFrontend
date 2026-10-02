@@ -929,6 +929,104 @@
 }
 .app2 .spec__runs b { font-weight: 650; letter-spacing: -0.03em; }
 
+/* the roster, reduced: one face, one name, one sentence, one button */
+.acards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.acard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04);
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+.acard:hover {
+  border-color: var(--rule-hard);
+  transform: translateY(-1px);
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04), 0 18px 40px -30px rgba(13, 15, 18, 0.35);
+}
+.acard__ic {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--mark-row);
+  border: 1px solid color-mix(in srgb, var(--mark-line) 55%, var(--rule));
+  color: var(--mark-ink);
+  margin-bottom: 2px;
+}
+.acard__ic svg { width: 20px; height: 20px; }
+/* dark's --mark-ink is near-black, invisible on the dark wash — the face
+   switches to the marigold itself */
+[data-theme="dark"] .acard__ic { color: var(--mark); }
+.acard h3 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: var(--fg);
+}
+.acard p {
+  margin: 0;
+  flex: 1;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--fg-2);
+}
+.acard__go {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 8px 15px 8px 17px;
+  border: 1px solid var(--fg);
+  border-radius: var(--r-pill);
+  background: var(--fg);
+  color: var(--surface);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.acard__go svg { width: 13px; height: 13px; transition: transform var(--t-fast) var(--ease); }
+.acard__go:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -12px rgba(13, 15, 18, 0.5); }
+.acard__go:hover svg { transform: translateX(2px); }
+
+/* the ones that are only promised yet */
+.acard.is-soon { background: color-mix(in srgb, var(--surface-2) 55%, transparent); }
+.acard.is-soon .acard__ic {
+  background: var(--surface-2);
+  border-color: var(--rule);
+  color: var(--fg-3);
+}
+.acard.is-soon h3 { color: var(--fg-2); }
+.acard.is-soon p { color: var(--fg-3); }
+.acard__soon {
+  margin-top: 8px;
+  padding: 5px 12px;
+  border: 1px dashed var(--rule-hard);
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--fg-3);
+}
+
+@media (max-width: 1100px) {
+  .acards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .acards { grid-template-columns: 1fr; }
+}
+
 /* integrations & schedule: each hook is a card */
 .app2 .hooks { border-top: 0; display: grid; gap: 10px; }
 .app2 .hook {
