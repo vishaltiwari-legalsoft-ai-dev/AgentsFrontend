@@ -1295,3 +1295,100 @@
   .wbar__sections { margin-left: 0; }
   .wbar__id em { display: none; }
 }
+
+/* ---------- the record as a base grid (Runs) ---------- */
+
+/* The run table drawn the way a base draws it: a full cell grid, a header
+   band with one field-type mark per column, a row-number gutter, states as
+   soft select pills, specialists as their own hue chips, and a records bar
+   along the bottom. The semantics stay a plain sortable <table>. */
+.app2 .tw--air { padding-bottom: 0; overflow: hidden; }
+.app2 .tw--air .rt { border-collapse: separate; border-spacing: 0; }
+
+.app2 .tw--air .rt thead th {
+  height: 38px; padding: 0 12px; vertical-align: middle;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--rule);
+  border-right: 1px solid var(--rule-soft);
+}
+.app2 .tw--air .rt thead th:last-child { border-right: 0; }
+.app2 .tw--air .rt thead th button {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 11.5px; font-weight: 600;
+  letter-spacing: 0; text-transform: none;
+  color: var(--fg-2);
+}
+.app2 .tw--air .rt thead th button svg { width: 13px; height: 13px; color: var(--fg-3); flex: none; }
+.app2 .tw--air .rt thead th[aria-sort]:not([aria-sort="none"]) button svg { color: var(--mark); }
+
+.app2 .tw--air .rt tbody td {
+  height: 40px; padding: 0 12px;
+  border-right: 1px solid var(--rule-soft);
+  border-bottom: 1px solid var(--rule-soft);
+}
+.app2 .tw--air .rt tbody td:last-child { border-right: 0; }
+.app2 .tw--air .rt tbody tr:last-child td { border-bottom: 1px solid var(--rule-soft); }
+.app2 .tw--air .rt tbody tr.rt__r:hover td { background: color-mix(in srgb, var(--fg) 3%, var(--surface)); }
+
+/* the gutter: row numbers, counted in the order on screen */
+.app2 .tw--air .rt .rnum {
+  width: 46px; min-width: 46px;
+  padding: 0;
+  text-align: center;
+  font-size: 10.5px; font-variant-numeric: tabular-nums;
+  color: var(--fg-3);
+}
+
+/* the primary field: weightier, with the expand mark earned on hover */
+.app2 .tw--air .rt__open { font-weight: 600; }
+.app2 .tw--air .rt__open svg { opacity: 0; transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease); }
+.app2 .tw--air .rt__r:hover .rt__open svg,
+.app2 .tw--air .rt__r.is-open .rt__open svg { opacity: 1; }
+
+/* states as single-select pills */
+.app2 .tw--air .st {
+  padding: 3px 10px 3px 9px;
+  border-radius: var(--r-pill);
+  font-size: 11.5px; font-weight: 600;
+}
+.app2 .tw--air .st i { width: 5px; height: 5px; }
+.app2 .tw--air .st.done { background: color-mix(in srgb, var(--live) 11%, transparent); color: var(--live); }
+.app2 .tw--air .st.failed { background: color-mix(in srgb, var(--gap) 11%, transparent); color: var(--gap); }
+.app2 .tw--air .st.running { background: color-mix(in srgb, var(--mark) 12%, transparent); color: var(--mark-line); }
+[data-theme="dark"] .app2 .tw--air .st.running { color: var(--mark); }
+.app2 .tw--air .st.queued { background: color-mix(in srgb, var(--fg) 6%, transparent); color: var(--fg-2); }
+
+/* the specialist, wearing its own mark */
+.rt__ai {
+  display: grid; place-items: center;
+  width: 22px; height: 22px; flex: none;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--ac, var(--fg-3)) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ac, var(--fg-3)) 22%, transparent);
+  color: var(--ac, var(--fg-3));
+}
+.rt__ai svg { width: 12.5px; height: 12.5px; }
+
+/* brands as quiet tags */
+.rt__tag {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+  font-size: 11.5px; font-weight: 550; color: var(--fg-2);
+}
+
+/* the detail row opens as a sheet inside the grid */
+.app2 .tw--air .rt__d > td {
+  height: auto; padding: 12px 14px;
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  border-right: 0;
+}
+
+/* the records bar */
+.app2 .tw--air .rt tfoot td {
+  height: 36px; padding: 0 14px;
+  background: var(--surface-2);
+  border-top: 0;
+  font-size: 11px; font-weight: 600; color: var(--fg-3);
+}

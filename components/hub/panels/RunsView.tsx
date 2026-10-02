@@ -17,9 +17,9 @@
 import { useMemo, useState } from "react";
 import type { RunRow, RunState } from "@/lib/api";
 import { useHeadline, useHub } from "../context";
-import { LIVE_AGENTS, WORKSPACE_SLUG, agentById, canOpenAgent, n } from "../model";
+import { LIVE_AGENTS, WORKSPACE_SLUG, canOpenAgent, n } from "../model";
 import { Ic } from "../Sprite";
-import { Facet, Mono, Oops, PageHead, RuleHead, STATE_LABEL, Wait } from "../ui";
+import { Facet, Oops, PageHead, RuleHead, STATE_LABEL, Wait } from "../ui";
 import { RunRowCard } from "../RunLedger";
 import { clock, dayLabel, took } from "../format";
 import { useRuns } from "../useRuns";
@@ -29,6 +29,8 @@ type SortKey = "state" | "title" | "agent" | "brand" | "action" | "when" | "took
 interface Col {
   key: SortKey;
   label: string;
+  /** the field-type mark in the header, the way a base names its columns */
+  icon: string;
   num?: boolean;
   wide?: boolean;
   value: (r: RunRow) => string | number | null;
@@ -39,14 +41,14 @@ interface Col {
 const STATE_RANK: Record<RunState, number> = { failed: 0, running: 1, queued: 2, done: 3 };
 
 const COLS: Col[] = [
-  { key: "state", label: "State", value: (r) => STATE_RANK[r.state] },
-  { key: "title", label: "Run", wide: true, value: (r) => r.title.toLowerCase() },
-  { key: "agent", label: "Specialist", value: (r) => r.agent_name.toLowerCase() },
-  { key: "brand", label: "Brand", value: (r) => (r.brand || "").toLowerCase() },
-  { key: "action", label: "What was filed", value: (r) => r.action.toLowerCase() },
-  { key: "when", label: "Started", num: true, value: (r) => r.created_at },
+  { key: "state", label: "State", icon: "check", value: (r) => STATE_RANK[r.state] },
+  { key: "title", label: "Run", icon: "text", wide: true, value: (r) => r.title.toLowerCase() },
+  { key: "agent", label: "Specialist", icon: "user", value: (r) => r.agent_name.toLowerCase() },
+  { key: "brand", label: "Brand", icon: "vendors", value: (r) => (r.brand || "").toLowerCase() },
+  { key: "action", label: "What was filed", icon: "layers", value: (r) => r.action.toLowerCase() },
+  { key: "when", label: "Started", icon: "plan", num: true, value: (r) => r.created_at },
   // A run nobody timed has no place in a duration ranking, so it sinks.
-  { key: "took", label: "Took", num: true, value: (r) => r.took_seconds },
+  { key: "took", label: "Took", icon: "clock", num: true, value: (r) => r.took_seconds },
 ];
 
 const STATES: RunState[] = ["done", "running", "failed", "queued"];
@@ -211,11 +213,12 @@ export function RunsView() {
           )}
         </div>
       ) : (
-        <div className="tw">
+        <div className="tw tw--air">
           <table className="rt">
             <caption className="vh">Runs, sortable by any column</caption>
             <thead>
               <tr>
+                <th scope="col" className="rnum" aria-label="Row" />
                 {COLS.map((c) => {
                   const on = sort.key === c.key;
                   return (
@@ -231,6 +234,7 @@ export function RunsView() {
                           setSort((s) => (s.key === c.key ? { key: c.key, dir: (s.dir * -1) as 1 | -1 } : { key: c.key, dir: c.key === "when" ? -1 : 1 }))
                         }
                       >
+                        <Ic name={c.icon} />
                         {c.label}
                         <i aria-hidden="true">{on ? (sort.dir === 1 ? "▲" : "▼") : "◆"}</i>
                       </button>
@@ -240,29 +244,28 @@ export function RunsView() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((r) => {
+              {sorted.map((r, i) => {
                 const open = r.id === openId;
-                const a = agentById(r.agent_id);
                 const d = took(r.took_seconds);
                 return (
                   <RunTableRow
                     key={r.id}
                     run={r}
+                    row={i + 1}
                     open={open}
-                    mono={a?.mono || r.agent_name.slice(0, 2).toUpperCase()}
                     duration={d}
                     onToggle={() => setOpenId(open ? null : r.id)}
                     onOpenWorkspace={openAgent}
                     canOpenWorkspace={mayOpen}
-                    cols={COLS.length}
+                    cols={COLS.length + 1}
                   />
                 );
               })}
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={5}>
-                  {n(page.runs.length)} run{page.runs.length === 1 ? "" : "s"}
+                <td colSpan={6}>
+                  {n(page.runs.length)} record{page.runs.length === 1 ? "" : "s"}
                   {totalKnown !== null && page.runs.length < totalKnown ? ` of ${n(totalKnown)} stored` : ""}
                 </td>
                 <td className="num dim">total</td>
@@ -297,11 +300,11 @@ function totalTook(runs: RunRow[]): string {
 }
 
 function RunTableRow({
-  run, open, mono, duration, onToggle, onOpenWorkspace, canOpenWorkspace, cols,
+  run, row, open, duration, onToggle, onOpenWorkspace, canOpenWorkspace, cols,
 }: {
   run: RunRow;
+  row: number;
   open: boolean;
-  mono: string;
   duration: string | null;
   onToggle: () => void;
   onOpenWorkspace: (agentId: string) => void;
@@ -311,6 +314,7 @@ function RunTableRow({
   return (
     <>
       <tr className={`rt__r ${run.state}${open ? " is-open" : ""}`}>
+        <td className="rnum">{row}</td>
         <td><span className={`st ${run.state}`}><i />{STATE_LABEL[run.state]}</span></td>
         <td className="wide">
           <button type="button" className="rt__open" aria-expanded={open} title={run.title} onClick={onToggle}>
@@ -320,11 +324,11 @@ function RunTableRow({
         </td>
         <td>
           <span className="rt__who">
-            <Mono agent={{ mono }} size="sm" />
+            <span className="rt__ai" data-a={run.agent_id} aria-hidden="true"><Ic name={run.agent_id} /></span>
             <em>{run.agent_name}</em>
           </span>
         </td>
-        <td className="dim">{run.brand || "—"}</td>
+        <td>{run.brand ? <span className="rt__tag">{run.brand}</span> : <span className="dim">—</span>}</td>
         <td><span className="dim">{run.action || "—"}</span></td>
         <td className="num dim">
           {dayLabel(run.created_at)[0]} <span className="rt__hm">{clock(run.created_at)}</span>

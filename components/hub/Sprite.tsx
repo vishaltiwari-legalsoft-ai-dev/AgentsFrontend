@@ -15,14 +15,14 @@
 
 import type { LucideIcon } from "lucide-react";
 import {
-  Activity, ArrowUp, Bell, BookOpen, Brush, CalendarClock, CalendarDays,
+  Activity, ArrowUp, Bell, BookOpen, Brush, CalendarClock, CalendarDays, Clock,
   ChartLine, ChartPie, Check, ChevronRight, CircleDashed, Compass, Database,
   Download, Feather, Files, FileText, Filter, Gauge, Globe, Hash, HeartPulse,
   House, Images, Inbox, Layers, LayoutDashboard, LayoutGrid, Link2, MailPlus,
   Megaphone, MessageCircle, Moon, NotebookPen, Palette, PenLine, Plug, Plus,
   RotateCcw, Search, SearchCheck, Send, Settings, ShieldCheck,
   SlidersVertical, Sparkles, Store, Sun, Swords, Target, TrendingUp,
-  TriangleAlert, Wrench, X,
+  TriangleAlert, Type, UserRound, Wrench, X,
 } from "lucide-react";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -42,6 +42,8 @@ const ICONS: Record<string, LucideIcon> = {
   layers: Layers, kit: Palette, draft: PenLine, research: BookOpen,
   overview: Gauge, trend: TrendingUp, sources: Link2, competitors: Swords,
   optimizer: Target, pages: Files, keywords: Hash, health: HeartPulse,
+  // field-type marks for the record's grid (Runs)
+  text: Type, user: UserRound, clock: Clock,
   // the specialists, one mark each — keyed by agent id so a card can say
   // `<Ic name={agent.id} />` and be sure of a face
   a1: Brush, a2: SearchCheck, a6: ChartPie, a9: NotebookPen, a10: Globe,
