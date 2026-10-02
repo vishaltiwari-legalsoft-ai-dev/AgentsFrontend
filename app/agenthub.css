@@ -23,11 +23,14 @@
   --rail-fg: #AAB4C1;
   --rail-fg-2: #79838F;
 
-  --mark: #FFD84D;
-  --mark-2: #FFE894;
-  --mark-ink: #45340A;
-  --mark-line: #E9C24A;
-  --mark-row: #FFFBEA;
+  /* The accent moved from marigold to indigo: the same one-accent discipline,
+     a hue that actually reads premium on true white. The fill is solid, so
+     its ink is plain white. */
+  --mark: #4F46E5;
+  --mark-2: #C7D2FE;
+  --mark-ink: #FFFFFF;
+  --mark-line: #4338CA;
+  --mark-row: #EEF2FF;
 
   --rival: #C4CFFF;
   --rival-ink: #26317A;
@@ -96,12 +99,12 @@
   --rail-fg: #A5AFBB;
   --rail-fg-2: #7B8693;
 
-  --mark: #F5CE52;
-  --mark-2: #7A6216;
-  --mark-ink: #241A00;
-  --mark-line: #6B5715;
+  --mark: #818CF8;
+  --mark-2: #312E81;
+  --mark-ink: #101232;
+  --mark-line: #4F46E5;
   /* the running wash sits under 11px --fg-3 text, so it stays dark enough to clear it */
-  --mark-row: #201C10;
+  --mark-row: #1B1D36;
 
   --rival: #363F8F;
   --rival-ink: #DDE3FF;
@@ -348,8 +351,10 @@ h1, h2, h3, h4 { margin: 0; font-weight: 700; line-height: 1.2; letter-spacing: 
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn--mark { background: var(--mark); color: var(--mark-ink); }
-.btn--mark:hover:not(:disabled) { background: var(--mark-2); }
-[data-theme="dark"] .btn--mark:hover:not(:disabled) { background: #FFE894; }
+/* hover deepens rather than fades: the ink on this fill is white, and a
+   paler step would walk the label out of contrast */
+.btn--mark:hover:not(:disabled) { background: var(--mark-line); }
+[data-theme="dark"] .btn--mark:hover:not(:disabled) { background: #A5B4FC; }
 
 .btn--solid { background: var(--fg); color: var(--bg); }
 .btn--solid:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 84%, var(--fg-2)); }
@@ -952,7 +957,7 @@ mark.them { background-image: linear-gradient(var(--rival), var(--rival)); color
 /* the caret is always present, so a column does not shift when it becomes the sort */
 .rt thead th button i { font-size: 7px; font-style: normal; color: var(--rule-hard); }
 .rt thead th[aria-sort]:not([aria-sort="none"]) button { color: var(--fg); }
-.rt thead th[aria-sort]:not([aria-sort="none"]) button i { color: var(--mark-2); }
+.rt thead th[aria-sort]:not([aria-sort="none"]) button i { color: var(--mark); }
 
 /* A sortable column puts its label inside a button and the padding goes there. A table
    that is not sortable has bare text in the cell, which with `padding: 0` collapsed the
@@ -1799,7 +1804,7 @@ textarea { resize: vertical; line-height: 1.55; }
 .ptile__none { color: #56606C; font-size: 15px; }
 .ptile__c {
   position: absolute; top: 4px; left: 4px; padding: 1px 5px; border-radius: var(--r-mark);
-  background: rgba(10, 12, 16, 0.72); color: #FFE894; font-size: 9.5px; font-weight: 800; letter-spacing: 0.04em;
+  background: rgba(10, 12, 16, 0.72); color: #C7D2FE; font-size: 9.5px; font-weight: 800; letter-spacing: 0.04em;
 }
 .ptile b { font-size: 12px; font-weight: 700; }
 .ptile span:last-child { font-size: 11px; line-height: 1.45; color: var(--fg-3); }

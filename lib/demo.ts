@@ -103,7 +103,7 @@ const library = (): { brands: LibraryBrand[] } => ({
     {
       id: "ls", brand_name: "LegalSoft", creative_count: 24,
       creatives: [
-        { file_name: "festive-hero.png", file_type: "png", view_url: art("Festive hero", "#FFE894", "#E9A23B"), is_image: true },
+        { file_name: "festive-hero.png", file_type: "png", view_url: art("Festive hero", "#C7D2FE", "#4F46E5"), is_image: true },
         { file_name: "webinar-promo.png", file_type: "png", view_url: art("Webinar promo", "#C7CDFF", "#3B4FE0"), is_image: true },
         { file_name: "intake-guide.png", file_type: "png", view_url: art("Intake guide", "#9BDFC6", "#0E8A63"), is_image: true },
         { file_name: "q4-offer.png", file_type: "png", view_url: art("Q4 offer", "#F08FA4", "#A33B57"), is_image: true },
@@ -470,7 +470,7 @@ const STATIC: Record<string, Fix> = {
 
   "/api/gd/brands": () => ({
     brands: [
-      { brand_id: "ls", name: "LegalSoft", slug: "legalsoft", source: "user", editable: true, logo_url: null, primary_colors: ["#14161C", "#FFD84D"], has_kit: true, reference_count: 12 },
+      { brand_id: "ls", name: "LegalSoft", slug: "legalsoft", source: "user", editable: true, logo_url: null, primary_colors: ["#14161C", "#4F46E5"], has_kit: true, reference_count: 12 },
       { brand_id: "ac", name: "Acme Health", slug: "acme-health", source: "user", editable: true, logo_url: null, primary_colors: ["#145C8E", "#3FA7D6"], has_kit: true, reference_count: 6 },
     ],
     default: "ls",
@@ -478,7 +478,7 @@ const STATIC: Record<string, Fix> = {
   "/api/gd/config": () => ({
     brand_id: "ls", brand_name: "LegalSoft",
     stage1_variants: [
-      { id: "g1", title: "Marigold sweep", desc: "Warm gradient, left-lit.", css_gradient: "linear-gradient(120deg,#FFE894,#E9A23B)", prompt_file: "g1.txt" },
+      { id: "g1", title: "Indigo sweep", desc: "Cool gradient, left-lit.", css_gradient: "linear-gradient(120deg,#C7D2FE,#4F46E5)", prompt_file: "g1.txt" },
       { id: "g2", title: "Ink fade", desc: "Deep neutral, quiet.", css_gradient: "linear-gradient(120deg,#3E4756,#14161C)", prompt_file: "g2.txt" },
       { id: "g3", title: "Counsel blue", desc: "Steady, institutional.", css_gradient: "linear-gradient(120deg,#3FA7D6,#145C8E)", prompt_file: "g3.txt" },
     ],
@@ -518,8 +518,8 @@ const STATIC: Record<string, Fix> = {
     ],
     brand_kit_block: "LegalSoft \u2014 ink & marigold; Inter; speak plainly.",
     locked_colors: {
-      gradient: ["#FFE894", "#E9A23B"], text: "#0D0F12", accent: "#FFD84D",
-      headline_highlight: { from: "#FFE894", to: "#FFD84D", direction: "90deg" },
+      gradient: ["#C7D2FE", "#818CF8"], text: "#0D0F12", accent: "#4F46E5",
+      headline_highlight: { from: "#C7D2FE", to: "#A5B4FC", direction: "90deg" },
       cta: { from: "#14161C", to: "#14161C", direction: "90deg", shadow: "0 10px 24px -12px rgba(13,15,18,.5)" },
     },
     stage1_source_note: "Backgrounds come from the brand kit\u2019s gradient library.",
@@ -529,7 +529,7 @@ const STATIC: Record<string, Fix> = {
   }),
   "/api/gd/ingested-brands": () => ({
     brands: [
-      { id: "ls", name: "LegalSoft", logo_url: null, primary_colors: ["#14161C", "#FFD84D"], counts: { fonts: 2, logos: 3, reference_assets: 12 }, source: "user" },
+      { id: "ls", name: "LegalSoft", logo_url: null, primary_colors: ["#14161C", "#4F46E5"], counts: { fonts: 2, logos: 3, reference_assets: 12 }, source: "user" },
       { id: "ac", name: "Acme Health", logo_url: null, primary_colors: ["#145C8E", "#3FA7D6"], counts: { fonts: 1, logos: 2, reference_assets: 6 }, source: "user" },
     ],
   }),

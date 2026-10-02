@@ -73,12 +73,12 @@
   --rail-fg: #A69F95;
   --rail-fg-2: #847F77;
 
-  /* marigold — the one decorative colour */
-  --mark: #F0C651;
-  --mark-2: #6B5719;
-  --mark-ink: #2A1E02;
-  --mark-line: #6E5A1C;
-  --mark-row: #2B2519;
+  /* indigo — the one decorative colour */
+  --mark: #818CF8;
+  --mark-2: #312E81;
+  --mark-ink: #101232;
+  --mark-line: #4F46E5;
+  --mark-row: #1B1D36;
 
   /* state */
   --rival: #4E56A0;

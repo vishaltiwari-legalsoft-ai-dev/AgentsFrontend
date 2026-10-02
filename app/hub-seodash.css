@@ -4,9 +4,9 @@
  * surface, the quiet lift — and adds the one thing panels did not need yet:
  * data marks. The marks follow the house chart rules:
  *
- *   - One hue for magnitude. The data hue is the marigold family worked
- *     darker (`--viz`), because the chrome's #FFD84D cannot hold a 2px line
- *     against white. Light steps of the same hue carry fills and remainders.
+ *   - One hue for magnitude. The data hue (`--viz`) is the accent indigo
+ *     itself, which holds a 2px line against white on its own. Light steps
+ *     of the same hue carry fills and remainders.
  *   - Status colours mean state and nothing else: the fix queue's
  *     done/assigned/open and the position track's quality bands.
  *   - Text wears ink tokens, never the series colour.
@@ -18,16 +18,16 @@
   display: grid;
   gap: 16px;
   animation: rise 560ms var(--ease) both;
-  /* the data hue: marigold, dark step (≈3.8:1 on white) */
-  --viz: #B8860B;
+  /* the data hue: the accent indigo itself (≈6:1 on white, holds a 2px line) */
+  --viz: #4F46E5;
   /* the light steps of the same hue, for fills and remainders */
-  --viz-area: color-mix(in srgb, var(--mark) 15%, transparent);
+  --viz-area: color-mix(in srgb, var(--mark) 11%, transparent);
   --viz-soft: var(--mark-2);
 }
 [data-theme="dark"] .sdb {
-  --viz: #F0C64A;
-  --viz-area: color-mix(in srgb, var(--mark) 10%, transparent);
-  --viz-soft: #5C4A12;
+  --viz: #8B95FA;
+  --viz-area: color-mix(in srgb, var(--mark) 12%, transparent);
+  --viz-soft: #383D8C;
 }
 
 /* ---------- the four headline figures ---------- */

@@ -62,7 +62,8 @@ export function AgentsView() {
 
         <div className="acards">
           {mine.map((a) => (
-            <article className="acard" key={a.id}>
+            <article className="acard" data-a={a.id} key={a.id}>
+              <i className="acard__ghost" aria-hidden="true"><Ic name={a.id} /></i>
               <span className="acard__ic"><Ic name={a.id} /></span>
               <h3>{a.name}</h3>
               <p>{a.desc}</p>
@@ -92,6 +93,7 @@ export function AgentsView() {
         <div className="acards">
           {soon.map((a) => (
             <article className="acard is-soon" key={a.id}>
+              <i className="acard__ghost" aria-hidden="true"><Ic name={a.id} /></i>
               <span className="acard__ic"><Ic name={a.id} /></span>
               <h3>{a.name}</h3>
               <p>{a.desc}</p>

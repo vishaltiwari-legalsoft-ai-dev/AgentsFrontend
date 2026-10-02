@@ -37,7 +37,7 @@ export const AVATAR_GRADIENTS: { name: string; css: string }[] = [
   { name: "Emerald", css: "linear-gradient(135deg, #34C08B, #0A6B4D)" },
   { name: "Bronze", css: "linear-gradient(135deg, #E3BC70, #8F6B2E)" },
   { name: "Rose", css: "linear-gradient(135deg, #F08FA4, #A33B57)" },
-  { name: "Marigold", css: "linear-gradient(135deg, #FFE894, #E9A23B)" },
+  { name: "Iris", css: "linear-gradient(135deg, #A5B4FC, #4338CA)" },
 ];
 
 export interface AvatarStyle {
