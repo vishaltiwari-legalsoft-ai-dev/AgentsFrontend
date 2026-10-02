@@ -1,12 +1,14 @@
 "use client";
 
-/** Agents — the roster, reduced to the three things a reader actually needs:
- *  who the specialist is, what it does, and the button that launches it.
+/** Agents — the staff, drawn as the product's hero shelf.
  *
- *  Each card wears the specialist's own mark (one Lucide face per agent, keyed
- *  by id in the sprite map) instead of a letter stamp, and carries nothing
- *  else: no run counts, no artifact strips, no section chips. The record of
- *  what each one produced lives on Runs, where the record belongs.
+ *  Six deep-ink cards on the white paper, one per specialist. Each card
+ *  carries the agent's own hue as an aurora in the glass, its own mark in a
+ *  glowing chip, the role as an eyebrow, one sentence of work, and Launch.
+ *  Nothing else: the record of what each one produced lives on Runs.
+ *
+ *  The five that are only promised are a quiet list, not a second grid —
+ *  they are information, not merchandise.
  */
 
 import { useHeadline, useHub } from "../context";
@@ -63,10 +65,11 @@ export function AgentsView() {
         <div className="acards">
           {mine.map((a) => (
             <article className="acard" data-a={a.id} key={a.id}>
-              <i className="acard__ghost" aria-hidden="true"><Ic name={a.id} /></i>
+              <span className="acard__aur" aria-hidden="true" />
               <span className="acard__ic"><Ic name={a.id} /></span>
+              <span className="acard__role"><i aria-hidden="true" />{a.role}</span>
               <h3>{a.name}</h3>
-              <p>{a.desc}</p>
+              <p title={a.desc}>{a.desc}</p>
               <button type="button" className="acard__go" onClick={() => launch(a.id)}>
                 Launch
                 <Ic name="chevron" />
@@ -90,15 +93,14 @@ export function AgentsView() {
           note="Listed so you know what is coming and can stop waiting for what is not."
           aside={<span className="aside">{soon.length} planned</span>}
         />
-        <div className="acards">
+        <div className="asoon">
           {soon.map((a) => (
-            <article className="acard is-soon" key={a.id}>
-              <i className="acard__ghost" aria-hidden="true"><Ic name={a.id} /></i>
-              <span className="acard__ic"><Ic name={a.id} /></span>
-              <h3>{a.name}</h3>
-              <p>{a.desc}</p>
-              <span className="acard__soon">Not available yet</span>
-            </article>
+            <div className="asoon__row" key={a.id}>
+              <span className="asoon__ic"><Ic name={a.id} /></span>
+              <b>{a.name}</b>
+              <span>{a.desc}</span>
+              <em>Not yet</em>
+            </div>
           ))}
         </div>
         <p className="soon-note">

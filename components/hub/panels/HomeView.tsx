@@ -20,7 +20,7 @@ import { FAQS, GUIDES } from "../guide";
 import { JOBS } from "../jobs";
 import { WORKSPACE_SLUG, agentsFor, greeting, word, type HubAgent } from "../model";
 import { Ic } from "../Sprite";
-import { Mono, RuleHead } from "../ui";
+import { RuleHead } from "../ui";
 
 export function HomeView() {
   const { user, openWork, openBrief, go, toast } = useHub();
@@ -131,7 +131,7 @@ function GuideModule({
             aria-current={a.id === agent.id ? "true" : undefined}
             onClick={() => onSelect(a.id)}
           >
-            <Mono agent={a} />
+            <span className="hgm__ic" data-a={a.id} aria-hidden="true"><Ic name={a.id} /></span>
             <span className="hgm__who">
               <b>{a.name}</b>
               <em>{a.role}</em>
@@ -142,6 +142,7 @@ function GuideModule({
 
       <article className="hgm__detail" key={agent.id}>
         <header className="hgm__head">
+          <span className="hgm__badge" data-a={agent.id} aria-hidden="true"><Ic name={agent.id} /></span>
           <div className="hgm__id">
             <b>{agent.name}</b>
             <em>{agent.desc}</em>

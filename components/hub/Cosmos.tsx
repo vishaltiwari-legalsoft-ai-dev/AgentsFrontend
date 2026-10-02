@@ -19,6 +19,7 @@
 
 import type { CSSProperties } from "react";
 import type { HubAgent } from "./model";
+import { Ic } from "./Sprite";
 
 /** ring diameter (px) · seconds per lap · the two phase angles on it */
 const RINGS = [
@@ -63,12 +64,13 @@ export default function Cosmos({
             <button
               type="button"
               className="cosmos__sat"
+              data-a={a.id}
               style={{ "--delay": `${450 + i * 110}ms` } as CSSProperties}
               title={a.role}
               aria-label={`${a.name} — open its manual`}
               onClick={() => onPick(a.id)}
             >
-              <i aria-hidden="true" />
+              <i aria-hidden="true"><Ic name={a.id} /></i>
               {a.name}
             </button>
           </span>
