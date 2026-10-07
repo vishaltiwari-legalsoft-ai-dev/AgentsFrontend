@@ -16,8 +16,12 @@ import { loadPending, useLoadSession, type Load } from "@/lib/load";
 import { useHeadline, useHub } from "../context";
 import { clock } from "../format";
 import { n } from "../model";
+import { Ic } from "../Sprite";
 import { Blank, Oops, PageHead, RuleHead, Wait } from "../ui";
-import { SEVERITY_META, canFollowFix, countsLine, groupBySeverity, routeForFix } from "./issues";
+import { SEVERITY_META, canFollowFix, countsLine, groupBySeverity, routeForFix, type Severity } from "./issues";
+
+/** The signal each severity wears in the row's left margin. */
+const SEV_ICON: Record<Severity, string> = { high: "issues", medium: "clock", low: "info" };
 
 export function IssuesView() {
   const { user, revision, go, openWork } = useHub();
@@ -82,23 +86,18 @@ export function IssuesView() {
           in plain words and says where to fix it.
         </Blank>
       ) : (
-        groups.map((g) => {
-          const meta = SEVERITY_META[g.severity];
-          return (
-            <section className="band" key={g.severity}>
-              <RuleHead
-                title={meta.head}
-                note={meta.note}
-                aside={<span className="aside">{n(g.issues.length)}</span>}
-              />
-              <ol className="prio" aria-label={`${meta.chip} severity issues`}>
-                {g.issues.map((i) => (
-                  <IssueRow key={i.id} issue={i} onFix={openFix} canFix={canFix} />
-                ))}
-              </ol>
-            </section>
-          );
-        })
+        <section className="band">
+          <RuleHead
+            title="Open issues"
+            note="Most severe first. The button beside each one goes where it is put right."
+            aside={<span className="aside">{n(data.issues.length)} open</span>}
+          />
+          <ol className="issl" aria-label="Open issues, most severe first">
+            {groups.flatMap((g) => g.issues).map((i) => (
+              <IssueRow key={i.id} issue={i} onFix={openFix} canFix={canFix} />
+            ))}
+          </ol>
+        </section>
       )}
 
       {someWithheld && (
@@ -123,11 +122,11 @@ export function IssuesView() {
   );
 }
 
-/** One issue on one line: chip, brand, what is wrong, what it means, and the
- *  one place to go. The chips sit nested one level down so `.prio__i div >
- *  span` cannot restyle them. A row with no fix is a fact, not a task — it
- *  simply has no button, and so does a row whose fix lives behind a wall this
- *  reader is on the other side of. */
+/** One issue, one clean row: the severity signal in the margin, the title with
+ *  its priority pill right beside it, the plain-words detail underneath, and
+ *  the one place to go on the right. A row with no fix is a fact, not a task —
+ *  it simply has no button, and so does a row whose fix lives behind a wall
+ *  this reader is on the other side of. */
 function IssueRow({
   issue, onFix, canFix,
 }: {
@@ -136,20 +135,22 @@ function IssueRow({
   canFix: (fix: IssueFix) => boolean;
 }) {
   const fix = issue.fix && canFix(issue.fix) ? issue.fix : null;
-  const high = issue.severity === "high";
   return (
-    <li className={`prio__i${high ? " is-bad" : ""}`}>
-      <span className="prio__n" aria-hidden="true">{high ? "!" : "·"}</span>
-      <div>
-        <span>
-          <span className={`sev sev--${issue.severity}`}>{SEVERITY_META[issue.severity].chip}</span>{" "}
-          <span className="tag">{issue.brand}</span>
-        </span>{" "}
-        <b>{issue.title}</b>{" "}
-        <span>{issue.detail}</span>
+    <li className={`iss is-${issue.severity}`}>
+      <span className="iss__sig" aria-hidden="true"><Ic name={SEV_ICON[issue.severity]} /></span>
+      <div className="iss__body">
+        <span className="iss__head">
+          <b>{issue.title}</b>
+          <em className={`iss__pri is-${issue.severity}`}>{SEVERITY_META[issue.severity].chip}</em>
+          {issue.brand && <span className="iss__brand">{issue.brand}</span>}
+        </span>
+        <p>{issue.detail}</p>
       </div>
       {fix && (
-        <button type="button" onClick={() => onFix(fix)}>{fix.label}</button>
+        <button type="button" className="iss__go" onClick={() => onFix(fix)}>
+          {fix.label}
+          <Ic name="chevron" />
+        </button>
       )}
     </li>
   );

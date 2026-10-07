@@ -1392,3 +1392,100 @@
   border-top: 0;
   font-size: 11px; font-weight: 600; color: var(--fg-3);
 }
+
+/* ---------- issues, one clean ledger ---------- */
+
+/* One flat list, most severe first. Each row: the severity's signal in the
+   margin, the title with its priority pill right beside it, the detail in
+   plain words underneath, and the fix on the right. Status colours only —
+   rose for high, amber for medium, quiet ink for low. */
+.issl {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.iss {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 15px 16px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04);
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.iss:hover {
+  border-color: var(--rule-hard);
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04), 0 16px 34px -28px rgba(13, 15, 18, 0.35);
+}
+.iss.is-high { border-left: 3px solid var(--gap); padding-left: 14px; }
+
+.iss__sig {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+}
+.iss__sig svg { width: 17px; height: 17px; }
+.iss.is-high .iss__sig { background: color-mix(in srgb, var(--gap) 10%, transparent); color: var(--gap); }
+.iss.is-medium .iss__sig { background: color-mix(in srgb, var(--proxy) 12%, transparent); color: var(--proxy); }
+.iss.is-low .iss__sig { background: color-mix(in srgb, var(--fg) 5%, transparent); color: var(--fg-3); }
+
+.iss__body { min-width: 0; display: grid; gap: 3px; }
+.iss__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.iss__head b { font-size: 13.5px; font-weight: 650; letter-spacing: -0.01em; color: var(--fg); }
+.iss__body p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--fg-2); max-width: 86ch; }
+
+/* the priority, said right beside the title */
+.iss__pri {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 2.5px 9px;
+  border-radius: var(--r-pill);
+}
+.iss__pri.is-high { background: color-mix(in srgb, var(--gap) 11%, transparent); color: var(--gap); }
+.iss__pri.is-medium { background: color-mix(in srgb, var(--proxy) 13%, transparent); color: var(--proxy); }
+.iss__pri.is-low { background: color-mix(in srgb, var(--fg) 6%, transparent); color: var(--fg-2); }
+
+.iss__brand {
+  padding: 2px 9px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--fg-2);
+}
+
+.iss__go {
+  flex: none;
+  align-self: center;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 13px 7px 15px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+  white-space: nowrap;
+  transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.iss__go svg { width: 12px; height: 12px; transition: transform var(--t-fast) var(--ease); }
+.iss__go:hover { border-color: var(--fg); color: var(--fg); }
+.iss__go:hover svg { transform: translateX(2px); }
+
+@media (max-width: 680px) {
+  .iss { flex-wrap: wrap; }
+  .iss__go { margin-left: 50px; }
+}
