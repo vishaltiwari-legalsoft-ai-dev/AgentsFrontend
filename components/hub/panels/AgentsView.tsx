@@ -11,13 +11,16 @@
  *  they are information, not merchandise.
  */
 
+import { useState } from "react";
 import { useHeadline, useHub } from "../context";
 import { AGENTS, Cap, LIVE_AGENTS, WORKSPACE_SLUG, agentsFor, word } from "../model";
+import { RequestDialog, type AskKind } from "../RequestDialog";
 import { Ic } from "../Sprite";
 import { PageHead, RuleHead } from "../ui";
 
 export function AgentsView() {
   const { user, openWork, toast } = useHub();
+  const [ask, setAsk] = useState<AskKind | null>(null);
 
   // This rail entry is how GEO is reached, so it stays for a scoped account —
   // but the four specialists it cannot open are not drawn as cards it can
@@ -55,6 +58,18 @@ export function AgentsView() {
         lede="Each one takes a brief in plain words and hands back one kind of finished thing. Launch the one whose work you need."
       />
 
+      {/* the two asks that belong at the top of the roster */}
+      <div className="aquick">
+        <button type="button" className="aquick__b" onClick={() => setAsk("feedback")}>
+          <Ic name="ask" />
+          Submit feedback
+        </button>
+        <button type="button" className="aquick__b" onClick={() => setAsk("issue")}>
+          <Ic name="issues" />
+          Submit a problem
+        </button>
+      </div>
+
       <section className="band">
         <RuleHead
           title="Working now"
@@ -62,15 +77,21 @@ export function AgentsView() {
           aside={<span className="aside">{scoped ? `${mine.length} of ${LIVE_AGENTS.length} live` : `${LIVE_AGENTS.length} of ${AGENTS.length}`}</span>}
         />
 
-        <div className="acards">
+        <div className="aorbs">
           {mine.map((a) => (
-            <article className="acard" data-a={a.id} key={a.id}>
-              <span className="acard__aur" aria-hidden="true" />
-              <span className="acard__ic"><Ic name={a.id} /></span>
-              <span className="acard__role"><i aria-hidden="true" />{a.role}</span>
+            <article className="aorb" data-a={a.id} key={a.id}>
+              <button
+                type="button"
+                className="aorb__orb"
+                onClick={() => launch(a.id)}
+                aria-label={`Launch ${a.name}`}
+                title={`Launch ${a.name}`}
+              >
+                <Ic name={a.id} />
+              </button>
               <h3>{a.name}</h3>
-              <p title={a.desc}>{a.desc}</p>
-              <button type="button" className="acard__go" onClick={() => launch(a.id)}>
+              <p>{a.desc}</p>
+              <button type="button" className="aorb__go" onClick={() => launch(a.id)}>
                 Launch
                 <Ic name="chevron" />
               </button>
@@ -109,6 +130,13 @@ export function AgentsView() {
         </p>
       </section>
       )}
+
+      <RequestDialog
+        kind={ask || "feedback"}
+        open={ask !== null}
+        onClose={() => setAsk(null)}
+        onToast={toast}
+      />
     </>
   );
 }

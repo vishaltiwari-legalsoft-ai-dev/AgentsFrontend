@@ -45,6 +45,9 @@
 @import url("./hub-legacy-bridge.css");
 /* The SEO workspace's per-brand dashboard — the first all-new data surface. */
 @import url("./hub-seodash.css");
+/* The glass pass and the newest furniture (orbs, asks, Brands, usage strip).
+   Last of all, so the translucent surfaces win over every solid paint above. */
+@import url("./hub-glass.css");
 
 @keyframes spin {
   to {

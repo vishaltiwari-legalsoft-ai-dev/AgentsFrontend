@@ -31,6 +31,7 @@ import { HubProvider, type Headline, type HubContextValue, type ToastFn, type Wo
 import { HubToasts, useToasts } from "./Toasts";
 import { HubPalette } from "./Palette";
 import { BriefDialog } from "./BriefDialog";
+import { RequestDialog } from "./RequestDialog";
 import { PanelSwitch } from "./PanelSwitch";
 import { useShellStats } from "./useShellStats";
 
@@ -131,6 +132,7 @@ export default function HubApp() {
   const [revision, setRevision] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [briefFor, setBriefFor] = useState<string | null>(null);
+  const [agentAsk, setAgentAsk] = useState(false);
   const [workNav, setWorkNav] = useState<WorkNav | null>(null);
   const { toasts, fire, dismiss } = useToasts();
 
@@ -275,7 +277,8 @@ export default function HubApp() {
           onLogout={logout}
           hasNews={stats.hasNews}
           onBell={() => go("settings")}
-          onNewWork={() => openBrief()}
+          onNewWork={() => setAgentAsk(true)}
+          usage={{ runs: stats.counts.runs, live: agents.length }}
         />
         <div className="app2__stage">
           {route.work && (
@@ -323,6 +326,13 @@ export default function HubApp() {
         onToast={fire}
         onOpenWork={openWork}
         onQueued={bumpRevision}
+      />
+
+      <RequestDialog
+        kind="agent"
+        open={agentAsk}
+        onClose={() => setAgentAsk(false)}
+        onToast={fire}
       />
 
       <HubToasts toasts={toasts} onDismiss={dismiss} />

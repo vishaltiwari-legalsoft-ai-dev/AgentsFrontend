@@ -142,7 +142,7 @@ export const PANELS: Panel[] = [
   { id: "issues", label: "Issues", icon: "issues", group: "Work", title: "Issues", gate: null, inGeoScope: true },
   { id: "agents", label: "Agents", icon: "agents", group: "Work", title: "Agents", gate: null, inGeoScope: true },
   { id: "runs", label: "Runs", icon: "runs", group: "Work", title: "Runs", gate: null, inGeoScope: true },
-  { id: "library", label: "Library", icon: "library", group: "Assets", title: "Library", gate: null, inGeoScope: false },
+  { id: "library", label: "Brands", icon: "vendors", group: "Assets", title: "Brands", gate: null, inGeoScope: false },
   { id: "models", label: "Models", icon: "models", group: "Setup", title: "Models", gate: "creator", inGeoScope: false },
   { id: "integrations", label: "Integrations", icon: "integrations", group: "Setup", title: "Integrations", gate: null, inGeoScope: false },
   { id: "schedule", label: "Schedule", icon: "plan", group: "Setup", title: "Schedule", gate: "creator", inGeoScope: false },

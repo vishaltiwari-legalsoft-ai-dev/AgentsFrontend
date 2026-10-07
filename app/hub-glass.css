@@ -1,0 +1,382 @@
+/* The glass pass, and this round's new furniture.
+ *
+ * Imported last on purpose: the cards below were all painted solid by the
+ * sheets before this one, and glass only works if these rules win. The recipe
+ * is one idea everywhere — a translucent cut of the theme surface, the dotted
+ * paper blurring through it, a thread of light along the top edge — so light
+ * mode reads as frosted paper and dark mode stops being matte.
+ */
+
+/* ---------- the glass recipe, over every card surface ---------- */
+
+.app2 .spec, .app2 .hook, .app2 .prio__i, .app2 .rledger, .app2 .tw,
+.app2 .asset, .wbar, .hgm, .iss, .sdb-card, .sdb-tile, .bcard {
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  backdrop-filter: blur(16px) saturate(1.5);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #FFFFFF 55%, transparent),
+    0 1px 2px rgba(13, 15, 18, 0.04);
+}
+[data-theme="dark"] .app2 .spec, [data-theme="dark"] .app2 .hook,
+[data-theme="dark"] .app2 .prio__i, [data-theme="dark"] .app2 .rledger,
+[data-theme="dark"] .app2 .tw, [data-theme="dark"] .app2 .asset,
+[data-theme="dark"] .wbar, [data-theme="dark"] .hgm, [data-theme="dark"] .iss,
+[data-theme="dark"] .sdb-card, [data-theme="dark"] .sdb-tile, [data-theme="dark"] .bcard {
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 14px 38px -26px rgba(0, 0, 0, 0.8);
+}
+
+/* the base grid's cells stop painting over the glass */
+.app2 .tw--air .rt tbody td { background: transparent; }
+.app2 .tw--air .rt thead th,
+.app2 .tw--air .rt tfoot td { background: color-mix(in srgb, var(--surface-2) 62%, transparent); }
+.app2 .tw--air .rt tbody tr.rt__r:hover td { background: color-mix(in srgb, var(--fg) 4%, transparent); }
+.app2 .tw--air .rt__d > td { background: color-mix(in srgb, var(--surface-2) 45%, transparent); }
+
+/* the header capsule, deeper glass — above all in dark, which read matte */
+.tnav__in {
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: blur(18px) saturate(1.6);
+}
+[data-theme="dark"] .tnav__in {
+  background: color-mix(in srgb, #181C26 66%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 20px 52px -26px rgba(0, 0, 0, 0.75);
+}
+
+/* ---------- the usage strip above the capsule ---------- */
+
+.usebar { display: flex; justify-content: center; padding: 8px 24px 0; }
+.usebar__in {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 15px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--surface) 68%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  backdrop-filter: blur(12px) saturate(1.4);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #FFFFFF 50%, transparent), 0 6px 18px -14px rgba(13, 15, 18, 0.4);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-2);
+}
+.usebar__in svg { width: 13px; height: 13px; color: var(--mark); }
+.usebar__in b { color: var(--fg); font-variant-numeric: tabular-nums; font-weight: 700; }
+.usebar__in i { width: 1px; height: 12px; background: var(--rule-hard); margin: 0 3px; }
+[data-theme="dark"] .usebar__in {
+  background: color-mix(in srgb, #181C26 60%, transparent);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+/* ---------- the two asks at the top of the roster ---------- */
+
+.aquick { display: flex; gap: 10px; margin: -26px 0 40px; }
+.aquick__b {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #FFFFFF 45%, transparent), 0 1px 2px rgba(13, 15, 18, 0.04);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg-2);
+  transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+.aquick__b svg { width: 14px; height: 14px; color: var(--fg-3); }
+.aquick__b:hover { border-color: var(--fg); color: var(--fg); transform: translateY(-1px); }
+.aquick__b:hover svg { color: var(--fg); }
+[data-theme="dark"] .aquick__b { background: color-mix(in srgb, var(--surface) 55%, transparent); border-color: rgba(255,255,255,0.1); }
+[data-theme="dark"] .aquick__b:hover { border-color: rgba(255,255,255,0.4); }
+
+/* ---------- the roster as floating orbs ---------- */
+
+.aorbs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 34px 14px;
+  padding-top: 10px;
+}
+.aorb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  animation: rise 520ms var(--ease) backwards;
+}
+.aorbs .aorb:nth-child(1) { animation-delay: 40ms; }
+.aorbs .aorb:nth-child(2) { animation-delay: 110ms; }
+.aorbs .aorb:nth-child(3) { animation-delay: 180ms; }
+.aorbs .aorb:nth-child(4) { animation-delay: 250ms; }
+.aorbs .aorb:nth-child(5) { animation-delay: 320ms; }
+.aorbs .aorb:nth-child(6) { animation-delay: 390ms; }
+
+/* the orb itself: a sphere of glass holding the agent's light */
+.aorb__orb {
+  --ac-fallback: var(--fg-3);
+  display: grid;
+  place-items: center;
+  width: 106px;
+  height: 106px;
+  margin-bottom: 10px;
+  border-radius: 50%;
+  color: var(--ac, var(--fg-3));
+  background:
+    radial-gradient(42% 42% at 33% 26%, color-mix(in srgb, #FFFFFF 85%, transparent), transparent 62%),
+    radial-gradient(75% 75% at 72% 82%, color-mix(in srgb, var(--ac, var(--fg-3)) 26%, transparent), transparent 76%),
+    color-mix(in srgb, var(--surface) 50%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ac, var(--fg-3)) 32%, var(--rule));
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
+  backdrop-filter: blur(10px) saturate(1.4);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #FFFFFF 70%, transparent),
+    inset 0 -14px 24px -18px color-mix(in srgb, var(--ac, var(--fg-3)) 55%, transparent),
+    0 22px 44px -20px color-mix(in srgb, var(--ac, var(--fg-3)) 50%, rgba(13, 15, 18, 0.35));
+  animation: orb-float 5.4s ease-in-out infinite alternate;
+  transition: box-shadow var(--t) var(--ease), border-color var(--t) var(--ease), scale var(--t) var(--ease);
+}
+.aorb__orb svg { width: 38px; height: 38px; }
+/* each sphere rides its own phase of the same tide */
+.aorbs .aorb:nth-child(2) .aorb__orb { animation-delay: -1.3s; }
+.aorbs .aorb:nth-child(3) .aorb__orb { animation-delay: -2.6s; }
+.aorbs .aorb:nth-child(4) .aorb__orb { animation-delay: -0.7s; }
+.aorbs .aorb:nth-child(5) .aorb__orb { animation-delay: -1.9s; }
+.aorbs .aorb:nth-child(6) .aorb__orb { animation-delay: -3.2s; }
+@keyframes orb-float {
+  from { transform: translateY(5px); }
+  to { transform: translateY(-7px); }
+}
+.aorb__orb:hover {
+  scale: 1.06;
+  border-color: color-mix(in srgb, var(--ac, var(--fg-3)) 55%, var(--rule));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #FFFFFF 75%, transparent),
+    inset 0 -14px 24px -18px color-mix(in srgb, var(--ac, var(--fg-3)) 60%, transparent),
+    0 28px 56px -22px color-mix(in srgb, var(--ac, var(--fg-3)) 65%, rgba(13, 15, 18, 0.4));
+}
+[data-theme="dark"] .aorb__orb {
+  background:
+    radial-gradient(42% 42% at 33% 26%, rgba(255, 255, 255, 0.16), transparent 62%),
+    radial-gradient(75% 75% at 72% 82%, color-mix(in srgb, var(--ac, var(--fg-3)) 30%, transparent), transparent 76%),
+    color-mix(in srgb, var(--surface) 45%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -14px 24px -18px color-mix(in srgb, var(--ac, var(--fg-3)) 55%, transparent),
+    0 22px 44px -20px color-mix(in srgb, var(--ac, var(--fg-3)) 40%, rgba(0, 0, 0, 0.7));
+}
+
+.aorb h3 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -0.015em; color: var(--fg); }
+.aorb p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--fg-2); max-width: 36ch; }
+.aorb__go {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 6px 13px 6px 15px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+  transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+.aorb__go svg { width: 12px; height: 12px; transition: transform var(--t-fast) var(--ease); }
+.aorb__go:hover { border-color: var(--ac, var(--fg)); color: var(--fg); }
+.aorb__go:hover svg { transform: translateX(2px); }
+
+/* ---------- the ask dialogs ---------- */
+
+.rqd {
+  /* the header opens this outside `.app2`, so the shell's type is pinned here */
+  font-family: "InterVariable", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.011em;
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: color-mix(in srgb, #0D0F12 36%, transparent);
+  -webkit-backdrop-filter: blur(7px);
+  backdrop-filter: blur(7px);
+  animation: rqd-in 180ms var(--ease) both;
+}
+@keyframes rqd-in { from { opacity: 0; } }
+.rqd__card {
+  width: 460px;
+  max-width: calc(100vw - 40px);
+  max-height: calc(100dvh - 60px);
+  overflow-y: auto;
+  display: grid;
+  gap: 12px;
+  padding: 22px 24px 20px;
+  border: 1px solid var(--rule);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(24px) saturate(1.5);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #FFFFFF 60%, transparent), var(--shadow-float);
+  animation: rqd-card-in 220ms var(--ease) both;
+}
+@keyframes rqd-card-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+[data-theme="dark"] .rqd__card {
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  border-color: rgba(255, 255, 255, 0.11);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), var(--shadow-float);
+}
+.rqd__head { display: flex; align-items: center; justify-content: space-between; }
+.rqd__head h3 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -0.015em; }
+.rqd__x {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--fg-3);
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.rqd__x svg { width: 14px; height: 14px; }
+.rqd__x:hover { background: color-mix(in srgb, var(--fg) 6%, transparent); color: var(--fg); }
+.rqd__card > p { margin: -4px 0 2px; font-size: 12.5px; line-height: 1.55; color: var(--fg-2); }
+.rqd__card label {
+  display: grid;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.rqd__card .inp, .rqd__card .sel, .rqd__card textarea {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 450;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--fg);
+  padding: 9px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 75%, transparent);
+  width: 100%;
+}
+.rqd__card textarea { resize: vertical; min-height: 86px; line-height: 1.55; }
+.rqd__card .inp:focus-visible, .rqd__card .sel:focus-visible, .rqd__card textarea:focus-visible {
+  border-color: var(--mark);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mark) 18%, transparent);
+  outline: none;
+}
+.rqd__ops { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+/* ---------- the Brands panel ---------- */
+
+.bgrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.bcard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 20px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+}
+.bcard__head { display: flex; align-items: baseline; gap: 10px; padding-bottom: 10px; }
+.bcard__head > b { font-size: 15px; font-weight: 650; letter-spacing: -0.015em; }
+.bcard__head > em { font-style: normal; font-size: 11.5px; color: var(--fg-3); }
+.bcard__now {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.bcard__now.is-live { background: color-mix(in srgb, var(--live) 11%, transparent); color: var(--live); }
+.bcard__now.is-live i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--live);
+  animation: bnow 1.4s ease-in-out infinite;
+}
+@keyframes bnow { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.bcard__none { margin: 4px 0 10px; font-size: 12.5px; color: var(--fg-3); }
+
+.bcard__rows { display: grid; }
+.bcard__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 2px;
+  border-top: 1px solid var(--rule-soft);
+  text-align: left;
+  border-radius: 0;
+  transition: background var(--t-fast) var(--ease);
+}
+.bcard__row:hover { background: color-mix(in srgb, var(--fg) 3%, transparent); }
+.bcard__row > b { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bcard__row > u { text-decoration: none; font-size: 11px; color: var(--fg-3); font-variant-numeric: tabular-nums; }
+.bst {
+  font-style: normal;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+.bst.is-run {
+  padding: 2.5px 9px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--live) 11%, transparent);
+  color: var(--live);
+}
+.bst.is-run i { width: 5px; height: 5px; border-radius: 50%; background: var(--live); animation: bnow 1.4s ease-in-out infinite; }
+.bst.is-q {
+  padding: 2.5px 9px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  color: var(--fg-2);
+}
+
+/* ---------- small screens & settled motion ---------- */
+
+@media (max-width: 1060px) {
+  .aorbs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bgrid { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .aorbs { grid-template-columns: 1fr; }
+  .aquick { flex-wrap: wrap; margin-top: -10px; }
+  .usebar { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aorb { animation: none; }
+  .aorb__orb { animation: none; }
+  .bcard__now.is-live i, .bst.is-run i { animation: none; }
+}

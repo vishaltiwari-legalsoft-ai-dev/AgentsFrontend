@@ -19,7 +19,7 @@ import { HomeView } from "./panels/HomeView";
 import { IssuesView } from "./panels/IssuesView";
 import { AgentsView } from "./panels/AgentsView";
 import { RunsView } from "./panels/RunsView";
-import { LibraryView } from "./panels/LibraryView";
+import { BrandsView } from "./panels/BrandsView";
 import { ModelsView } from "./panels/ModelsView";
 import { IntegrationsView } from "./panels/IntegrationsView";
 import { ScheduleView } from "./panels/ScheduleView";
@@ -88,7 +88,9 @@ export function PanelSwitch({ route }: { route: Route }) {
     case "issues": return <IssuesView />;
     case "agents": return <AgentsView />;
     case "runs": return <RunsView />;
-    case "library": return <LibraryView />;
+    // The Library's slot now carries the Brands panel: who is working for
+    // whom, right now. The id stays "library" so stored links keep opening.
+    case "library": return <BrandsView />;
     case "models": return <ModelsView />;
     case "integrations": return <IntegrationsView />;
     case "schedule": return <ScheduleView />;

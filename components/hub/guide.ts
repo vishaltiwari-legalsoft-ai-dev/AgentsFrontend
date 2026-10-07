@@ -23,12 +23,12 @@ export const GUIDES: Record<string, AgentGuide> = {
   a1: {
     when: "You need an on-brand visual — a social creative, a hero banner, an ad set, a brochure page — from a written brief.",
     steps: [
-      "Press New work in the header and say what the creative is for, or pick a ready job like Social creative.",
+      "Pick a ready job from its manual on Home — or press Ctrl K and brief it in plain words.",
       "Pick the brand, so it pulls the right kit — colours, fonts, logo, references.",
       "Approve the four stages one at a time — background, element, text, logo — regenerating any attempt you don't like.",
       "Collect the finished PNG. If one detail is off, ask for a retouch instead of starting over.",
     ],
-    gets: "A finished PNG per placement. Completed creatives are archived to the Library.",
+    gets: "A finished PNG per placement. Completed creatives are archived with the brand.",
     tip: "The more concrete the brief — audience, offer, occasion — the fewer regenerations you'll need.",
   },
   a2: {
@@ -53,7 +53,7 @@ export const GUIDES: Record<string, AgentGuide> = {
   a9: {
     when: "You want a blog post that survives scrutiny — researched in depth, with every claim carrying its citation.",
     steps: [
-      "Press New work with the topic, or pick a job — research post, comparison piece, FAQ page.",
+      "Brief it with the topic from Ctrl K, or pick a job — research post, comparison piece, FAQ page.",
       "It researches first, then drafts: every claim in the draft is tied to a source.",
       "Review the draft beside its evidence ledger, then export Markdown or HTML.",
     ],
@@ -103,7 +103,7 @@ export const FAQS: Faq[] = [
   },
   {
     q: "How do I make sure everything comes out on-brand?",
-    a: "Keep the brand's kit complete in the Library — colours, fonts, logos, and real reference creatives. The Graphic Designer pulls from the kit on every run, so the kit is where “on-brand” is defined. When output drifts, a thin kit is usually why.",
+    a: "Keep the brand's kit complete — colours, fonts, logos, and real reference creatives. The Graphic Designer pulls from the kit on every run, so the kit is where “on-brand” is defined. When output drifts, a thin kit is usually why.",
   },
   {
     q: "Will teammates and I step on each other's work?",

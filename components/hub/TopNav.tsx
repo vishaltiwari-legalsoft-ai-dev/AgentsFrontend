@@ -18,7 +18,7 @@ import type { PanelId, Route } from "./model";
 
 export default function TopNav({
   route, panels, counts, onGo, onOpenPalette, dark, onTheme, user, onLogout,
-  hasNews, onBell, onNewWork,
+  hasNews, onBell, onNewWork, usage,
 }: {
   route: Route;
   panels: ReturnType<typeof panelsFor>;
@@ -32,6 +32,8 @@ export default function TopNav({
   hasNews: boolean;
   onBell: () => void;
   onNewWork: () => void;
+  /** How much the agents have been used — absent until the record answers. */
+  usage?: { runs?: number; live: number };
 }) {
   const [menu, setMenu] = useState<"setup" | "user" | null>(null);
   const [avatarOpen, setAvatarOpen] = useState(false);
@@ -70,6 +72,19 @@ export default function TopNav({
 
   return (
     <header className="tnav" ref={barRef}>
+      {/* the usage strip: how much work the staff has actually done */}
+      {usage?.runs != null && (
+        <div className="usebar">
+          <span className="usebar__in">
+            <Ic name="runs" />
+            Agents put to work
+            <b>{usage.runs.toLocaleString("en-US")}</b>
+            times
+            <i aria-hidden="true" />
+            {usage.live} specialist{usage.live === 1 ? "" : "s"} live
+          </span>
+        </div>
+      )}
       <div className="tnav__in">
         <button type="button" className="tnav__brand" onClick={() => go("home")} title="Home">
           <span className="tnav__glyph" aria-hidden="true" />
@@ -149,8 +164,8 @@ export default function TopNav({
             {hasNews && <i className="tnav__dot" aria-hidden="true" />}
           </button>
           <button type="button" className="btn btn--solid btn--sm" onClick={onNewWork}>
-            <Ic name="plus" />
-            New work
+            <Ic name="sweep" />
+            Request an agent
           </button>
 
           <div className="tnav__drop">
