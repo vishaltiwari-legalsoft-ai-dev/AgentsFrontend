@@ -70,11 +70,11 @@
 .app2 > * { position: relative; z-index: 1; }
 
 [data-theme="dark"] .app2 {
-  --bg: #101318;
+  --bg: #0B132B;
   background: var(--bg);
 }
 [data-theme="dark"] .app2::before {
-  background-image: radial-gradient(circle, rgba(211, 216, 222, 0.07) 1px, transparent 1.1px);
+  background-image: radial-gradient(circle, rgba(168, 183, 224, 0.09) 1px, transparent 1.1px);
 }
 
 /* ---------- the floating header ---------- */

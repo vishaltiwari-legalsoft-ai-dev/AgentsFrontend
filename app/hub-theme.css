@@ -50,49 +50,51 @@
 
   --mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "Liberation Mono", Menlo, monospace;
 
-  /* ground */
-  --bg: #201E1B;
-  --surface: #262421;
-  --surface-2: #2D2A27;
-  --surface-3: #1A1816;
+  /* ground — the Space Cadet family (0B132B · 1C2541 · 3A506B): deep
+     blue-black night instead of the old warm brown, so the indigo accent
+     and the glass belong to the same world as the ground they sit on */
+  --bg: #0B132B;
+  --surface: #131C3B;
+  --surface-2: #1C2541;
+  --surface-3: #080F22;
 
-  /* text */
-  --fg: #D0C8BB;
-  --fg-2: #A19B91;
-  --fg-3: #989289;
+  /* text — cool parchment on navy, ~10:1 body like the warm theme had */
+  --fg: #DCE3F4;
+  --fg-2: #A6B1CE;
+  --fg-3: #95A1C4;
 
   /* rules */
-  --rule: #383531;
-  --rule-soft: #2A2825;
-  --rule-hard: #4F4B46;
+  --rule: #27325A;
+  --rule-soft: #1D2746;
+  --rule-hard: #3C4A7C;
 
   /* the rail */
-  --rail: #161412;
-  --rail-2: #262421;
-  --rail-line: #34312D;
-  --rail-fg: #A69F95;
-  --rail-fg-2: #847F77;
+  --rail: #0A1124;
+  --rail-2: #131C3B;
+  --rail-line: #243055;
+  --rail-fg: #A9B3D2;
+  --rail-fg-2: #7F8AAD;
 
   /* indigo — the one decorative colour */
   --mark: #818CF8;
   --mark-2: #312E81;
-  --mark-ink: #101232;
+  --mark-ink: #0E1435;
   --mark-line: #4F46E5;
-  --mark-row: #1B1D36;
+  --mark-row: #1B2244;
 
-  /* state */
+  /* state — the washes cooled to sit on navy; the signals themselves stay */
   --rival: #4E56A0;
   --rival-ink: #E4E7FF;
   --gap: #EE8A8F;
-  --gap-soft: #34211F;
-  --gap-swipe: #5E2B2B;
+  --gap-soft: #311E2E;
+  --gap-swipe: #5A2B40;
   --gap-ink: #370C10;
   --live: #5FC395;
   --live-ink: #06281A;
   --ok: #5FC395;
   --proxy: #D6A855;
 
-  /* depth */
-  --shadow-lift: 0 10px 26px rgba(0, 0, 0, 0.46);
-  --shadow-float: 0 24px 60px rgba(0, 0, 0, 0.62);
+  /* depth — the night is blue now, so its shadows are too */
+  --shadow-lift: 0 10px 26px rgba(2, 6, 23, 0.52);
+  --shadow-float: 0 24px 60px rgba(2, 6, 23, 0.68);
 }
