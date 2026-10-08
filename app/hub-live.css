@@ -534,6 +534,22 @@
 .cov__miss li { margin: 4px 0; font-size: 12px; line-height: 1.5; color: var(--fg-2); }
 .cov__miss li b { font-weight: 700; color: var(--fg); }
 .cov__miss li em { font-style: normal; color: var(--fg-3); }
+
+/* ---------- Marketing Research: a report's own document -------------------
+ *
+ * Report HTML is shown only inside a sandboxed iframe (`reportFrame.ts`), and
+ * the document needs the panel's width rather than the 46rem prose measure, so
+ * the opened vendor report drops `.rep`'s max-width. The document inside the
+ * frame paints its own background; this only draws the frame's edge.
+ */
+
+.rep--wide { max-width: none; }
+.rframe {
+  display: block; width: 100%; height: 80dvh;
+  border: 1px solid var(--rule-hard); border-radius: var(--r-card);
+  background: var(--surface);
+}
+
 /* ---------- Graphic Designer: the brand-kit sheet ------------------------
  *
  * One dialog creates a brand and edits its kit. It is the console's `.dialog`,

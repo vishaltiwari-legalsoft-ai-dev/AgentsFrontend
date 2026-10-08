@@ -12,16 +12,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  MR_REPORT_KINDS, apiStatus, isBoardKind, mrBoardReportHtmlUrl, mrBoardReportPdfUrl,
-  mrBuildBoardReport, mrBuildReport, mrGetBoardRun, mrGetRun, mrListRuns, mrReportPeriods,
-  mrReportPdfUrl,
+  MR_REPORT_KINDS, apiStatus, isBoardKind, isCampaignKind, isVendorKind, mrBoardReportHtml,
+  mrBoardReportPdfUrl, mrBuildBoardReport, mrBuildReport, mrBuildVendorReport, mrGetBoardRun,
+  mrGetRun, mrGetVendorRun, mrListRuns, mrReportPeriods, mrReportPdfUrl, mrVendorReportHtml,
+  mrVendorReportPdfUrl, mrVendorReportPeriods,
   type MrBoardCoverageColumn, type MrBoardReport, type MrReport, type MrReportKind,
-  type MrReportPeriods, type MrRunSummary,
+  type MrReportPeriods, type MrRunSummary, type MrVendorPeriods, type MrVendorRun,
 } from "@/lib/api";
 import { describeFailure, loadPending, useLoadSession, type Load } from "@/lib/load";
 import {
-  REPORT_META, absentMetrics, boardPeriodOptions, boardPeriodValues, filledOf, periodsFor,
-  takesPeriod,
+  REPORT_META, absentMetrics, boardPeriodOptions, boardPeriodValues, filledOf, missingFigures,
+  periodsFor, takesPeriod, vendorBuiltLine, vendorMonthPick, visibleRuns,
 } from "@/components/console/mr/reportMeta";
 import { proseBlocks } from "@/components/console/mr/proseBlocks";
 import { Ic } from "../../Sprite";
@@ -31,6 +32,15 @@ import type { ToastFn } from "../../context";
 import type { MrData_ } from "../MrWorkspace";
 import { SourceList } from "./parts";
 import { PullWorkbook, useWorkbookPull, type WorkbookPull } from "./Data";
+import { ReportFrame, openReportTab } from "./reportFrame";
+
+/** The report on screen. One slot, three readers: a campaign narrative, the
+ *  board ledger and the vendor document are different shapes, and holding them
+ *  in one union means opening one always closes the other two. */
+type Shown =
+  | { kind: "campaign"; doc: MrReport }
+  | { kind: "board"; report: MrBoardReport }
+  | { kind: "vendor"; run: MrVendorRun };
 
 export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }) {
   const session = useLoadSession();
@@ -39,12 +49,13 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
   // keyed by report kind. It is held as a `Load` rather than a bare value so
   // "we never found out" cannot render as "there is nothing to pick".
   const [periods, setPeriods] = useState<Load<MrReportPeriods>>(loadPending);
+  // The vendor band's months, and whether it is drawn at all: the server says
+  // `enabled` with the months, so a switched-off feature is never discovered
+  // through a failed click. A backend too old to know the route reads as off.
+  const [vendor, setVendor] = useState<Load<MrVendorPeriods>>(loadPending);
+  const [vendorRetry, setVendorRetry] = useState(false);
   const [chosen, setChosen] = useState<Partial<Record<MrReportKind, string>>>({});
-  const [doc, setDoc] = useState<MrReport | null>(null);
-  // The board report is the other thing this rail files, and it is not a
-  // narrative: it has two columns, no markdown, and a coverage block instead.
-  // Held apart from `doc` so neither reader is ever handed the other's shape.
-  const [board, setBoard] = useState<MrBoardReport | null>(null);
+  const [shown, setShown] = useState<Shown | null>(null);
   const [opening, setOpening] = useState(false);
   const [building, setBuilding] = useState<MrReportKind | null>(null);
   const [beat, setBeat] = useState(0);
@@ -61,9 +72,23 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
       "The report history could not be read.", { keepStale: true });
     void session.run("mr-periods", () => mrReportPeriods(), setPeriods,
       "The months and quarters on file could not be read.", { keepStale: true });
+    void session.run("mr-vendor-periods", () => mrVendorReportPeriods(), setVendor,
+      "The months with vendor figures could not be read.", { keepStale: true });
   }, [session, beat]);
 
-  const list = runs.data || [];
+  useEffect(() => { if (vendor.phase !== "loading") setVendorRetry(false); }, [vendor.phase]);
+
+  const vendorOn = vendor.data?.enabled === true;
+  // Drawn when the server said on; or when we never found out (a failure is not
+  // "off"); or while a retry of that failure is in flight. Never on the first
+  // read, so a deployment with the switch off does not flash a band it hides.
+  const vendorBand = vendorOn || (vendor.data === null
+    && (vendor.phase === "failed" || (vendor.phase === "loading" && vendorRetry)));
+  const retryVendor = () => { setVendorRetry(true); setVendor(loadPending); setBeat((b) => b + 1); };
+
+  const list = visibleRuns(runs.data || [], vendorOn);
+  // Until both reads land, an empty list is "not known yet", not "nothing written".
+  const settled = runs.data !== null && vendor.phase !== "loading";
   const lastOf = (kind: MrReportKind) => list.find((r) => r.kind === kind) || null;
 
   /** The period a build goes out with: what the picker is showing — its own
@@ -81,13 +106,9 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
   const open = useCallback(async (id: string, kind: MrRunSummary["kind"]) => {
     setOpening(true);
     try {
-      if (isBoardKind(kind)) {
-        setBoard(await mrGetBoardRun(id));
-        setDoc(null);
-      } else {
-        setDoc(await mrGetRun(id));
-        setBoard(null);
-      }
+      if (isBoardKind(kind)) setShown({ kind: "board", report: await mrGetBoardRun(id) });
+      else if (isVendorKind(kind)) setShown({ kind: "vendor", run: await mrGetVendorRun(id) });
+      else setShown({ kind: "campaign", doc: await mrGetRun(id) });
     } catch (e: unknown) {
       onToast(e instanceof Error ? e.message : "That report could not be opened.", "error");
     } finally {
@@ -100,8 +121,7 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
     onToast(`${REPORT_META[kind].label} is being written from the last pull.`, "ok");
     try {
       const report = await mrBuildReport(kind, periodOf(kind));
-      setDoc(report);
-      setBoard(null);
+      setShown({ kind: "campaign", doc: report });
       setBeat((b) => b + 1);
       onToast(`${REPORT_META[kind].label} is written. It is also filed on Runs.`, "ok");
     } catch (e: unknown) {
@@ -113,20 +133,22 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
   }, [onToast, periodOf]);
 
   // Open the newest report on arrival, so the panel leads with the thing the
-  // agent hands over rather than with a list of buttons.
+  // agent hands over rather than with a list of buttons. Not before the vendor
+  // switch is known: until then a newer vendor run is hidden, and the panel
+  // would lead with an older report than the newest one on file.
   useEffect(() => {
-    if (doc || board || opening || !list.length) return;
+    if (shown || opening || !list.length || vendor.phase === "loading") return;
     void open(list[0].id, list[0].kind);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [list.length]);
+  }, [list.length, vendor.phase]);
 
   return (
     <>
       <PageHead
         statement={
-          doc || board
+          shown
             ? <>The report, <b>set to be sent</b>.</>
-            : list.length === 0
+            : settled && list.length === 0
               ? <>No report has been <b>written yet</b>.</>
               : <>Reading the last report.</>
         }
@@ -137,16 +159,27 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
         <Oops what="The report history could not be read." error={runs.error || ""} onRetry={() => setBeat((b) => b + 1)} />
       )}
 
-      {opening && !doc && !board && <Wait what="Opening the report" rows={6} />}
+      {opening && !shown && <Wait what="Opening the report" rows={6} />}
 
-      {doc && <ReportDoc doc={doc} data={data} />}
+      {shown?.kind === "campaign" && <ReportDoc doc={shown.doc} data={data} />}
 
-      {board && <BoardDoc report={board} data={data} onToast={onToast} />}
+      {shown?.kind === "board" && <BoardDoc report={shown.report} data={data} onToast={onToast} />}
 
-      {!doc && !board && !opening && list.length === 0 && (
+      {shown?.kind === "vendor" && (
+        <VendorDoc
+          run={shown.run}
+          // Unknown is "ask the server": the PDF route answers 503 with its own
+          // reason, so an enabled button can only fail honestly.
+          pdfAvailable={vendor.data?.pdf_available !== false}
+          onToast={onToast}
+        />
+      )}
+
+      {!shown && !opening && settled && list.length === 0 && (
         <Blank title="Nothing written yet">
-          Pick one of the ten below, or build the board report. Either is written from the last
-          workbook pull and filed on Runs like any other piece of work.
+          {vendorOn
+            ? "Build this month's Vendor Performance report, pick one of the ten below, or build the board report. Each is written from the last workbook pull and filed on Runs like any other piece of work."
+            : "Pick one of the ten below, or build the board report. Either is written from the last workbook pull and filed on Runs like any other piece of work."}
         </Blank>
       )}
 
@@ -179,11 +212,23 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
         </section>
       )}
 
+      {vendorBand && (
+        <VendorBuild
+          load={vendor}
+          pull={pull}
+          disabled={opening}
+          onBuilt={(run) => { setShown({ kind: "vendor", run }); setBeat((b) => b + 1); }}
+          onGone={() => setBeat((b) => b + 1)}
+          onToast={onToast}
+          onRetry={retryVendor}
+        />
+      )}
+
       <BoardBuild
         periods={periods}
         pull={pull}
         disabled={building !== null || opening}
-        onBuilt={(report) => { setBoard(report); setDoc(null); setBeat((b) => b + 1); }}
+        onBuilt={(report) => { setShown({ kind: "board", report }); setBeat((b) => b + 1); }}
         onToast={onToast}
         onRetry={() => setBeat((b) => b + 1)}
       />
@@ -191,12 +236,12 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
       <section className="band">
         <RuleHead
           title="The ten it can write"
-          note="What each one contains, on the page. In the app being replaced this sits in a title attribute on the button, so on a touch screen there is no way to read it at all."
+          note="What each one contains."
           aside={
             <span className="aside">
-              {/* The ten, not every kind on file: the board report is filed on
-                  the same rail and would otherwise be counted as one of them. */}
-              {n(new Set(list.map((r) => r.kind).filter((k) => !isBoardKind(k))).size)} have run
+              {/* The ten, not every kind on file: the board and vendor reports
+                  are filed on the same rail and would otherwise be counted. */}
+              {n(new Set(list.map((r) => r.kind).filter(isCampaignKind)).size)} have run
             </span>
           }
         />
@@ -288,6 +333,322 @@ function PeriodPick({ kind, periods, value, onPick }: {
       </select>
     </p>
   );
+}
+
+/* ---------------------------- vendor performance -------------------------- */
+
+/** One month select and a button: the whole control.
+ *
+ *  Only months the server says hold a vendor sweep are offered, newest first
+ *  and preselected. A month that turns out to have no vendor rows is the
+ *  server's 422, and its sentence is printed as it came — it names the month
+ *  and the way out. The template line is a statement, not a control: Phase 1
+ *  builds with the built-in template only. */
+function VendorBuild({ load, pull, disabled, onBuilt, onGone, onToast, onRetry }: {
+  load: Load<MrVendorPeriods>;
+  pull: WorkbookPull;
+  disabled: boolean;
+  onBuilt: (run: MrVendorRun) => void;
+  /** The build answered 404: the switch went off since the months were read.
+   *  Re-reading the periods is what hides the band. */
+  onGone: () => void;
+  onToast: ToastFn;
+  onRetry: () => void;
+}) {
+  const [chosen, setChosen] = useState("");
+  const [building, setBuilding] = useState(false);
+  // The two answers that leave nothing built, kept apart: an empty month is the
+  // server saying "no figures for that month", calm and actionable; anything
+  // else is a failure and reads as one.
+  const [empty, setEmpty] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  const months = load.data?.months ?? [];
+  const pick = vendorMonthPick(months, chosen);
+  const labelOf = (ym: string) => months.find((m) => m.year_month === ym)?.label || ym;
+
+  const build = async () => {
+    setBuilding(true);
+    setEmpty(null);
+    setFailed(null);
+    try {
+      const run = await mrBuildVendorReport(pick || undefined);
+      const month = run.structured?.month_label || labelOf(pick);
+      onBuilt(run);
+      onToast(
+        run.reused
+          ? `Vendor Performance for ${month} was already built from this pull, so it is opened rather than built again.`
+          : `Vendor Performance for ${month} is built and filed under Already written.`,
+        "ok",
+      );
+    } catch (e: unknown) {
+      const status = apiStatus(e);
+      if (status === 422) {
+        setEmpty(describeFailure(e,
+          `The last pull has no vendor figures for ${labelOf(pick)}. Pull the workbook, then build again.`));
+      } else if (status === 404) {
+        onToast("Vendor Performance is not switched on for this server any more. Nothing was built.", "error");
+        onGone();
+      } else {
+        const message = describeFailure(e, "The report was not built. Nothing was filed.");
+        setFailed(message);
+        onToast(message, "error");
+      }
+    } finally {
+      setBuilding(false);
+    }
+  };
+
+  return (
+    <section className="band">
+      <RuleHead
+        title="Vendor Performance"
+        note="Every vendor tab for one month, set out to send. No model writes any part of it."
+        aside={<span className="aside">One month</span>}
+      />
+
+      {months.length === 0 ? (
+        load.phase === "loading" ? (
+          <Wait what="Reading which months have vendor figures" />
+        ) : load.phase === "failed" && !load.data ? (
+          <Oops
+            what="The months with vendor figures could not be read. This is not the same as there being none — we never found out."
+            error={load.error || ""}
+            onRetry={onRetry}
+          />
+        ) : (
+          <Blank title="No month has vendor figures yet" action={<PullWorkbook pull={pull} />}>
+            It's built from the vendor tabs. Pull the workbook and months appear here.
+          </Blank>
+        )
+      ) : (
+        <>
+          <div className="brd">
+            <label className="field" htmlFor="mr-vendor-month">
+              <span>Month</span>
+              <select
+                id="mr-vendor-month"
+                className="sel"
+                value={pick}
+                disabled={building}
+                onChange={(e) => { setChosen(e.target.value); setEmpty(null); setFailed(null); }}
+              >
+                {months.map((m) => <option key={m.year_month} value={m.year_month}>{m.label}</option>)}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="btn btn--solid btn--sm"
+              disabled={building || disabled || !pick}
+              onClick={() => void build()}
+            >
+              {building ? "Building…" : "Build the report"}
+            </button>
+          </div>
+
+          <p className="calm">The team's reports use the built-in template.</p>
+
+          {empty && (
+            <>
+              <p className="calm" role="status">{empty}</p>
+              <PullWorkbook pull={pull} />
+            </>
+          )}
+          {failed && <p className="err" role="alert">{failed}</p>}
+        </>
+      )}
+    </section>
+  );
+}
+
+/** A vendor run, opened: one header line, two actions, what the page prints
+ *  as a dash and why — then the report itself, in the sandboxed viewer.
+ *
+ *  The document is the server's HTML for the stored run, never re-derived
+ *  here, so what is read on screen is what the PDF and the new tab hold. */
+function VendorDoc({ run, pdfAvailable, onToast }: {
+  run: MrVendorRun;
+  pdfAvailable: boolean;
+  onToast: ToastFn;
+}) {
+  const session = useLoadSession();
+  const [html, setHtml] = useState<Load<string>>(loadPending);
+  const [beat, setBeat] = useState(0);
+
+  useEffect(() => {
+    // A different run must never show the last one's document while it loads.
+    setHtml(loadPending);
+    void session.run("mr-vendor-html", () => mrVendorReportHtml(run.id).catch(gone), setHtml,
+      "The report's document could not be read.");
+  }, [session, run.id, beat]);
+
+  const s = run.structured || {};
+  const month = s.month_label || "";
+  const title = month ? `Vendor Performance — ${month}` : "Vendor Performance";
+  const gaps = missingFigures(s.missing);
+  const file = `mr-vendor-report-${(run.sweep_date || s.year_month || run.id)}`
+    .replace(/[^A-Za-z0-9._-]+/g, "-");
+
+  return (
+    <article className="rep rep--wide">
+      <header className="rep__h">
+        <p className="rep__k">{REPORT_META.vendor_report.eyebrow}</p>
+        <h1>{title}</h1>
+        <p className="rep__p">
+          {vendorBuiltLine(run)}
+          {run.reused ? " Already on file for this pull, so it was opened rather than built again." : ""}
+        </p>
+        <div className="ops" style={{ marginTop: 12 }}>
+          <OpenInTab
+            title={title}
+            // The document already on screen when it is; fetched on click when not.
+            read={() => (html.data !== null ? Promise.resolve(html.data) : mrVendorReportHtml(run.id))}
+            onToast={onToast}
+          />
+          <VendorPdfButton id={run.id} name={file} available={pdfAvailable} onToast={onToast} />
+        </div>
+        {!pdfAvailable && (
+          // No browser-printing advice here: a browser prints an iframe only as far
+          // as its visible box, so that route hands over a cut-off report. The PDF
+          // renderer is the fix, and deploying it is the owner's call.
+          <p className="rep__n" id="mr-vendor-pdf-off">
+            {"PDF downloads aren't set up on this server yet. The full report is here, or open it in a new tab to read it full-screen."}
+          </p>
+        )}
+      </header>
+
+      {gaps && gaps.count > 0 && (
+        <section className="rep__s">
+          <div className="cov">
+            {/* No cause in this line: the reasons differ by row (a vendor tab
+                without the figure, no target set, no roll-up to reconcile
+                against), so each one is given under "Which figures, and why". */}
+            <p className="cov__w">
+              <b>{n(gaps.count)} {gaps.count === 1 ? "figure shows" : "figures show"}</b>
+              {" as — . A dash means missing, not zero."}
+            </p>
+            <details className="shut">
+              <summary>Which figures, and why</summary>
+              <ul className="cov__miss">
+                {gaps.rows.map((row, i) => <li key={i}>{row}</li>)}
+              </ul>
+            </details>
+          </div>
+        </section>
+      )}
+
+      <section className="rep__s">
+        {html.phase === "failed" && html.data === null ? (
+          <Oops what="The report could not be shown." error={html.error || ""} onRetry={() => setBeat((b) => b + 1)} />
+        ) : html.data === null ? (
+          <Wait what="Opening the report" rows={8} />
+        ) : (
+          <ReportFrame key={run.id} html={html.data} title={title} />
+        )}
+      </section>
+    </article>
+  );
+}
+
+/** A 404 from a vendor document route: the switch is off, or the deployment
+ *  predates it. Said in words rather than as FastAPI's bare "Not Found". */
+function gone(e: unknown): never {
+  if (apiStatus(e) === 404) {
+    throw new Error("This server is not serving Vendor Performance reports right now — the feature is switched off here, or this deployment predates it.");
+  }
+  throw e;
+}
+
+/** The PDF, saved as a file. Disabled with a sentence under it when the server
+ *  says PDF export is not set up; when it is, a 503 still comes back in the
+ *  server's own words. */
+function VendorPdfButton({ id, name, available, onToast }: {
+  id: string;
+  name: string;
+  available: boolean;
+  onToast: ToastFn;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      className="btn btn--quiet btn--sm"
+      disabled={busy || !available}
+      aria-describedby={available ? undefined : "mr-vendor-pdf-off"}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          saveFile(await mrVendorReportPdfUrl(id).catch(gone), `${name}.pdf`);
+        } catch (e: unknown) {
+          onToast(describeFailure(e, "The PDF could not be prepared."), "error");
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <Ic name="download" />
+      {busy ? "Preparing the PDF…" : "Download the PDF"}
+    </button>
+  );
+}
+
+/** "Open in a new tab", for every report this panel holds as HTML.
+ *
+ *  The tab is opened before the `await` — after one, the browser no longer
+ *  counts the click and blocks it as a popup — and is then filled with the
+ *  report inside the same sandboxed iframe as the inline viewer. It is never a
+ *  `blob:` URL: one of those runs the report in this origin, beside the login
+ *  token. */
+function OpenInTab({ title, read, onToast }: {
+  title: string;
+  read: () => Promise<string>;
+  onToast: ToastFn;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      className="btn btn--quiet btn--sm"
+      disabled={busy}
+      onClick={async () => {
+        const tab = openReportTab(title);
+        if (!tab) {
+          onToast("Your browser blocked the new tab. Allow pop-ups for this site, then try again.", "error");
+          return;
+        }
+        setBusy(true);
+        try {
+          tab.show(await read());
+        } catch (e: unknown) {
+          tab.close();
+          onToast(
+            apiStatus(e) === 404
+              ? "This server has no document for this report — its document route is not live here yet."
+              : describeFailure(e, "The report could not be opened."),
+            "error",
+          );
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <Ic name="external" />
+      {busy ? "Opening…" : "Open in a new tab"}
+    </button>
+  );
+}
+
+/** Hand an object URL to the browser as a download, then let it go. */
+function saveFile(url: string, fileName: string) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Not revoked at once: some browsers still read the URL a moment after the
+  // click. Ten seconds is long past that and short of leaking it for the session.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 /* ------------------------------- board report ----------------------------- */
@@ -477,8 +838,12 @@ function BoardDoc({ report, data, onToast }: {
           {report.reused ? " Already on file for that pull, so it was read back rather than derived again." : ""}
         </p>
         <div className="ops" style={{ marginTop: 12 }}>
-          <BoardDocButton id={report.id} what="html" name={fileName} onToast={onToast} />
-          <BoardDocButton id={report.id} what="pdf" name={fileName} onToast={onToast} />
+          <OpenInTab
+            title={`${meta?.label || "Board Report"}${(s.columns || []).length ? ` — ${(s.columns || []).join(" vs ")}` : ""}`}
+            read={() => mrBoardReportHtml(report.id)}
+            onToast={onToast}
+          />
+          <BoardPdfButton id={report.id} name={fileName} onToast={onToast} />
         </div>
       </header>
 
@@ -573,21 +938,18 @@ function Coverage({ column, rows }: { column: MrBoardCoverageColumn; rows: MrBoa
   );
 }
 
-/** The board report as a file. Both endpoints are authenticated, so the bytes
- *  are fetched with the caller's token and handed over as an object URL — a
- *  plain link to either would arrive without one and 401. The HTML opens in a
- *  tab; the PDF is saved, because it is the thing that gets attached to an
- *  email. */
-function BoardDocButton({ id, what, name, onToast }: {
+/** The board report's PDF, saved as a file. The endpoint is authenticated, so
+ *  the bytes are fetched with the caller's token and handed over as an object
+ *  URL — a plain link would arrive without one and 401. Its HTML opens through
+ *  `OpenInTab`, in the sandboxed viewer, like every other report document. */
+function BoardPdfButton({ id, name, onToast }: {
   id: string;
-  what: "html" | "pdf";
   /** What the saved file is called. A run id is no name for something that
    *  gets attached to an email, so the periods name it. */
   name: string;
   onToast: ToastFn;
 }) {
   const [busy, setBusy] = useState(false);
-  const label = what === "html" ? "View the HTML" : "Download the PDF";
 
   return (
     <button
@@ -597,21 +959,12 @@ function BoardDocButton({ id, what, name, onToast }: {
       onClick={async () => {
         setBusy(true);
         try {
-          if (what === "html") {
-            window.open(await mrBoardReportHtmlUrl(id), "_blank", "noopener");
-          } else {
-            const link = document.createElement("a");
-            link.href = await mrBoardReportPdfUrl(id);
-            link.download = `${name}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-          }
+          saveFile(await mrBoardReportPdfUrl(id), `${name}.pdf`);
         } catch (e: unknown) {
           onToast(
             apiStatus(e) === 404
-              ? `This deployment has no ${what.toUpperCase()} of the board report — the document routes are not live here yet. The figures above are what it holds.`
-              : describeFailure(e, `The ${what.toUpperCase()} could not be fetched.`),
+              ? "This deployment has no PDF of the board report — the document routes are not live here yet. The figures above are what it holds."
+              : describeFailure(e, "The PDF could not be fetched."),
             "error",
           );
         } finally {
@@ -619,8 +972,8 @@ function BoardDocButton({ id, what, name, onToast }: {
         }
       }}
     >
-      <Ic name={what === "html" ? "pages" : "download"} />
-      {busy ? "Fetching…" : label}
+      <Ic name="download" />
+      {busy ? "Fetching…" : "Download the PDF"}
     </button>
   );
 }

@@ -211,8 +211,21 @@ async function fetchBlob(
   return response.blob();
 }
 
+/** `fetchBlob` read as text — for a document the console shows inside a
+ *  sandboxed `<iframe srcdoc>` rather than navigating to it. Report HTML must
+ *  never become an object URL: a `blob:` URL inherits this origin, and this
+ *  origin holds the login token. */
+async function fetchText(
+  path: string,
+  init?: RequestInit,
+  opts?: RequestOptions,
+): Promise<string> {
+  return (await fetchBlob(path, init, opts)).text();
+}
+
 /** `fetchBlob` as an object URL, for an `<img src>` or an `<a download>` click.
- *  Callers own the URL and should revoke it when they're done with it. */
+ *  Callers own the URL and should revoke it when they're done with it. Never
+ *  for HTML — see `fetchText`. */
 async function blobUrl(
   path: string,
   init?: RequestInit,
@@ -1706,11 +1719,24 @@ export type MrReportKind = (typeof MR_REPORT_KINDS)[number];
 export const MR_BOARD_KINDS = ["board_report", "board_report_comparison"] as const;
 export type MrBoardKind = (typeof MR_BOARD_KINDS)[number];
 
+/** The vendor performance report, also kept out of the ten: one month, built
+ *  at `POST /api/mr/vendor-report` (which `POST /api/mr/reports/{kind}` names
+ *  with a 422), no model in it, and filed on the same run rail. */
+export const MR_VENDOR_KINDS = ["vendor_report"] as const;
+export type MrVendorKind = (typeof MR_VENDOR_KINDS)[number];
+
 /** Any kind the run rail can hand back. */
-export type MrAnyReportKind = MrReportKind | MrBoardKind;
+export type MrAnyReportKind = MrReportKind | MrBoardKind | MrVendorKind;
 
 export const isBoardKind = (kind: string): kind is MrBoardKind =>
   (MR_BOARD_KINDS as readonly string[]).includes(kind);
+
+export const isVendorKind = (kind: string): kind is MrVendorKind =>
+  (MR_VENDOR_KINDS as readonly string[]).includes(kind);
+
+/** One of the ten campaign kinds — the only ones the narrative reader opens. */
+export const isCampaignKind = (kind: string): kind is MrReportKind =>
+  (MR_REPORT_KINDS as readonly string[]).includes(kind);
 
 export interface MrDataGap {
   source: string;
@@ -2277,12 +2303,142 @@ export const mrBuildBoardReport = (period: string, compareTo?: string) =>
 export const mrGetBoardRun = (id: string) => getJson<MrBoardReport>(`/api/mr/runs/${id}`);
 
 /** The board report as a document. Both endpoints are authenticated, so the
- *  bytes are fetched with the caller's token and handed over as an object URL:
- *  an `<a href>` straight to the endpoint would arrive without one and 401. */
-export const mrBoardReportHtmlUrl = (id: string) =>
-  blobUrl(`/api/mr/board-report/${id}/html`);
+ *  bytes are fetched with the caller's token: an `<a href>` straight to the
+ *  endpoint would arrive without one and 401.
+ *
+ *  The HTML comes back as **text**, for a sandboxed `<iframe srcdoc>` — never
+ *  as an object URL. A `blob:` URL opened in a tab runs in this origin, next to
+ *  the login token. The PDF is a file to save, so it stays an object URL. */
+export const mrBoardReportHtml = (id: string) =>
+  fetchText(`/api/mr/board-report/${id}/html`);
 export const mrBoardReportPdfUrl = (id: string) =>
   blobUrl(`/api/mr/board-report/${id}/pdf`);
+
+/* ---------------------------- vendor performance -------------------------- */
+
+export interface MrVendorMonth {
+  year_month: string; // "2026-09"
+  label: string;      // "September 2026"
+}
+
+/** The month picker, and the two switches the band reads before it draws. */
+export interface MrVendorPeriods {
+  /** `MR_VENDOR_REPORT` on this server. Off, the band and every vendor row in
+   *  the history are not drawn at all. */
+  enabled: boolean;
+  /** Whether the PDF renderer is configured. Off, the PDF button is disabled
+   *  with a sentence rather than offered and then failed. */
+  pdf_available: boolean;
+  pdf_unavailable_reason: string | null;
+  /** Months with a vendor sweep, newest first. */
+  months: MrVendorMonth[];
+}
+
+/** What a backend that does not build vendor reports amounts to. */
+export const MR_VENDOR_OFF: MrVendorPeriods = {
+  enabled: false, pdf_available: false, pdf_unavailable_reason: null, months: [],
+};
+
+/** The periods reply, with every field read against a default.
+ *
+ *  Vercel ships in about a minute and Cloud Run in four to six, so for a few
+ *  minutes this console talks to a backend that may send none of these. Absent
+ *  `enabled` is OFF (draw nothing); absent `pdf_available` is "ask the server"
+ *  — the PDF route answers 503 with its own reason, so an enabled button can
+ *  only fail honestly, while a wrongly disabled one would hide a working PDF. */
+export function readVendorPeriods(raw: unknown): MrVendorPeriods {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const months = Array.isArray(r.months)
+    ? r.months.flatMap((m): MrVendorMonth[] => {
+        const ym = (m as Record<string, unknown> | null)?.year_month;
+        const label = (m as Record<string, unknown> | null)?.label;
+        return typeof ym === "string" && ym
+          ? [{ year_month: ym, label: typeof label === "string" && label ? label : ym }]
+          : [];
+      })
+    : [];
+  return {
+    enabled: r.enabled === true,
+    pdf_available: r.pdf_available !== false,
+    pdf_unavailable_reason:
+      typeof r.pdf_unavailable_reason === "string" ? r.pdf_unavailable_reason : null,
+    months,
+  };
+}
+
+/** `GET /api/mr/vendor-report/periods`. Answers 200 with `enabled: false` when
+ *  the switch is off; a 404 is a backend that predates the route, which for the
+ *  panel is the same thing — no band. Anything else is a real failure. */
+export async function mrVendorReportPeriods(): Promise<MrVendorPeriods> {
+  try {
+    return readVendorPeriods(await getJson<unknown>("/api/mr/vendor-report/periods"));
+  } catch (e) {
+    if (apiStatus(e) === 404) return MR_VENDOR_OFF;
+    throw e;
+  }
+}
+
+/** One figure the report prints as a dash, and why. */
+export interface MrVendorMissing {
+  metric: string;
+  label: string;
+  /** The vendors it is missing for, or `"portfolio"` for a portfolio total. */
+  vendors: string[] | "portfolio";
+  reason: string;
+}
+
+/** Which template a run was built with. `builtin` is the only kind Phase 1
+ *  builds; a saved team version carries its number. */
+export interface MrVendorTemplate {
+  kind: string;
+  version?: number | null;
+}
+
+/** The parts of `structured` the panel reads. The document itself is the
+ *  server's HTML — the panel never re-derives it from these. */
+export interface MrVendorStructured {
+  year_month?: string;
+  month_label?: string;
+  /** Optional: a run that does not carry it says nothing about missing
+   *  figures, which must not render as "none missing". */
+  missing?: MrVendorMissing[];
+  [key: string]: unknown;
+}
+
+/** A vendor run, as built or as read back off the run rail. `links` and
+ *  `reused` come only with a build; the rail's copy has neither. */
+export interface MrVendorRun {
+  id: string;
+  kind: MrVendorKind;
+  generated_at: string;
+  built_at?: string;
+  sweep_date?: string;
+  template?: MrVendorTemplate;
+  reused?: boolean;
+  links?: { html?: string; pdf?: string };
+  structured: MrVendorStructured;
+  sources?: MrSource[];
+  ai?: boolean;
+  fallback_reason?: string;
+}
+
+/** Build — or re-serve — the vendor report for one month. No `year_month` is
+ *  the newest month with a sweep. No `template` is the workspace's active one;
+ *  the server never swaps it silently. An empty month is a 422 whose `detail`
+ *  is the sentence the panel shows. */
+export const mrBuildVendorReport = (yearMonth?: string) =>
+  postJson<MrVendorRun>("/api/mr/vendor-report", yearMonth ? { year_month: yearMonth } : {});
+
+/** The same run read back off the rail — same URL as `mrGetRun`, typed for
+ *  the vendor reader. */
+export const mrGetVendorRun = (id: string) => getJson<MrVendorRun>(`/api/mr/runs/${id}`);
+
+/** The vendor report as a document: HTML as text for the sandboxed viewer,
+ *  and the PDF as a file to save. */
+export const mrVendorReportHtml = (id: string) =>
+  fetchText(`/api/mr/vendor-report/${id}/html`);
+export const mrVendorReportPdfUrl = (id: string) =>
+  blobUrl(`/api/mr/vendor-report/${id}/pdf`);
 
 /** Download-report PDFs — the console panels rendered server-side in the same
  *  format. Returns an object URL ready for an <a download> click. */

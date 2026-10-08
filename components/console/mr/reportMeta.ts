@@ -1,7 +1,10 @@
 import type {
   MrAnyReportKind, MrBoardCoverageColumn, MrBoardRow, MrReportKind, MrReportPeriod,
-  MrReportPeriods,
+  MrReportPeriods, MrRunSummary, MrVendorMonth, MrVendorRun,
 } from "@/lib/api";
+// A value import, so it is relative: the test suite runs without the `@/`
+// alias, which only type imports (erased before run time) can use.
+import { isVendorKind } from "../../../lib/api";
 
 export interface ReportMeta { label: string; eyebrow: string; desc: string }
 
@@ -56,6 +59,10 @@ export const REPORT_META: Record<MrAnyReportKind, ReportMeta> = {
   board_report_comparison: {
     label: "Board Report — two periods", eyebrow: "On demand · Board",
     desc: "The same ledger with a second column beside it, and the movement between them.",
+  },
+  vendor_report: {
+    label: "Vendor Performance", eyebrow: "Monthly · Vendors",
+    desc: "Every vendor tab for one month, against the benchmarks — no model writes any part of it.",
   },
 };
 
@@ -189,4 +196,96 @@ export function absentMetrics(
     .filter((k) => !named.has(k))
     .map((k) => ({ key: k, label: k, group: "", reason: reason(k) }));
   return [...inOrder, ...orphans];
+}
+
+/* ------------------------------ vendor performance ------------------------ */
+
+/** The runs "Already written" lists. A vendor run is filed on the same rail as
+ *  the rest, but while the feature is off — or not yet known to be on — it is
+ *  not drawn: its document routes answer 404 then, so a row would be a button
+ *  that can only fail. */
+export function visibleRuns<T extends Pick<MrRunSummary, "kind">>(runs: T[], vendorOn: boolean): T[] {
+  return vendorOn ? runs : runs.filter((r) => !isVendorKind(r.kind));
+}
+
+/** The month a build goes out with: the reader's pick while it is still on
+ *  offer, else the newest month — never a neighbouring one they did not ask for. */
+export function vendorMonthPick(months: MrVendorMonth[], chosen: string): string {
+  return chosen && months.some((m) => m.year_month === chosen)
+    ? chosen
+    : months[0]?.year_month ?? "";
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "2 Oct 2026, 9:14 am" in the reader's own clock, or null for a stamp that
+ *  does not parse. Written out rather than left to `toLocaleString` so the
+ *  header reads the same on every machine. */
+export function vendorStamp(iso: string | null | undefined): string | null {
+  const d = new Date(iso || "");
+  if (!iso || Number.isNaN(d.getTime())) return null;
+  const h = d.getHours();
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${h % 12 || 12}:${
+    String(d.getMinutes()).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
+}
+
+/** "2 Oct" for a `YYYY-MM-DD` day, with the year only when it is not the year
+ *  the report was built in. Parsed as a calendar day, never through a timezone. */
+function vendorDay(ymd: string | null | undefined, builtYear: number | null): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || "");
+  if (!m) return null;
+  const month = MONTHS[Number(m[2]) - 1];
+  if (!month) return null;
+  const day = `${Number(m[3])} ${month}`;
+  return builtYear !== null && Number(m[1]) !== builtYear ? `${day} ${m[1]}` : day;
+}
+
+/** "Template: built-in." / "Template: version 4." — or nothing, for a run that
+ *  does not say which template made it. */
+export function vendorTemplateLine(template: MrVendorRun["template"]): string {
+  if (!template || typeof template.kind !== "string") return "";
+  if (template.kind === "builtin") return "Template: built-in.";
+  if (typeof template.version === "number") return `Template: version ${template.version}.`;
+  return "Template: the team's.";
+}
+
+/** The opened report's header line:
+ *  "Built 2 Oct 2026, 9:14 am, from the workbook pulled on 2 Oct. Template: built-in." */
+export function vendorBuiltLine(
+  run: Pick<MrVendorRun, "built_at" | "generated_at" | "sweep_date" | "template">,
+): string {
+  const when = run.built_at || run.generated_at;
+  const stamp = vendorStamp(when);
+  const builtYear = stamp ? new Date(when).getFullYear() : null;
+  const pulled = vendorDay(run.sweep_date, builtYear);
+  const built = stamp ? `Built ${stamp}` : "Built";
+  const from = pulled ? `from the workbook pulled on ${pulled}` : "from the last workbook pull";
+  return [`${built}, ${from}.`, vendorTemplateLine(run.template)].filter(Boolean).join(" ");
+}
+
+/** One missing figure as a sentence: "Show rate, 11 vendors: no demos booked yet." */
+function missingRow(m: { label?: unknown; vendors?: unknown; reason?: unknown }): string {
+  const label = typeof m.label === "string" && m.label ? m.label : "A figure";
+  const who = Array.isArray(m.vendors)
+    ? m.vendors.length === 1
+      ? String(m.vendors[0])
+      : `${m.vendors.length} vendors`
+    : "the portfolio total";
+  const raw = (typeof m.reason === "string" ? m.reason : "").trim().replace(/[.\s]+$/, "");
+  // Lower-case a sentence's opening capital, but never an acronym's ("CPL").
+  const reason = /^[A-Z][a-z]/.test(raw) ? raw[0].toLowerCase() + raw.slice(1) : raw;
+  return `${label}, ${who}: ${reason || "the report did not say why"}.`;
+}
+
+/** How many figures the report prints as a dash, and why each one is.
+ *
+ *  Counted as dashes on the page: a figure missing for 11 vendors is 11
+ *  dashes, a portfolio total is one. `null` when the run carries no `missing`
+ *  list at all — "the run did not say" must not render as "nothing missing". */
+export function missingFigures(missing: unknown): { count: number; rows: string[] } | null {
+  if (!Array.isArray(missing)) return null;
+  const items = missing.filter((m): m is Record<string, unknown> => !!m && typeof m === "object");
+  const count = items.reduce(
+    (sum, m) => sum + (Array.isArray(m.vendors) ? m.vendors.length : 1), 0);
+  return { count, rows: items.map(missingRow) };
 }
