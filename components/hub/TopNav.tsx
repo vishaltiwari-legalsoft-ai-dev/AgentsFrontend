@@ -60,6 +60,9 @@ export default function TopNav({
   const primary = panels.filter((p) => p.group !== "Setup");
   const setup = panels.filter((p) => p.group === "Setup");
   const setupOn = setup.some((p) => p.id === route.panel);
+  // What the folded menu is hiding: the Setup pill carries the sum of its
+  // entries' counts while closed, so an unseen ask is not out of sight.
+  const setupCount = setup.reduce((sum, p) => sum + (counts[p.id] ?? 0), 0);
 
   const tier = user.is_geo_only
     ? "GEO only"
@@ -125,6 +128,9 @@ export default function TopNav({
               >
                 <Ic name="settings" />
                 <span>Setup</span>
+                {menu !== "setup" && setupCount > 0 && (
+                  <span className="tnav__count">{setupCount.toLocaleString("en-US")}</span>
+                )}
                 <i className="tnav__caret" aria-hidden="true"><Ic name="chevron" /></i>
               </button>
               {menu === "setup" && (

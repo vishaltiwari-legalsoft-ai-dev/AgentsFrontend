@@ -17,19 +17,27 @@
 
 import { useEffect, useState } from "react";
 import {
-  getAdminAnalytics, getAdminSettings, getAdminUsers, getDbCollections,
-  type AdminSettings, type AdminUser, type Analytics, type DbCollectionsResponse,
+  getAdminAnalytics, getAdminSettings, getAdminUsers, getDbCollections, listAsks, setAskStatus,
+  type AdminSettings, type AdminUser, type Analytics, type AskList, type AskStatus, type DbCollectionsResponse,
 } from "@/lib/api";
-import { loadPending, useLoadSession, type Load } from "@/lib/load";
+import { loadPending, loadReady, useLoadSession, type Load } from "@/lib/load";
 import { useHeadline, useHub } from "../context";
 import { agentById, n } from "../model";
-import { Mono, Oops, PageHead, RuleHead, Wait } from "../ui";
+import { Blank, Facet, Mono, Oops, PageHead, RuleHead, Wait } from "../ui";
 import { useRuns } from "../useRuns";
 import { ago } from "../format";
+import {
+  STATUS_ACTION, askEmail, askLines, askTitle, askWho, filterAsks, kindLabel, nextStatuses, replaceAsk,
+  type AskFilter,
+} from "../asks";
 
 export function AdminView() {
-  const { user, revision } = useHub();
+  const { user, revision, toast, bumpRevision } = useHub();
   const session = useLoadSession();
+  const [asks, setAsks] = useState<Load<AskList>>(loadPending);
+  const [askFilter, setAskFilter] = useState<AskFilter>("new");
+  /** The ask whose status change is in flight — its buttons are held. */
+  const [askBusy, setAskBusy] = useState<string | null>(null);
   const [users, setUsers] = useState<Load<{ users: AdminUser[]; total: number }>>(loadPending);
   const [stats, setStats] = useState<Load<Analytics>>(loadPending);
   const [db, setDb] = useState<Load<DbCollectionsResponse>>(loadPending);
@@ -40,6 +48,10 @@ export function AdminView() {
   const runs = feed.data;
 
   useEffect(() => {
+    // Every row, once; New / All is then a local filter and the counts are
+    // the backend's own figures rather than a second read.
+    void session.run("admin-asks", (s) => listAsks("all", 200, { signal: s }), setAsks,
+      "The inbox could not be read.", { keepStale: true });
     void session.run("admin-users", () => getAdminUsers(), setUsers,
       "The people could not be read.", { keepStale: true });
     void session.run("admin-stats", () => getAdminAnalytics(), setStats,
@@ -52,6 +64,26 @@ export function AdminView() {
     }
   }, [session, beat, user.is_creator]);
 
+  /** Mark one ask seen or done. The row is swapped in place from the
+   *  backend's reply, and the rail's badge is told to re-read. A failure keeps
+   *  the row as it was and says why. */
+  const changeAsk = (id: string, status: AskStatus) => {
+    const attempt = session.begin(`ask-status-${id}`);
+    setAskBusy(id);
+    setAskStatus(id, status)
+      .then((updated) => {
+        if (!attempt.current()) return;
+        setAsks((prev) => (prev.data ? loadReady(replaceAsk(prev.data, updated)) : prev));
+        bumpRevision();
+      })
+      .catch((e: unknown) => {
+        const message = attempt.failure(e, "The status could not be changed.");
+        if (message) toast(message, "error");
+      })
+      .finally(() => setAskBusy((b) => (b === id ? null : b)));
+  };
+
+  const askRows = asks.data ? filterAsks(asks.data.asks, askFilter) : [];
   const people = users.data?.users || [];
   const months = stats.data?.monthly || [];
   const maxMonth = Math.max(1, ...months.map((m) => m.count));
@@ -72,6 +104,83 @@ export function AdminView() {
         }
         lede="Who can open this workspace, how hard it is being used, and where the data actually sits. Only an admin sees this page."
       />
+
+      {/* ------------------------------------------- feedback & problems --- */}
+      <section className="band">
+        <RuleHead
+          title="Feedback & problems"
+          note="What people sent from the console — feedback, problems, agent requests."
+          aside={asks.data && asks.data.new > 0
+            ? <span className="aside">{n(asks.data.new)} new</span>
+            : undefined}
+        />
+        {asks.phase === "loading" && !asks.data ? (
+          <Wait what="Reading the inbox" rows={3} />
+        ) : asks.phase === "failed" && !asks.data ? (
+          <Oops what="The inbox could not be read." error={asks.error || ""} onRetry={() => setBeat((b) => b + 1)} />
+        ) : asks.data && (
+          <>
+            <div className="facets">
+              <Facet on={askFilter === "new"} label="New" count={asks.data.new} onClick={() => setAskFilter("new")} />
+              <Facet on={askFilter === "all"} label="All" count={asks.data.total} onClick={() => setAskFilter("all")} />
+            </div>
+            {askRows.length === 0 ? (
+              asks.data.total === 0 ? (
+                <Blank title="Nothing has come in yet.">
+                  Feedback, problems and agent requests people send from the console land here.
+                </Blank>
+              ) : (
+                <Blank title="Nothing new.">
+                  Everything sent has been looked at. All shows the rest.
+                </Blank>
+              )
+            ) : (
+              <ul className="asks">
+                {askRows.map((a) => {
+                  const title = askTitle(a);
+                  const email = askEmail(a);
+                  const busy = askBusy === a.id;
+                  return (
+                    <li className={`ask is-${a.status}`} key={a.id} aria-busy={busy}>
+                      <div className="ask__meta">
+                        <span className={`tag ask__kind is-${a.kind}`}>{kindLabel(a.kind)}</span>
+                        <span className="ask__who">
+                          <b>{askWho(a)}</b>
+                          {email && <em>{email}</em>}
+                        </span>
+                        {a.created_at && <span className="ask__when">{ago(a.created_at)}</span>}
+                      </div>
+                      <div className="ask__body">
+                        {title && <b>{title}</b>}
+                        {askLines(a).map((line, i) => <p key={i}>{line}</p>)}
+                        {a.page && <span className="ask__page">{a.page}</span>}
+                      </div>
+                      <div className="ask__ops">
+                        {a.status !== "new" && (
+                          <span className={`tag${a.status === "done" ? " is-on" : ""}`}>
+                            {a.status === "done" ? "Done" : "Seen"}
+                          </span>
+                        )}
+                        {nextStatuses(a.status).map((s) => (
+                          <button
+                            type="button"
+                            key={s}
+                            className="btn btn--quiet btn--sm"
+                            disabled={busy}
+                            onClick={() => changeAsk(a.id, s)}
+                          >
+                            {STATUS_ACTION[s]}
+                          </button>
+                        ))}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </>
+        )}
+      </section>
 
       {/* ------------------------------------------------ usage by month --- */}
       <section className="band">

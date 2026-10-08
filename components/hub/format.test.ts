@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { until } from "./format";
-import type { HumansMonth, TeamReportee } from "@/lib/api";
+import type { Ask, HumansMonth, TeamReportee } from "@/lib/api";
+import {
+  STATUS_ACTION, askEmail, askLines, askTitle, askWho, filterAsks, kindLabel, nextStatuses, replaceAsk,
+} from "./asks";
 import {
   agentChips, boardTabs, dayName, hasExtras, monthLabel, monthShort, monthsNewestFirst, pickTab, rowState,
   summaryNote, teamSummary, usersByRuns, windowNote,
@@ -421,5 +424,118 @@ describe("panel gates", () => {
 
   it("every gated panel answers canOpen the same way panelsFor does", () => {
     for (const p of PANELS) expect(canOpen(p, {})).toBe(ids({}).includes(p.id));
+  });
+});
+
+/* ------------------------------------------------- the admin's inbox -- */
+/* Joins this module (house rule). The rules behind the Admin panel's inbox of
+ * feedback, problems and agent requests live in `./asks.ts`; what is pinned
+ * here is what a row says and which buttons it offers, so a backend row with
+ * a field missing never blanks a line or offers a button for its own status. */
+
+const askRow = (over: Partial<Ask> = {}): Ask => ({
+  id: "k1", kind: "feedback", fields: { note: "The runs page is great." },
+  from: { user_id: "u9", email: "sana@legalsoft.com", name: "Sana" },
+  page: "#/runs", status: "new",
+  created_at: "2026-10-08T09:00:00Z", updated_at: "2026-10-08T09:00:00Z",
+  ...over,
+});
+
+describe("kindLabel", () => {
+  it("names the three kinds and shows an unknown one as it came", () => {
+    expect(kindLabel("feedback")).toBe("Feedback");
+    expect(kindLabel("issue")).toBe("Problem");
+    expect(kindLabel("agent")).toBe("Agent request");
+    expect(kindLabel("praise")).toBe("praise");
+  });
+});
+
+describe("filterAsks", () => {
+  const rows = [askRow({ id: "a" }), askRow({ id: "b", status: "seen" }), askRow({ id: "c", status: "done" })];
+
+  it("keeps only the unseen rows for New, in the order given", () => {
+    expect(filterAsks(rows, "new").map((a) => a.id)).toEqual(["a"]);
+  });
+
+  it("keeps every row for All without mutating the payload", () => {
+    const all = filterAsks(rows, "all");
+    expect(all.map((a) => a.id)).toEqual(["a", "b", "c"]);
+    expect(all).not.toBe(rows);
+  });
+});
+
+describe("what an ask row says", () => {
+  it("leads feedback with nothing and shows its note", () => {
+    expect(askTitle(askRow())).toBe("");
+    expect(askLines(askRow())).toEqual(["The runs page is great."]);
+  });
+
+  it("leads a problem with where it happened", () => {
+    const row = askRow({ kind: "issue", fields: { where: "SEO dashboard", note: "The chart is blank." } });
+    expect(askTitle(row)).toBe("SEO dashboard");
+    expect(askLines(row)).toEqual(["The chart is blank."]);
+  });
+
+  it("leads an agent request with its name and spells out the rest", () => {
+    const row = askRow({
+      kind: "agent",
+      fields: { name: "PR Writer", job: "Draft press releases.", gets: "A ready draft", cadence: "Weekly" },
+    });
+    expect(askTitle(row)).toBe("PR Writer");
+    expect(askLines(row)).toEqual(["Draft press releases.", "Hands back: A ready draft", "Used: weekly"]);
+  });
+
+  it("drops a line whose field is missing or blank rather than printing a label over nothing", () => {
+    const row = askRow({ kind: "agent", fields: { name: "PR Writer", job: "  ", gets: "" } });
+    expect(askLines(row)).toEqual([]);
+    expect(askLines(askRow({ fields: {} }))).toEqual([]);
+  });
+});
+
+describe("who sent an ask", () => {
+  it("names the person, with the email dim beside it", () => {
+    expect(askWho(askRow())).toBe("Sana");
+    expect(askEmail(askRow())).toBe("sana@legalsoft.com");
+  });
+
+  it("falls back to the email, then the id, and never to a blank", () => {
+    const noName = askRow({ from: { user_id: "u9", email: "sana@legalsoft.com", name: "" } });
+    expect(askWho(noName)).toBe("sana@legalsoft.com");
+    expect(askEmail(noName)).toBe("");
+    expect(askWho(askRow({ from: { user_id: "u9", email: "", name: "" } }))).toBe("u9");
+    expect(askWho(askRow({ from: { user_id: "", email: "", name: "" } }))).toBe("Someone");
+  });
+});
+
+describe("the status buttons a row offers", () => {
+  it("offers both to a new row, and never the status it already has", () => {
+    expect(nextStatuses("new")).toEqual(["seen", "done"]);
+    expect(nextStatuses("seen")).toEqual(["done"]);
+    expect(nextStatuses("done")).toEqual(["seen"]);
+  });
+
+  it("names them the way the panel prints them", () => {
+    expect(STATUS_ACTION.seen).toBe("Mark seen");
+    expect(STATUS_ACTION.done).toBe("Done");
+  });
+});
+
+describe("replaceAsk", () => {
+  const list = { asks: [askRow({ id: "a" }), askRow({ id: "b", status: "seen" })], total: 2, new: 1 };
+
+  it("swaps the row in place and moves the new count with it", () => {
+    const seen = replaceAsk(list, askRow({ id: "a", status: "seen" }));
+    expect(seen.asks.map((a) => a.status)).toEqual(["seen", "seen"]);
+    expect(seen.new).toBe(0);
+    expect(seen.total).toBe(2);
+  });
+
+  it("leaves the count alone when the status did not cross new", () => {
+    expect(replaceAsk(list, askRow({ id: "b", status: "done" })).new).toBe(1);
+  });
+
+  it("ignores a row it does not hold and never goes below zero", () => {
+    expect(replaceAsk(list, askRow({ id: "zz", status: "done" }))).toBe(list);
+    expect(replaceAsk({ ...list, new: 0 }, askRow({ id: "a", status: "done" })).new).toBe(0);
   });
 });

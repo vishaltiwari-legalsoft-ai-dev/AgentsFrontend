@@ -767,3 +767,51 @@
 @media (prefers-reduced-motion: reduce) {
   .hboard { animation: none; }
 }
+
+/* ---------- the admin inbox: what people sent from the console ----------- */
+/* One row per ask — feedback, a problem, an agent request — newest first. A
+   new row carries the console's mark in its left margin; the status buttons
+   sit at the right. Every colour is a token, so dark follows light. */
+
+.asks { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule-hard); }
+.ask {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 16px;
+  padding: 12px 2px 12px 14px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.ask::before {
+  content: "";
+  position: absolute; left: 0; top: 14px; bottom: 14px;
+  width: 3px; border-radius: 2px;
+  background: transparent;
+}
+.ask.is-new::before { background: var(--mark); }
+
+.ask__meta {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 10px;
+  font-size: 12px; color: var(--fg-3);
+}
+.ask__kind.is-issue { color: var(--gap); }
+.ask__who { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; min-width: 0; }
+.ask__who b { font-weight: 650; color: var(--fg); }
+.ask__who em { font-style: normal; color: var(--fg-3); overflow-wrap: anywhere; }
+.ask__when { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.ask__body { grid-column: 1; display: grid; gap: 3px; min-width: 0; font-size: 13px; line-height: 1.5; color: var(--fg); }
+.ask__body b { font-weight: 650; }
+.ask__body p { margin: 0; max-width: 76ch; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ask__page { font-size: 11px; color: var(--fg-3); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.ask.is-done .ask__body { color: var(--fg-2); }
+
+.ask__ops {
+  grid-column: 2; grid-row: 1 / span 2; align-self: start;
+  display: flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .ask { grid-template-columns: minmax(0, 1fr); }
+  .ask__ops { grid-column: 1; grid-row: auto; }
+}

@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { getIssues, getNews, loadLibrary, listRuns } from "@/lib/api";
+import { getIssues, getNews, listAsks, loadLibrary, listRuns } from "@/lib/api";
 import { LIVE_AGENTS, n, type PanelId } from "./model";
 
 interface OrStats {
@@ -47,9 +47,10 @@ const usd0 = (v: number) => `$${Math.round(v).toLocaleString("en-US")}`;
 /** `openAgents` is how many specialists this reader may actually open. It is
  *  the whole live roster for everyone but an account the backend has scoped, and
  *  the rail must not badge Agents with a five that opens a page listing one. */
-/** `admin` gates the two rail counts only an admin's rail carries: the Issues
- *  badge (the route is admin-only) and the Brands count (the panel is). A
- *  member's rail never asks for them, so nothing 403s behind their back. */
+/** `admin` gates the three rail counts only an admin's rail carries: the Issues
+ *  badge (the route is admin-only), the Brands count (the panel is) and the
+ *  Admin entry's unseen-asks count (the inbox is). A member's rail never asks
+ *  for them, so nothing 403s behind their back. */
 export function useShellStats(
   enabled: boolean, revision: number, openAgents = LIVE_AGENTS.length, admin = false,
 ): ShellStats {
@@ -91,6 +92,13 @@ export function useShellStats(
           .then((p) => {
             if (!dead) setCounts((c) => ({ ...c, issues: p.counts.high + p.counts.medium }));
           })
+          .catch(() => { /* no count rather than a wrong one */ });
+
+        // The Admin entry badges what nobody has looked at yet. The rows are
+        // not needed here, only the figure, so one row is asked for; TopNav
+        // draws no count at 0, so a cleared inbox clears the badge.
+        listAsks("new", 1)
+          .then((p) => { if (!dead) setCounts((c) => ({ ...c, admin: p.new })); })
           .catch(() => { /* no count rather than a wrong one */ });
       }
 

@@ -3,55 +3,41 @@
 /** The three ask-us-something forms: feedback, a problem, and the big one —
  *  requesting a whole new specialist from the header.
  *
- *  Nothing here writes to the backend, because no endpoint records these yet.
- *  A submission is kept in localStorage (so the console can grow an outbox
- *  later without losing what people already said) and answered with a toast.
- *  The forms stay honest: a submit button that would send nothing is disabled.
+ *  Each one is a `POST /api/asks`, which lands in the admins' inbox on the
+ *  Admin panel. A send that fails keeps the dialog open with the text intact
+ *  and the backend's own sentence under the form — never a success toast for
+ *  something nobody received. The submit button is disabled until there is
+ *  something to send, and again while the send is in flight.
  */
 
 import { useEffect, useState } from "react";
+import { submitAsk, type AskKind } from "@/lib/api";
+import { describeFailure } from "@/lib/load";
 import { Ic } from "./Sprite";
 import type { ToastFn } from "./context";
 
-export type AskKind = "feedback" | "issue" | "agent";
+export type { AskKind };
 
-/** The toast and the note under the form say the same true thing: nothing is
- *  sent anywhere yet. A "filed — we're on it" that reached nobody would be a
- *  canned success, which this console does not do. */
-const COPY: Record<AskKind, { title: string; lede: string; thanks: string; cta: string }> = {
+const COPY: Record<AskKind, { title: string; lede: string; sent: string; cta: string }> = {
   feedback: {
     title: "Submit feedback",
-    lede: "What is working, what is rubbing wrong — plain words are perfect.",
-    thanks: "Feedback kept on this device. Nobody is notified yet — tell the team directly for now.",
-    cta: "Keep feedback",
+    lede: "What is working, what is rubbing wrong — plain words are perfect. Goes straight to the admins' inbox.",
+    sent: "Feedback sent to the admins.",
+    cta: "Send feedback",
   },
   issue: {
     title: "Report a problem",
-    lede: "Say what went wrong and where it happened.",
-    thanks: "Problem kept on this device. Nobody is notified yet — tell the team directly for now.",
-    cta: "Keep the note",
+    lede: "Say what went wrong and where it happened. Goes straight to the admins' inbox.",
+    sent: "Problem sent to the admins.",
+    cta: "Report the problem",
   },
   agent: {
     title: "Request a new agent",
-    lede: "Describe the specialist you wish was on staff. The clearer the job, the faster it gets sized up.",
-    thanks: "Request kept on this device. Nobody is notified yet — tell the team directly for now.",
-    cta: "Keep the request",
+    lede: "Describe the specialist you wish was on staff. The clearer the job, the faster it gets sized up. Goes straight to the admins' inbox.",
+    sent: "Sent to the admins — it is in their inbox now.",
+    cta: "Submit request",
   },
 };
-
-const KEPT_LOCALLY =
-  "For now this is kept in this browser only — no endpoint receives it and nobody is notified.";
-
-function keep(kind: AskKind, body: Record<string, string>) {
-  try {
-    const k = "agentos.asks";
-    const prev = JSON.parse(localStorage.getItem(k) || "[]") as unknown[];
-    prev.push({ kind, at: new Date().toISOString(), ...body });
-    localStorage.setItem(k, JSON.stringify(prev));
-  } catch {
-    /* storage off — the toast still answers the person */
-  }
-}
 
 export function RequestDialog({
   kind, open, onClose, onToast,
@@ -66,10 +52,15 @@ export function RequestDialog({
   const [gets, setGets] = useState("");
   const [where, setWhere] = useState("");
   const [cadence, setCadence] = useState("On demand");
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   // A reopened form is a fresh form.
   useEffect(() => {
-    if (open) { setMain(""); setName(""); setGets(""); setWhere(""); setCadence("On demand"); }
+    if (open) {
+      setMain(""); setName(""); setGets(""); setWhere(""); setCadence("On demand");
+      setSending(false); setErr(null);
+    }
   }, [open, kind]);
 
   useEffect(() => {
@@ -83,18 +74,28 @@ export function RequestDialog({
   const c = COPY[kind];
   const ready = kind === "agent" ? main.trim() !== "" && name.trim() !== "" : main.trim() !== "";
 
-  const submit = () => {
-    if (!ready) return;
-    keep(kind, kind === "agent"
+  const submit = async () => {
+    if (!ready || sending) return;
+    setSending(true);
+    setErr(null);
+    const fields = kind === "agent"
       ? { name, job: main, gets, cadence }
-      : kind === "issue" ? { where, what: main } : { note: main });
-    onToast(c.thanks, "ok");
-    onClose();
+      : kind === "issue" ? { where, note: main } : { note: main };
+    try {
+      await submitAsk({ kind, ...fields, page: window.location.hash });
+      onToast(c.sent, "ok");
+      onClose();
+    } catch (e) {
+      // The backend's `detail` as it came; a timeout keeps its own sentence.
+      setErr(describeFailure(e, "It could not be sent. Try again."));
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
     <div className="rqd" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="rqd__card" role="dialog" aria-modal="true" aria-label={c.title}>
+      <div className="rqd__card" role="dialog" aria-modal="true" aria-label={c.title} aria-busy={sending}>
         <header className="rqd__head">
           <h3>{c.title}</h3>
           <button type="button" className="rqd__x" onClick={onClose} aria-label="Close">
@@ -102,7 +103,6 @@ export function RequestDialog({
           </button>
         </header>
         <p>{c.lede}</p>
-        <p className="rqd__kept" role="note">{KEPT_LOCALLY}</p>
 
         {kind === "agent" && (
           <>
@@ -152,10 +152,12 @@ export function RequestDialog({
           </label>
         )}
 
+        {err && <p className="rqd__err" role="alert">{err}</p>}
+
         <div className="rqd__ops">
           <button type="button" className="btn btn--quiet btn--sm" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn btn--solid btn--sm" disabled={!ready} onClick={submit}>
-            {c.cta}
+          <button type="button" className="btn btn--solid btn--sm" disabled={!ready || sending} onClick={submit}>
+            {sending ? "Sending…" : c.cta}
           </button>
         </div>
       </div>

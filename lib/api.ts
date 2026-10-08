@@ -3805,6 +3805,98 @@ export interface IssuesPayload {
 export const getIssues = (req?: RequestOptions) =>
   getJson<IssuesPayload>("/api/issues", req);
 
+/* ------------- Asks (feedback, problems and agent requests) ------------- */
+/* What people send from the console's three forms. Anyone signed in can file
+   one; the inbox and its status changes are admin-only. */
+
+export type AskKind = "feedback" | "issue" | "agent";
+export type AskStatus = "new" | "seen" | "done";
+
+/** The body of `POST /api/asks`. `note` is the text every kind carries; the
+ *  rest belong to one kind each. `page` is the hash the form was opened from. */
+export interface AskBody {
+  kind: AskKind;
+  note?: string;
+  where?: string;
+  name?: string;
+  job?: string;
+  gets?: string;
+  cadence?: string;
+  page?: string;
+}
+
+export interface Ask {
+  id: string;
+  kind: AskKind;
+  /** The form's fields as sent — `note`, `where`, `name`, `job`, `gets`, `cadence`. */
+  fields: Record<string, string>;
+  from: { user_id: string; email: string; name: string };
+  page: string;
+  status: AskStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AskList {
+  /** Newest first. */
+  asks: Ask[];
+  total: number;
+  /** How many are still `new` — the rail badge's figure. */
+  new: number;
+}
+
+/** What the backend actually sent. Every field optional, the same deploy-skew
+ *  rule as `RawBrandSummary`: the console reads a new field with a default. */
+type RawAsk = Partial<Omit<Ask, "from" | "fields">> & {
+  fields?: Record<string, unknown>;
+  from?: Partial<Ask["from"]>;
+};
+
+const ASK_KINDS: readonly AskKind[] = ["feedback", "issue", "agent"];
+const ASK_STATUSES: readonly AskStatus[] = ["new", "seen", "done"];
+
+const ask = (raw: RawAsk): Ask => {
+  const fields: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw.fields ?? {})) {
+    if (typeof v === "string") fields[k] = v;
+  }
+  return {
+    id: raw.id ?? "",
+    kind: ASK_KINDS.includes(raw.kind as AskKind) ? (raw.kind as AskKind) : "feedback",
+    fields,
+    from: { user_id: raw.from?.user_id ?? "", email: raw.from?.email ?? "", name: raw.from?.name ?? "" },
+    page: raw.page ?? "",
+    status: ASK_STATUSES.includes(raw.status as AskStatus) ? (raw.status as AskStatus) : "new",
+    created_at: raw.created_at ?? "",
+    updated_at: raw.updated_at ?? raw.created_at ?? "",
+  };
+};
+
+/** 201 `{id, created_at}`; 422 when the text is missing; 502 on a failed write. */
+export const submitAsk = (body: AskBody) =>
+  postJson<{ id: string; created_at: string }>("/api/asks", body);
+
+/** Admin only. Newest first; `limit` caps the rows, not `total` or `new`. */
+export async function listAsks(
+  status: "all" | "new" = "all",
+  limit = 200,
+  opts?: RequestOptions,
+): Promise<AskList> {
+  const raw = await getJson<{ asks?: RawAsk[]; total?: number; new?: number }>(
+    `/api/admin/asks?status=${status}&limit=${limit}`, opts,
+  );
+  const asks = (raw.asks ?? []).map(ask).filter((a) => a.id);
+  return {
+    asks,
+    total: raw.total ?? asks.length,
+    new: raw.new ?? asks.filter((a) => a.status === "new").length,
+  };
+}
+
+/** Admin only. Answers with the updated ask. */
+export const setAskStatus = (id: string, status: AskStatus) =>
+  postJson<RawAsk>(`/api/admin/asks/${encodeURIComponent(id)}/status`, { status }).then(ask);
+
 /* ------------- Schedule (the cron jobs that drive the agents) ------------ */
 
 export interface CronSchedule { cron: string; timezone: string }
