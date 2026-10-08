@@ -14,6 +14,16 @@ import { pickDefaultStyle } from "./styleChoice";
 import { DEFAULT_PLAN_LAYOUT } from "./wireframe";
 import { attachErrorMessage, canAttach, MAX_PROMPT_IMAGES } from "./promptAttach";
 import { BrandKitSheet } from "./BrandKitSheet";
+import {
+  brandRefreshDue,
+  brandSummaryOf,
+  forgetBrand,
+  mergeBrandList,
+  noteBrand,
+  placeBrand,
+  settleBrandPick,
+  type BrandSightings,
+} from "./brandKit";
 import { useAuth } from "@/lib/auth";
 import {
   creativeTypes,
@@ -164,6 +174,13 @@ export function GraphicsStudioV2({
   const [phase, setPhase] = useState<"setup" | "studio">("setup");
   const [brands, setBrands] = useState<GdBrandSummary[]>([]);
   const [brandId, setBrandId] = useState<string>("");
+  // Every brand seen recently (list reads and this member's own saves) — a
+  // read from a Cloud Run instance whose list cache is behind must not drop
+  // one. `brandNames` outlives the list, so a brand that leaves it can still
+  // be named when the screen says it is gone.
+  const brandSightings = useRef<BrandSightings>({});
+  const brandsReadAt = useRef<number | null>(null);
+  const [brandNames, setBrandNames] = useState<Record<string, string>>({});
   // The brand-kit sheet: closed, creating, or editing one brand. `kitRev`
   // ticks after a save so the picker and the config re-read the kit.
   const [kitSheet, setKitSheet] = useState<{ open: boolean; brandId: string | null }>({ open: false, brandId: null });
@@ -248,14 +265,34 @@ export function GraphicsStudioV2({
   );
 
   /* ---------------- data loads ---------------- */
+  // Brands are shared and any member may add one. Each read is merged with
+  // what this screen has seen within the backend's cache window, and a brand
+  // the member chose is never swapped for another: if it is genuinely gone it
+  // stays chosen, the screen says so, and Generate waits for a new pick.
+  const loadBrands = useCallback(async () => {
+    brandsReadAt.current = Date.now();
+    const r = await gdBrands();
+    const merged = mergeBrandList(r.brands, brandSightings.current, Date.now());
+    brandSightings.current = merged.sightings;
+    setBrands(merged.brands);
+    setBrandNames((n) => ({ ...n, ...Object.fromEntries(merged.brands.map((b) => [b.brand_id, b.name])) }));
+    setBrandId((b) => settleBrandPick(b, merged.brands, r.default).brandId);
+  }, []);
+
   useEffect(() => {
-    gdBrands()
-      .then((r) => {
-        setBrands(r.brands);
-        setBrandId((b) => (b && r.brands.some((x) => x.brand_id === b) ? b : r.default));
-      })
-      .catch(fail);
-  }, [fail, kitRev]);
+    loadBrands().catch(fail);
+  }, [loadBrands, fail, kitRev]);
+
+  // An open studio picks up brands other members add: the picker reads the
+  // list again when it is focused or opened, at most once per refresh gap.
+  // A failed background read leaves the list on screen as it was read.
+  const refreshBrands = useCallback(() => {
+    if (!brandRefreshDue(brandsReadAt.current, Date.now())) return;
+    loadBrands().catch(() => undefined);
+  }, [loadBrands]);
+
+  const brandMissing = settleBrandPick(brandId, brands, "").missing;
+  const missingBrandName = brandNames[brandId] || "The brand you picked";
 
   // Creative-Agent types for the setup picker (additive; failure is silent so
   // the social studio still works if the rail isn't reachable).
@@ -661,6 +698,10 @@ export function GraphicsStudioV2({
   };
 
   const start = () => {
+    if (brandMissing) {
+      onToast(`${missingBrandName} is no longer in the brand list — choose a brand first.`, "warn");
+      return;
+    }
     if (autoMode && !brief.trim()) {
       onToast("Auto mode needs a brief — tell the studio what this is about.", "warn");
       return;
@@ -1162,7 +1203,7 @@ export function GraphicsStudioV2({
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (isSocial) start();
-                  else setLaunchedCreative(true);
+                  else if (!brandMissing) setLaunchedCreative(true);
                 }}
               >
                 <div className="gdx-field">
@@ -1171,13 +1212,31 @@ export function GraphicsStudioV2({
                     <span className="gdx-lead gdx-ic--violet" aria-hidden="true">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="3" width="12" height="18" rx="1.5" /><path d="M16 8h4v13H4M8 7h2M12 7h.01M8 11h2M12 11h.01M8 15h2M12 15h.01" /></svg>
                     </span>
-                    <select id="gd2brand" value={brandId} onChange={(e) => setBrandId(e.target.value)}>
+                    <select
+                      id="gd2brand"
+                      value={brandId}
+                      aria-invalid={brandMissing || undefined}
+                      aria-describedby={brandMissing ? "gd2brand-note" : undefined}
+                      onFocus={refreshBrands}
+                      onPointerDown={refreshBrands}
+                      onChange={(e) => setBrandId(e.target.value)}
+                    >
+                      {/* A chosen brand that left the list stays shown as
+                          chosen — never quietly drawn as the first row. */}
+                      {brandMissing ? (
+                        <option value={brandId} disabled>{missingBrandName} — no longer listed</option>
+                      ) : null}
                       {brands.map((b) => (
                         <option key={b.brand_id} value={b.brand_id}>{b.name}</option>
                       ))}
                     </select>
                     <svg className="gdx-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
                   </div>
+                  {brandMissing ? (
+                    <p id="gd2brand-note" className="gdx-brandnote" role="alert">
+                      {missingBrandName} is no longer in the brand list — it may have been archived. Choose a brand to keep going.
+                    </p>
+                  ) : null}
                   {/* Brands are shared: anyone here may add one or change its kit.
                       A built-in pack has no "Edit kit" because a PATCH to it 409s. */}
                   <div className="gdx-kitrow">
@@ -1304,7 +1363,7 @@ export function GraphicsStudioV2({
                 ) : null}
 
                 {isSocial ? (
-                  <button className="gdx-generate" type="submit" disabled={busy !== null || !cfg}>
+                  <button className="gdx-generate" type="submit" disabled={busy !== null || !cfg || brandMissing}>
                     {busy ? (
                       <><span className="gdx-spin" aria-hidden="true" />{busy}</>
                     ) : (
@@ -1316,7 +1375,7 @@ export function GraphicsStudioV2({
                     )}
                   </button>
                 ) : (
-                  <button className="gdx-generate" type="submit">
+                  <button className="gdx-generate" type="submit" disabled={brandMissing}>
                     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 1.5c.5 4.6 4.4 8.5 9 9-4.6.9-8.5 4.4-9 9-.5-4.6-4.4-8.5-9-9 4.6-.9 8.5-4.4 9-9z" /></svg>
                     Open the Creative Agent
                     <svg className="gdx-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6" /></svg>
@@ -1415,10 +1474,19 @@ export function GraphicsStudioV2({
         onToast={onToast}
         onClose={() => setKitSheet((s) => ({ ...s, open: false }))}
         onSaved={(b) => {
-          setBrandId(b.brand_id);
+          // The save reply is proof the brand exists: hold it in the picker
+          // and keep it chosen, even when the refetch below lands on an
+          // instance whose list cache predates it.
+          const row = brandSummaryOf(b);
+          brandSightings.current = noteBrand(brandSightings.current, row, Date.now());
+          setBrands((list) => placeBrand(list, row));
+          setBrandNames((n) => ({ ...n, [row.brand_id]: row.name }));
+          setBrandId(row.brand_id);
           setKitRev((r) => r + 1);
         }}
         onArchived={(archivedId) => {
+          brandSightings.current = forgetBrand(brandSightings.current, archivedId);
+          setBrands((list) => list.filter((b) => b.brand_id !== archivedId));
           if (brandId === archivedId) setBrandId("");
           setKitRev((r) => r + 1);
         }}

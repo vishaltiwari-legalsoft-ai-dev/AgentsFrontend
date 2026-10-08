@@ -634,6 +634,13 @@
 
 /* the studio's setup screen: the two quiet buttons under the brand picker */
 .gdx-kitrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+/* …and the plain notice when the brand chosen has left the list */
+.gd2 .gdx-control select[aria-invalid="true"] { border-color: var(--gdx-warn); }
+.gdx-brandnote {
+  margin: 8px 0 0; padding: 8px 12px; border-radius: 10px;
+  border: 1px solid var(--gdx-warn); background: var(--gdx-tp);
+  font-size: 13px; line-height: 1.45; font-weight: 500; color: var(--gdx-ink);
+}
 
 /* ---------- Home: the usage board in the hero ---------------------------
  *

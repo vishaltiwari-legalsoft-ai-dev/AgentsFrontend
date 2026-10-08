@@ -11,6 +11,7 @@
 
 import type {
   GdBrandAssetKind, GdBrandDetail, GdBrandInput, GdBrandReference, GdBrandReferenceKind,
+  GdBrandSummary,
 } from "@/lib/api";
 import type { Viewer } from "@/components/hub/model";
 
@@ -398,3 +399,97 @@ export async function saveBrandKit<F extends FileLike>(
 
   return { brand, problems };
 }
+
+/* ------------------------------------------------------- the brand picker -- */
+
+/** How long the picker keeps a brand after it was last seen — in a list read,
+ *  or in the reply to the member's own save — when a later read leaves it out.
+ *
+ *  The backend caches the brand list per Cloud Run instance for 60 s
+ *  (`firestore_repo._BRANDS_TTL_SECONDS`), so a read that lands on another
+ *  instance can be a minute behind the one before it, or behind the create
+ *  that just answered. Past this window every instance has re-read the store
+ *  since the sighting, so a brand that is still left out is really gone. */
+export const BRAND_HOLD_MS = 90_000;
+
+/** The least time between two list reads the picker asks for on focus. */
+export const BRAND_REFRESH_GAP_MS = 4_000;
+
+export interface BrandSighting { brand: GdBrandSummary; at: number }
+export type BrandSightings = Readonly<Record<string, BrandSighting>>;
+
+/** The picker's row for a brand the sheet saved — the detail's heavy fields
+ *  (references, assets) stay out of the list. */
+export const brandSummaryOf = (b: GdBrandSummary): GdBrandSummary => ({
+  brand_id: b.brand_id,
+  name: b.name,
+  slug: b.slug,
+  source: b.source,
+  editable: b.editable,
+  logo_url: b.logo_url,
+  primary_colors: b.primary_colors,
+  has_kit: b.has_kit,
+  reference_count: b.reference_count,
+});
+
+/** Put a row in the list: in place of the row with its id, else where the
+ *  backend would list it — a member's brand among the members' brands (they
+ *  come first, by name), anything else at the end. */
+export function placeBrand(list: GdBrandSummary[], brand: GdBrandSummary): GdBrandSummary[] {
+  const same = list.findIndex((b) => b.brand_id === brand.brand_id);
+  if (same >= 0) return list.map((b, i) => (i === same ? brand : b));
+  if (brand.source !== "user") return [...list, brand];
+  const name = brand.name.toLowerCase();
+  const after = list.findIndex((b) => b.source !== "user" || b.name.toLowerCase().localeCompare(name) > 0);
+  const at = after < 0 ? list.length : after;
+  return [...list.slice(0, at), brand, ...list.slice(at)];
+}
+
+/** Record that a brand exists as of `now` — the sheet's save reply is proof. */
+export const noteBrand = (s: BrandSightings, brand: GdBrandSummary, now: number): BrandSightings =>
+  ({ ...s, [brand.brand_id]: { brand: brandSummaryOf(brand), at: now } });
+
+/** An archived brand leaves the picker at once; the hold must not bring it back. */
+export function forgetBrand(s: BrandSightings, brandId: string): BrandSightings {
+  const rest: Record<string, BrandSighting> = { ...s };
+  delete rest[brandId];
+  return rest;
+}
+
+/** One list read, merged with what the picker has seen recently. The server's
+ *  rows win for every id it lists; a brand it leaves out is kept while it was
+ *  seen within `BRAND_HOLD_MS` — the read may come from an instance whose
+ *  cache predates it — and dropped after that. */
+export function mergeBrandList(
+  server: GdBrandSummary[],
+  seen: BrandSightings,
+  now: number,
+): { brands: GdBrandSummary[]; sightings: BrandSightings } {
+  const sightings: Record<string, BrandSighting> = {};
+  for (const b of server) sightings[b.brand_id] = { brand: b, at: now };
+  let brands = server;
+  for (const [id, s] of Object.entries(seen)) {
+    if (id in sightings || now - s.at >= BRAND_HOLD_MS) continue;
+    sightings[id] = s; // the hold runs from the last real sighting, not this read
+    brands = placeBrand(brands, s.brand);
+  }
+  return { brands, sightings };
+}
+
+/** Which brand the picker holds after a list read. Nothing chosen yet → the
+ *  backend's default. A brand the member chose is never swapped for another:
+ *  if it is not in the list it stays chosen, and `missing` says so, so the
+ *  screen can say it plainly and hold Generate until they pick again. */
+export function settleBrandPick(
+  current: string,
+  brands: GdBrandSummary[],
+  fallback: string,
+): { brandId: string; missing: boolean } {
+  if (!current) return { brandId: fallback, missing: false };
+  return { brandId: current, missing: !brands.some((b) => b.brand_id === current) };
+}
+
+/** Whether focusing the picker should read the list again: not when it was
+ *  read moments ago — focus and pointer-down both fire on one click. */
+export const brandRefreshDue = (lastAt: number | null, now: number): boolean =>
+  lastAt === null || now - lastAt >= BRAND_REFRESH_GAP_MS;

@@ -9,27 +9,37 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { GdBrandDetail, GdBrandInput, GdBrandReference } from "@/lib/api";
+import type { GdBrandDetail, GdBrandInput, GdBrandReference, GdBrandSummary } from "@/lib/api";
 import {
+  BRAND_HOLD_MS,
+  BRAND_REFRESH_GAP_MS,
   DEFAULT_REFERENCE_CAP,
   REFERENCE_BATCH,
   REFERENCE_CREATIVE_TYPES,
   REFERENCE_TYPE_OTHER,
+  brandRefreshDue,
+  brandSummaryOf,
   canArchiveBrand,
   checkFiles,
   describeBrandFailure,
   draftFrom,
   emptyDraft,
   emptyPending,
+  forgetBrand,
+  mergeBrandList,
   normalizeHex,
+  noteBrand,
+  placeBrand,
   referenceCountLabel,
   referenceTypeLabel,
   referencesRemaining,
   saveBrandKit,
+  settleBrandPick,
   toInput,
   validateDraft,
   type BrandDraft,
   type BrandKitApi,
+  type BrandSightings,
   type FileLike,
 } from "./brandKit";
 
@@ -492,5 +502,128 @@ describe("saveBrandKit — a create that lands but whose uploads all fail is sti
     const out = await saveBrandKit(api, "b_old", draft({ name: "Anything" }), emptyPending<FileLike>());
     expect(out.brand?.name).toBe("Renamed by the server");
     expect(out.brand?.fonts).toEqual(["Archivo"]);
+  });
+});
+
+/* ------------------------------------------------ the studio's brand picker -- */
+
+/** A picker row. `legalsoft` is the backend's default and a built-in pack. */
+const row = (brand_id: string, name: string, source: GdBrandSummary["source"] = "user"): GdBrandSummary => ({
+  brand_id, name, slug: brand_id, source, editable: source === "user",
+  logo_url: null, primary_colors: ["#1746A2"], has_kit: false, reference_count: 0,
+});
+const legalSoft = row("legalsoft", "Legal Soft", "builtin");
+const acme = row("acme", "Acme Law");
+const T0 = 1_000_000;
+
+/** One list read as the studio applies it: merge, then settle the pick. */
+function read(server: GdBrandSummary[], seen: BrandSightings, now: number, current: string) {
+  const merged = mergeBrandList(server, seen, now);
+  return { ...merged, pick: settleBrandPick(current, merged.brands, "legalsoft") };
+}
+
+describe("S3 — a brand just saved stays chosen when the list read is behind it", () => {
+  it("keeps the new brand listed and chosen when the refetch lands on an instance whose cache predates it", () => {
+    // The save reply says Berry exists; the list read that follows does not.
+    const saved = noteBrand({}, brand({ brand_id: "berry", name: "Berry Virtual" }), T0);
+    const r = read([acme, legalSoft], saved, T0 + 2_000, "berry");
+    expect(r.brands.map((b) => b.brand_id)).toEqual(["acme", "berry", "legalsoft"]);
+    expect(r.pick).toEqual({ brandId: "berry", missing: false });
+  });
+
+  it("uses the server's row once the list returns the brand, with no duplicate", () => {
+    const saved = noteBrand({}, brand({ brand_id: "berry", name: "Berry Virtual" }), T0);
+    const fromServer = { ...row("berry", "Berry Virtual"), reference_count: 4 };
+    const r = read([acme, fromServer, legalSoft], saved, T0 + 5_000, "berry");
+    expect(r.brands).toEqual([acme, fromServer, legalSoft]);
+    expect(r.sightings.berry).toEqual({ brand: fromServer, at: T0 + 5_000 });
+  });
+
+  it("does not drop a brand again when a fresh read is followed by a stale one inside the cache window", () => {
+    const first = read([acme, row("berry", "Berry Virtual"), legalSoft], {}, T0, "berry");
+    const stale = read([acme, legalSoft], first.sightings, T0 + 30_000, "berry");
+    expect(stale.brands.map((b) => b.brand_id)).toContain("berry");
+    expect(stale.pick).toEqual({ brandId: "berry", missing: false });
+  });
+
+  it("says a chosen brand is missing once the hold has passed, and never substitutes Legal Soft for it", () => {
+    const saved = noteBrand({}, row("berry", "Berry Virtual"), T0);
+    const later = read([acme, legalSoft], saved, T0 + BRAND_HOLD_MS, "berry");
+    expect(later.brands.map((b) => b.brand_id)).toEqual(["acme", "legalsoft"]);
+    expect(later.sightings).not.toHaveProperty("berry");
+    expect(later.pick).toEqual({ brandId: "berry", missing: true });
+  });
+
+  it("holds from the last sighting, not from each read that leaves the brand out", () => {
+    const saved = noteBrand({}, row("berry", "Berry Virtual"), T0);
+    const a = read([legalSoft], saved, T0 + 60_000, "berry");
+    expect(a.sightings.berry.at).toBe(T0);
+    expect(read([legalSoft], a.sightings, T0 + BRAND_HOLD_MS - 1, "berry").pick.missing).toBe(false);
+    expect(read([legalSoft], a.sightings, T0 + BRAND_HOLD_MS, "berry").pick.missing).toBe(true);
+  });
+
+  it("does not hold a brand the member archived", () => {
+    const seen = forgetBrand(noteBrand({}, row("berry", "Berry Virtual"), T0), "berry");
+    expect(read([legalSoft], seen, T0 + 1_000, "").brands).toEqual([legalSoft]);
+  });
+
+  it("projects the save reply to a picker row, leaving the kit's heavy fields out", () => {
+    const summary = brandSummaryOf(brand({ brand_id: "berry", references: [ref("r1")] }));
+    expect(Object.keys(summary).sort()).toEqual([
+      "brand_id", "editable", "has_kit", "logo_url", "name", "primary_colors", "reference_count", "slug", "source",
+    ]);
+    expect(noteBrand({}, brand({ brand_id: "berry" }), T0).berry.brand).toEqual(summary);
+  });
+});
+
+describe("settleBrandPick — the backend's default only when nothing was chosen", () => {
+  it("takes the default on first load", () => {
+    expect(settleBrandPick("", [acme, legalSoft], "legalsoft")).toEqual({ brandId: "legalsoft", missing: false });
+  });
+
+  it("keeps a listed choice", () => {
+    expect(settleBrandPick("acme", [acme, legalSoft], "legalsoft")).toEqual({ brandId: "acme", missing: false });
+  });
+
+  it("keeps an unlisted choice and flags it, rather than falling back to the default", () => {
+    expect(settleBrandPick("gone", [acme, legalSoft], "legalsoft")).toEqual({ brandId: "gone", missing: true });
+  });
+});
+
+describe("placeBrand — where a held brand sits in the list", () => {
+  it("puts a member's brand among the members' brands, by name, ahead of the built-in packs", () => {
+    const list = [acme, row("zeta", "Zeta Legal"), legalSoft];
+    expect(placeBrand(list, row("berry", "berry virtual")).map((b) => b.brand_id)).toEqual(["acme", "berry", "zeta", "legalsoft"]);
+    expect(placeBrand([legalSoft], row("berry", "Berry")).map((b) => b.brand_id)).toEqual(["berry", "legalsoft"]);
+    expect(placeBrand([acme], row("zz", "Zz")).map((b) => b.brand_id)).toEqual(["acme", "zz"]);
+  });
+
+  it("replaces the row with the same id in place — an edit renames, it does not add", () => {
+    const out = placeBrand([acme, legalSoft], row("acme", "Acme Law LLP"));
+    expect(out.map((b) => b.name)).toEqual(["Acme Law LLP", "Legal Soft"]);
+  });
+
+  it("puts anything that is not a member's brand at the end", () => {
+    expect(placeBrand([acme, legalSoft], row("ingested", "Aaa Ingested", "builtin")).map((b) => b.brand_id))
+      .toEqual(["acme", "legalsoft", "ingested"]);
+  });
+});
+
+describe("S7 — the picker reads the list again on focus, lightly", () => {
+  it("reads when it never has, and again once the gap has passed", () => {
+    expect(brandRefreshDue(null, T0)).toBe(true);
+    expect(brandRefreshDue(T0, T0 + BRAND_REFRESH_GAP_MS)).toBe(true);
+  });
+
+  it("does not read twice for one click (focus and pointer-down both fire) or on rapid refocus", () => {
+    expect(brandRefreshDue(T0, T0)).toBe(false);
+    expect(brandRefreshDue(T0, T0 + BRAND_REFRESH_GAP_MS - 1)).toBe(false);
+  });
+
+  it("shows a brand another member added as soon as a read returns it", () => {
+    const before = read([acme, legalSoft], {}, T0, "acme");
+    const after = read([acme, row("berry", "Berry Virtual"), legalSoft], before.sightings, T0 + BRAND_REFRESH_GAP_MS, "acme");
+    expect(after.brands.map((b) => b.name)).toContain("Berry Virtual");
+    expect(after.pick).toEqual({ brandId: "acme", missing: false });
   });
 });
