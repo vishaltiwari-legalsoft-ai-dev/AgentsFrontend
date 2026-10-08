@@ -10,13 +10,15 @@
  *  text in ink tokens, thin marks with rounded ends, a hover layer on the
  *  trend, and no second y-axis anywhere.
  *
- *  The weekly series is derived deterministically from the brand's own
- *  28-day summary (the backend keeps no click history yet); the derivation
- *  is seeded by brand id so a brand's chart is stable across reloads, and
- *  it ends exactly on the real figures it was derived from.
+ *  Every figure here is one the backend measured. The backend keeps no click
+ *  history — only the last 28 days and the 28 before — so the trend is drawn
+ *  as exactly those two periods, never as an invented weekly line. A brand
+ *  without Search Console (rank-tracking mode, or a run that could not reach
+ *  it) has no click or impression figures, and the page says so instead of
+ *  scoring zeros as if they were measurements.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { seoBrandDetail, type SeoBrandCard, type SeoRun, type SeoTodo } from "@/lib/api";
 import { loadPending, useLoadSession, type Load } from "@/lib/load";
 import { useHub } from "../../context";
@@ -25,31 +27,21 @@ import { Blank, Oops, Wait } from "../../ui";
 
 /* ------------------------------------------------------------ derivation -- */
 
-/** Twelve weekly points that end on the real 28-day pair. Mulberry32 keeps a
- *  brand's wiggle identical on every visit. */
-function weeklySeries(seedText: string, last28: number, prev28: number): number[] {
-  let a = 0;
-  for (const c of seedText) a = (a * 31 + c.charCodeAt(0)) >>> 0;
-  const rnd = () => {
-    a |= 0; a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+/** What the run actually measured. Clicks and impressions exist only with a
+ *  Search Console grant; `avg_position` is 0 from the backend when nothing
+ *  was ranked, which is "unknown", not "first". */
+function measured(run: SeoRun): { traffic: boolean; position: boolean } {
+  const s = run.summary;
+  return {
+    traffic: s.mode !== "rank-tracking" && s.impressions_28d > 0,
+    position: s.avg_position > 0,
   };
-  const w8 = prev28 / 4;
-  const w12 = last28 / 4;
-  const out: number[] = [];
-  for (let i = 0; i < 12; i++) {
-    const base = w8 + ((w12 - w8) * i) / 11;
-    out.push(Math.max(0, Math.round(base * (0.9 + rnd() * 0.2))));
-  }
-  out[7] = Math.round(w8);
-  out[11] = Math.round(w12);
-  return out;
 }
 
 /** 0–100, from the figures on screen: position carries half, trend a third,
- *  the open queue the rest. Stated here so the dial is checkable, not vibes. */
+ *  the open queue the rest. Stated here so the dial is checkable, not vibes.
+ *  Only called when the position is known; without traffic the trend term
+ *  sits at its neutral middle rather than reading a 0→0 as "no change". */
 function healthScore(run: SeoRun): number {
   const pos = Math.max(0, Math.min(50, ((30 - Math.min(30, run.summary.avg_position)) / 29) * 50));
   const delta = run.summary.clicks_28d - run.summary.clicks_prev_28d;
@@ -100,51 +92,23 @@ function Dial({ value, label, sub }: { value: number; label: string; sub: string
 
 /* ----------------------------------------------------------------- trend -- */
 
-function TrendChart({ series, labels }: { series: number[]; labels: string[] }) {
-  const wrap = useRef<HTMLDivElement>(null);
-  const [hover, setHover] = useState<number | null>(null);
-  const W = 560, H = 170, PAD = { l: 8, r: 54, t: 14, b: 22 };
-  const max = Math.max(...series) * 1.15;
-  const x = (i: number) => PAD.l + ((W - PAD.l - PAD.r) * i) / (series.length - 1);
-  const y = (v: number) => H - PAD.b - ((H - PAD.t - PAD.b) * v) / max;
-  const line = series.map((v, i) => `${i ? "L" : "M"} ${x(i)} ${y(v)}`).join(" ");
-  const area = `${line} L ${x(series.length - 1)} ${H - PAD.b} L ${x(0)} ${H - PAD.b} Z`;
-  const gridY = [0.5, 1].map((f) => y(max * f * 0.87));
-
-  const onMove = (e: React.MouseEvent) => {
-    const box = wrap.current?.getBoundingClientRect();
-    if (!box) return;
-    const fx = ((e.clientX - box.left) / box.width) * W;
-    const i = Math.round(((fx - PAD.l) / (W - PAD.l - PAD.r)) * (series.length - 1));
-    setHover(Math.max(0, Math.min(series.length - 1, i)));
-  };
-
-  const hi = hover;
+/** The two periods the backend actually has, side by side. Bars scale to the
+ *  larger of the two; a pair of zeros draws two empty tracks, never NaN. */
+function PeriodBars({ prev, last }: { prev: number; last: number }) {
+  const max = Math.max(prev, last, 1);
+  const rows: [string, number, boolean][] = [
+    ["previous 28 days", prev, false],
+    ["last 28 days", last, true],
+  ];
   return (
-    <div className="sdb-trend" ref={wrap} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
-        {gridY.map((gy, i) => <line key={i} x1={PAD.l} x2={W - PAD.r} y1={gy} y2={gy} className="sdb-gline" />)}
-        <line x1={PAD.l} x2={W - PAD.r} y1={H - PAD.b} y2={H - PAD.b} className="sdb-axis" />
-        <path d={area} className="sdb-area" />
-        <path d={line} className="sdb-line" />
-        {hi !== null && (
-          <line x1={x(hi)} x2={x(hi)} y1={PAD.t} y2={H - PAD.b} className="sdb-cross" />
-        )}
-        <circle cx={x(series.length - 1)} cy={y(series[series.length - 1])} r="4.5" className="sdb-enddot" />
-        {hi !== null && <circle cx={x(hi)} cy={y(series[hi])} r="5" className="sdb-hoverdot" />}
-      </svg>
-      {/* the end value is the one direct label the line carries */}
-      <span className="sdb-endlabel" style={{ top: `${(y(series[11]) / H) * 100}%` }}>
-        {n(series[11])}
-      </span>
-      <span className="sdb-xlabel is-first">{labels[0]}</span>
-      <span className="sdb-xlabel is-last">{labels[labels.length - 1]}</span>
-      {hi !== null && (
-        <div className="sdb-tip" style={{ left: `${(x(hi) / W) * 100}%` }}>
-          <b>{n(series[hi])} clicks</b>
-          <span>{labels[hi]}</span>
+    <div className="sdb-pair" role="img" aria-label={`Clicks: ${n(prev)} in the previous 28 days, ${n(last)} in the last 28`}>
+      {rows.map(([label, v, now]) => (
+        <div className={`sdb-pair__row${now ? " is-now" : ""}`} key={label}>
+          <span className="sdb-pair__label">{label}</span>
+          <span className="sdb-pair__bar"><i style={{ width: `${(v / max) * 100}%` }} /></span>
+          <b className="sdb-pair__val">{n(v)}</b>
         </div>
-      )}
+      ))}
     </div>
   );
 }
@@ -260,16 +224,6 @@ export function SeoDashboard({ card }: { card: SeoBrandCard }) {
 
   const run = detail.data?.run ?? null;
 
-  const series = useMemo(
-    () => (run ? weeklySeries(brandId, run.summary.clicks_28d, run.summary.clicks_prev_28d) : []),
-    [brandId, run],
-  );
-  const weekLabels = useMemo(() => {
-    const out: string[] = [];
-    for (let i = 11; i >= 0; i--) out.push(i === 0 ? "this week" : `${i}w ago`);
-    return out;
-  }, []);
-
   if (detail.phase === "failed" && !detail.data) {
     return <Oops what="The brand's record could not be read." error={detail.error || ""} onRetry={() => setBeat((b) => b + 1)} />;
   }
@@ -285,36 +239,58 @@ export function SeoDashboard({ card }: { card: SeoBrandCard }) {
   }
 
   const s = run.summary;
+  const has = measured(run);
   const delta = s.clicks_28d - s.clicks_prev_28d;
-  const deltaPct = s.clicks_prev_28d ? Math.round((delta / s.clicks_prev_28d) * 100) : 0;
-  const score = healthScore(run);
+  const deltaPct = s.clicks_prev_28d ? Math.round((delta / s.clicks_prev_28d) * 100) : null;
+  const score = has.position ? healthScore(run) : null;
   const openFixes = run.todos.filter((t) => t.status !== "done").length;
+  const gscOff = card.gsc_connected === false || s.mode === "rank-tracking";
 
   return (
     <div className="sdb">
+      {/* what this run could not measure, in the backend's own words */}
+      {(gscOff || run.degraded.length > 0) && (
+        <div className="sdb-notice" role="status">
+          {gscOff && (
+            <p>
+              <b>Search Console is not connected</b> — positions come from live rank tracking only;
+              clicks and impressions are not measured for this brand.
+              <button type="button" className="sdb-link" onClick={() => openWork("seo", brandId, "console")}>
+                Connect it in the console
+              </button>
+            </p>
+          )}
+          {run.degraded.map((d) => <p key={d}>{d}</p>)}
+        </div>
+      )}
+
       {/* the four headline figures */}
       <div className="sdb-tiles">
         <div className="sdb-tile">
           <span>Clicks · 28d</span>
-          <b>{n(s.clicks_28d)}</b>
-          <em className={delta >= 0 ? "is-up" : "is-down"}>
-            {delta >= 0 ? "▲" : "▼"} {n(Math.abs(delta))} · {deltaPct >= 0 ? "+" : ""}{deltaPct}%
-          </em>
+          <b>{has.traffic ? n(s.clicks_28d) : "—"}</b>
+          {has.traffic && deltaPct !== null ? (
+            <em className={delta >= 0 ? "is-up" : "is-down"}>
+              {delta >= 0 ? "▲" : "▼"} {n(Math.abs(delta))} · {deltaPct >= 0 ? "+" : ""}{deltaPct}%
+            </em>
+          ) : (
+            <em>{has.traffic ? "no previous period to compare" : "not measured"}</em>
+          )}
         </div>
         <div className="sdb-tile">
           <span>Impressions · 28d</span>
-          <b>{n(s.impressions_28d)}</b>
-          <em>{(s.clicks_28d / Math.max(1, s.impressions_28d) * 100).toFixed(1)}% click-through</em>
+          <b>{has.traffic ? n(s.impressions_28d) : "—"}</b>
+          <em>{has.traffic ? `${(s.clicks_28d / s.impressions_28d * 100).toFixed(1)}% click-through` : "not measured"}</em>
         </div>
         <div className="sdb-tile">
           <span>Avg position</span>
-          <b>{s.avg_position.toFixed(1)}</b>
-          <em>across ranked queries</em>
+          <b>{has.position ? s.avg_position.toFixed(1) : "—"}</b>
+          <em>{has.position ? "across ranked queries" : "nothing ranked yet"}</em>
         </div>
         <div className="sdb-tile">
           <span>Still on the table</span>
           <b>+{n(s.est_potential_clicks)}</b>
-          <em>est. clicks/mo in open fixes</em>
+          <em>est. clicks/mo across the fix list</em>
         </div>
       </div>
 
@@ -322,37 +298,51 @@ export function SeoDashboard({ card }: { card: SeoBrandCard }) {
         {/* the dial */}
         <section className="sdb-card sdb-card--dial">
           <header><h3>Search health</h3><p>position + trend + queue, scored</p></header>
-          <Dial
-            value={score}
-            label="of 100"
-            sub={openFixes ? `${openFixes} open fix${openFixes === 1 ? "" : "es"} hold it back` : "nothing holding it back"}
-          />
+          {score !== null ? (
+            <Dial
+              value={score}
+              label="of 100"
+              sub={openFixes ? `${openFixes} open fix${openFixes === 1 ? "" : "es"} hold it back` : "nothing holding it back"}
+            />
+          ) : (
+            <p className="sdb-calm">Not scored: no ranked position has been measured for this brand yet.</p>
+          )}
         </section>
 
-        {/* the trend */}
+        {/* the trend: the two periods the backend has, nothing invented between */}
         <section className="sdb-card sdb-card--trend">
           <header>
-            <h3>Clicks, week by week</h3>
-            <p>twelve weeks, ending on the real 28-day figures</p>
+            <h3>Clicks, period over period</h3>
+            <p>the last 28 days against the 28 before — the only two figures the record holds</p>
           </header>
-          <TrendChart series={series} labels={weekLabels} />
+          {has.traffic
+            ? <PeriodBars prev={s.clicks_prev_28d} last={s.clicks_28d} />
+            : <p className="sdb-calm">No click figures without Search Console.</p>}
         </section>
 
         {/* the share ring */}
         <section className="sdb-card sdb-card--ring">
           <header><h3>Clicks captured</h3><p>of today's estimated monthly total</p></header>
-          {/* both figures on a monthly footing: 28d clicks × (30.4 / 28) ≈ ×1.08 */}
-          <ShareRing captured={Math.round(s.clicks_28d * 1.08)} potential={s.est_potential_clicks} />
-          <div className="sdb-ring__legend">
-            <span><i className="is-a" />Captured <b>{n(Math.round(s.clicks_28d * 1.08))}</b>/mo</span>
-            <span><i className="is-b" />Untapped <b>+{n(s.est_potential_clicks)}</b>/mo</span>
-          </div>
+          {has.traffic ? (
+            <>
+              {/* both figures on a monthly footing: 28d clicks × (30.4 / 28) ≈ ×1.08 */}
+              <ShareRing captured={Math.round(s.clicks_28d * 1.08)} potential={s.est_potential_clicks} />
+              <div className="sdb-ring__legend">
+                <span><i className="is-a" />Captured <b>{n(Math.round(s.clicks_28d * 1.08))}</b>/mo</span>
+                <span><i className="is-b" />Untapped <b>+{n(s.est_potential_clicks)}</b>/mo</span>
+              </div>
+            </>
+          ) : (
+            <p className="sdb-calm">No captured-click figure without Search Console.</p>
+          )}
         </section>
 
         {/* the position track */}
         <section className="sdb-card sdb-card--track">
           <header><h3>Average position</h3><p>lower is better; page one ends at 10</p></header>
-          <PositionTrack pos={s.avg_position} />
+          {has.position
+            ? <PositionTrack pos={s.avg_position} />
+            : <p className="sdb-calm">Nothing ranked has been measured yet.</p>}
         </section>
 
         {/* the queue */}

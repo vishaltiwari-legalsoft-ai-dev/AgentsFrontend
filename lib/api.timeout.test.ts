@@ -310,3 +310,35 @@ describe("streamed bodies", () => {
     await expect(gdArtifactBlob("/api/gd/artifact/gone.png")).rejects.toThrow("Artifact expired");
   });
 });
+
+/* ------------------------------------------------------------ live by default -- */
+
+/** The console must never boot into the UI-lab fixtures by omission. Two
+ *  pins: the build config sets no preview default, and with the flag unset the
+ *  transport asks the network for a path the fixture table knows. */
+describe("preview mode is off unless a build asks for it", () => {
+  const saved = process.env.NEXT_PUBLIC_PREVIEW_NO_AUTH;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.NEXT_PUBLIC_PREVIEW_NO_AUTH;
+    else process.env.NEXT_PUBLIC_PREVIEW_NO_AUTH = saved;
+    vi.unstubAllGlobals();
+  });
+
+  it("next.config.mjs does not default NEXT_PUBLIC_PREVIEW_NO_AUTH on", async () => {
+    delete process.env.NEXT_PUBLIC_PREVIEW_NO_AUTH;
+    const cfg = (await import("../next.config.mjs")).default as { env?: Record<string, string> };
+    expect(cfg.env?.NEXT_PUBLIC_PREVIEW_NO_AUTH).toBeUndefined();
+  });
+
+  it("a fixture-known GET still goes to the network when the flag is unset", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
+      new Response(JSON.stringify({ runs: [], total: 0, live: { running: 0, queued: 0 } }), {
+        status: 200, headers: { "Content-Type": "application/json" },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { listRuns } = await import("./api");
+    await listRuns({ limit: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/api/runs");
+  });
+});

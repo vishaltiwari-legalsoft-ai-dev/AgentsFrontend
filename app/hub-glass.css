@@ -252,6 +252,16 @@
 .rqd__x svg { width: 14px; height: 14px; }
 .rqd__x:hover { background: color-mix(in srgb, var(--fg) 6%, transparent); color: var(--fg); }
 .rqd__card > p { margin: -4px 0 2px; font-size: 12.5px; line-height: 1.55; color: var(--fg-2); }
+/* The one true sentence about where a request goes: nowhere yet. */
+.rqd__card > p.rqd__kept {
+  margin: 0 0 4px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--warn, #c98a1b);
+  border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, var(--warn, #c98a1b) 8%, transparent);
+  color: var(--fg-2);
+  font-size: 12px;
+}
 .rqd__card label {
   display: grid;
   gap: 6px;

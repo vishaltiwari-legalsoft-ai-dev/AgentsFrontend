@@ -23,6 +23,7 @@ import {
 } from "@/lib/api";
 import { useLoadSession } from "@/lib/load";
 import { Ic } from "./Sprite";
+import { OPEN_RUN_KEY } from "@/components/console/blogwriter/BlogWriter";
 import { AGENTS, WORKSPACE_SLUG, agentById, type HubAgent } from "./model";
 import type { ToastFn } from "./context";
 
@@ -143,10 +144,16 @@ export function BriefDialog({
         const run = await gdCreateRun(brand, { creative_brief: { brief } });
         onQueued();
         onClose();
-        onToast(`${agent?.name} has your brief. Its run is open on the bench.`, "ok");
+        // The studio cannot reopen a run by id yet — it always starts at its
+        // setup screen — so the toast says where the run actually is rather
+        // than claiming it is open.
+        onToast(`${agent?.name} has your brief. The run is recorded on Runs; the studio opens at setup.`, "ok");
         onOpenWork("art", run.id, "studio");
       } else {
         const run = await bwCreateRun({ brand_id: brand, topic: brief });
+        // The blog desk restores whichever run this key names when it mounts,
+        // so the run just created is the one the person lands on.
+        try { localStorage.setItem(OPEN_RUN_KEY, run.id); } catch { /* storage off — the desk starts fresh */ }
         onQueued();
         onClose();
         onToast(`${agent?.name} is researching. Its draft fills in as rounds land.`, "ok");

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { InboxStatus } from "@/lib/api";
 import {
-  disconnectNotice, facts, hasRead, headline, minutesToGo, readReturn, recheckHelps,
-  sheetCheckSentence, sheetCheckShort, stateOf, stripReturn, trimStop,
+  disconnectNotice, facts, hasRead, headline, minutesToGo, orderingNotice, readReturn,
+  recheckHelps, sheetCheckSentence, sheetCheckShort, stateOf, stripReturn, trimStop,
 } from "./inbox";
 
 /* Every sentence on the workspace follows from the status payload, so these
@@ -299,6 +299,99 @@ describe("sheetCheckSentence", () => {
     expect(sheetCheckShort("not_yours")).toBe("Not a sheet you own");
     expect(sheetCheckShort("mr_source")).toBe("A Marketing Research sheet");
     expect(sheetCheckShort(null)).toBe("Not checked yet");
+  });
+});
+
+/* ------------------------------------------------------- orderingNotice -- */
+
+describe("orderingNotice", () => {
+  /** The backend's sentence, as it writes it. */
+  const NOTE =
+    "The Inbox tab has not been put in newest-first order yet: a filter is hiding 343 rows (rows 2-344), and Google Sheets sorts around hidden rows. Show every row (Data > Remove filter, or clear the filter's conditions). New mail is still added at the top. The agent tries the sort again every hour.";
+
+  /** What a backend from before the rule answers, as it arrives off the wire:
+   *  no `ordering` and no `ordering_note` key anywhere in it. */
+  const OLD_BODY = JSON.stringify({
+    enabled: true,
+    service_account_email: SA,
+    gmail: { connected: true, address: EMAIL, connected_at: before(600) },
+    sheet: {
+      id: "1AbC", url: "https://docs.google.com/spreadsheets/d/1AbC", title: "Inbox",
+      check: "ok", checked_at: before(300),
+    },
+    backfill: { state: "done", done: 1240, total: 1240 },
+    last_poll: { at: before(3), ok: true, messages_read: 12, error: null },
+    next_poll_at: after(2),
+    rows_24h: 57,
+    needs_review: 3,
+    generated_at: NOW.toISOString(),
+  });
+
+  const blocked = (note?: unknown): InboxStatus => {
+    const s = JSON.parse(OLD_BODY) as InboxStatus;
+    const sheet = s.sheet as Record<string, unknown>;
+    sheet.ordering = "blocked";
+    if (note !== undefined) sheet.ordering_note = note;
+    return s;
+  };
+
+  it("says the backend's sentence, unchanged, when the tab is blocked", () => {
+    expect(orderingNotice(blocked(NOTE))).toBe(NOTE);
+    const other =
+      "The Inbox tab is in newest-first order, but Google Sheets did not let the agent record that (HTTP 429), so it will look again. New mail is still added at the top. The agent tries again every hour.";
+    expect(orderingNotice(blocked(other))).toBe(other);
+  });
+
+  it("is a notice beside a running pipe, not a state of its own", () => {
+    const s = blocked(NOTE);
+    expect(stateOf(s)).toBe("healthy");
+    expect(head(s)).toEqual(head(mk()));
+    expect(facts(s, NOW)).toEqual(facts(mk(), NOW));
+  });
+
+  it("says nothing to a backend that sends neither field", () => {
+    const old = JSON.parse(OLD_BODY) as InboxStatus;
+    expect("ordering" in old.sheet).toBe(false);
+    expect("ordering_note" in old.sheet).toBe(false);
+    expect(orderingNotice(old)).toBeNull();
+    expect(stateOf(old)).toBe("healthy");
+    expect(head(old)).toEqual(head(mk()));
+    expect(facts(old, NOW)).toEqual(facts(mk(), NOW));
+    // The fixture every other test here uses has neither key either.
+    expect(orderingNotice(mk())).toBeNull();
+  });
+
+  it("says nothing when the fields are null, or the tab is in order or not tried yet", () => {
+    const sheet = mk().sheet;
+    expect(orderingNotice(mk({ sheet: { ...sheet, ordering: null, ordering_note: null } }))).toBeNull();
+    expect(orderingNotice(mk({ sheet: { ...sheet, ordering: undefined, ordering_note: undefined } }))).toBeNull();
+    for (const ordering of ["applied", "already", "pending"] as const) {
+      expect(orderingNotice(mk({ sheet: { ...sheet, ordering, ordering_note: null } }))).toBeNull();
+      // A sentence left behind beside a settled answer is not shown.
+      expect(orderingNotice(mk({ sheet: { ...sheet, ordering, ordering_note: NOTE } }))).toBeNull();
+    }
+  });
+
+  it("says nothing for an answer it does not know", () => {
+    const s = blocked(NOTE);
+    (s.sheet as Record<string, unknown>).ordering = "reordering";
+    expect(orderingNotice(s)).toBeNull();
+  });
+
+  it("blocked without a sentence says nothing, and does not throw", () => {
+    for (const note of [undefined, null, "", "   ", 0, 42, {}, []]) {
+      expect(() => orderingNotice(blocked(note))).not.toThrow();
+      expect(orderingNotice(blocked(note))).toBeNull();
+    }
+  });
+
+  it("is not said while no mail is landing", () => {
+    // The server keeps the sheet, and its note, through a disconnect.
+    const off = { connected: false, address: null, connected_at: null };
+    expect(orderingNotice({ ...blocked(NOTE), gmail: off })).toBeNull();
+    const s = blocked(NOTE);
+    expect(orderingNotice({ ...s, sheet: { ...s.sheet, check: "not_shared" } })).toBeNull();
+    expect(orderingNotice({ ...s, sheet: { ...s.sheet, id: null } })).toBeNull();
   });
 });
 

@@ -30,8 +30,10 @@ const STATUS_LABEL: Record<string, string> = {
   capped: "Deep enough — go deeper if you want",
 };
 
-/** The open run survives dev-server reloads: remounting restores it from here. */
-const OPEN_RUN_KEY = "bw-open-run";
+/** The open run survives dev-server reloads: remounting restores it from here.
+ *  Exported so the hub's brief dialog can hand a run it just created to this
+ *  desk the same way — the desk reads the key on mount. */
+export const OPEN_RUN_KEY = "bw-open-run";
 
 function fmtDate(iso: string): string {
   const d = new Date(iso);

@@ -10,11 +10,10 @@ import {
   createDeadline, deadlineFor, RequestTimeoutError,
   type Deadline, type RequestOptions,
 } from "./requestPolicy";
-import { demoAnswer } from "./demo";
-
-/** The UI lab's demo mode (see lib/demo.ts): reads the preview flag the lab
- *  already builds with, so the live deployment — which never sets it — never
- *  touches the fixtures. */
+/** The UI lab's demo mode (see lib/demo.ts): on only when a build explicitly
+ *  sets NEXT_PUBLIC_PREVIEW_NO_AUTH=1 (next.config.mjs sets no default). The
+ *  fixture module is loaded lazily and only on that path, so a live build
+ *  never ships or evaluates it. */
 const DEMO_MODE = process.env.NEXT_PUBLIC_PREVIEW_NO_AUTH === "1";
 
 export { isAbortError, isTimeoutError, NO_TIMEOUT, RequestSequence, RequestTimeoutError } from "./requestPolicy";
@@ -91,7 +90,7 @@ async function send(
   let response: Response;
   // Demo mode answers known GETs locally before the network is asked —
   // writes and unknown paths fall through and fail as honestly as ever.
-  const demo = DEMO_MODE ? demoAnswer(path, init.method || "GET") : null;
+  const demo = DEMO_MODE ? (await import("./demo")).demoAnswer(path, init.method || "GET") : null;
   if (demo) {
     response = new Response(JSON.stringify(demo.body), {
       status: demo.status ?? 200,
@@ -3770,56 +3769,6 @@ export interface CronJobsPayload {
 export const getCronJobs = (req?: RequestOptions) =>
   getJson<CronJobsPayload>("/api/cron/jobs", req);
 
-/* ------------- Agent health (the Agents panel's run figures) ------------- */
-
-export interface AgentHealthModel {
-  id: string | null;
-  name: string | null;
-  /** Where the effective model came from: a per-agent override, the workspace
-   *  default, or the environment. Null when nothing could say. */
-  source: "agent" | "global" | "env" | null;
-}
-
-export interface AgentHealthError {
-  at: string;
-  message: string;
-}
-
-export interface AgentHealthUser {
-  id: string;
-  name: string;
-}
-
-/** One specialist's record over the payload's window. Workspace-shared: every
- *  signed-in reader sees the same figures. `success_rate` is never rendered —
- *  the panel's sentences are built from `runs` / `ok` / `errors` directly, so
- *  the words can never disagree with the figures they came from. */
-export interface AgentHealth {
-  id: string;
-  label: string;
-  model: AgentHealthModel;
-  runs: number;
-  ok: number;
-  errors: number;
-  success_rate: number | null;
-  last_run_at: string | null;
-  last_error: AgentHealthError | null;
-  /** The last three attempts in the window all failed. */
-  recent_failing: boolean;
-  users_count: number;
-  /** Names always non-empty; capped at 10 — `users_count` carries the rest. */
-  users: AgentHealthUser[];
-}
-
-export interface AgentsHealthPayload {
-  generated_at: string;
-  window_days: number;
-  agents: AgentHealth[];
-}
-
-export const getAgentsHealth = (req?: RequestOptions) =>
-  getJson<AgentsHealthPayload>("/api/agents/health", req);
-
 /* ------------- Inbox Triage (a12): Gmail to a sheet, read-only ----------- */
 
 /** What the last look at the named sheet found. `null` means it has not been
@@ -3831,6 +3780,12 @@ export const getAgentsHealth = (req?: RequestOptions) =>
  *    recruiting mail never lands in a team-wide sheet; nothing was written. */
 export type InboxSheetCheck =
   | "ok" | "not_shared" | "not_found" | "not_editable" | "not_yours" | "mr_source";
+
+/** What the agent did about putting the Inbox tab in newest-first order.
+ *  `applied` and `already` mean it is in order; `pending` that the sort has
+ *  not been tried yet; `blocked` that it was tried and something in the sheet
+ *  is in the way — mail is still written, and `ordering_note` says what. */
+export type InboxSheetOrdering = "applied" | "already" | "pending" | "blocked";
 
 /** One account's pipe, whole. Every write below answers with this same
  *  object, so a workspace never has to re-read after acting. */
@@ -3852,10 +3807,17 @@ export interface InboxStatus {
     title: string | null;
     check: InboxSheetCheck | null;
     checked_at: string | null;
+    /** Both optional: a backend from before the rule sends neither key, and
+     *  the frontend deploys ahead of the backend. Absent is read as null. */
+    ordering?: InboxSheetOrdering | null;
+    /** The backend's own sentence, present when `ordering` is `blocked`. */
+    ordering_note?: string | null;
   };
-  /** The first pass over the last 90 days. `total` is null until it is known. */
+  /** The first pass over the last 90 days. `total` is null until it is known;
+   *  `state` is null for an account that has never connected Gmail (the
+   *  backend has no backfill document to read a state from yet). */
   backfill: {
-    state: "not_started" | "running" | "done";
+    state: "not_started" | "running" | "done" | null;
     done: number;
     total: number | null;
   };

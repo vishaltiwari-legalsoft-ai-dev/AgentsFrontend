@@ -12,7 +12,7 @@
  */
 
 import type {
-  AdminSettings, AgentConfigResponse, AgentsHealthPayload, Analytics,
+  AdminSettings, AgentConfigResponse, Analytics,
   BwInventory, BwRun, BwRunSummary, BwVoice,
   CronJobsPayload, DbCollectionsResponse,
   GeoBrandConfig, GeoComparison, GeoGlobalConfig, GeoHistory,
@@ -373,18 +373,6 @@ const STATIC: Record<string, Fix> = {
       { id: "c2", name: "Tracker pull", agent_id: "a6", agent_label: "Marketing Research", endpoint: "POST /api/mr/ingest-sheet", purpose: "Pulls the team workbook so the boards stay current.", why_time: "Hourly during working hours.", schedule: { cron: "0 * * * *", timezone: "UTC" }, state: "ENABLED", last_attempt: { time: "2026-10-01T09:00:02Z", ok: true }, next_time: "2026-10-01T10:00:00Z", origin: "live_registered" },
       { id: "c3", name: "SEO weekly crawl", agent_id: "a2", agent_label: "SEO Analyst", endpoint: "POST /api/seo-geo/cron/run", purpose: "Re-crawls each brand and refreshes the fix list.", why_time: "Sunday night, so Monday opens with fresh lists.", schedule: { cron: "0 22 * * 0", timezone: "UTC" }, state: "ENABLED", last_attempt: { time: "2026-09-28T22:00:11Z", ok: true }, next_time: "2026-10-05T22:00:00Z", origin: "live_registered" },
       { id: "c4", name: "Inbox poll", agent_id: "a12", agent_label: "Inbox Triage", endpoint: "POST /api/inbox/cron/poll", purpose: "Reads new mail and writes the sheet rows.", why_time: "Every five minutes; the sheet should never be stale.", schedule: { cron: "*/5 * * * *", timezone: "UTC" }, state: "ENABLED", last_attempt: { time: "2026-10-01T09:25:00Z", ok: true }, next_time: "2026-10-01T09:30:00Z", origin: "live_registered" },
-    ],
-  }),
-
-  "/api/agents/health": (): AgentsHealthPayload => ({
-    generated_at: NOW, window_days: 7,
-    agents: [
-      { id: "a1", label: "Graphic Designer", model: { id: "gemini-2.5-flash-image", name: "Gemini Flash Image", source: "global" }, runs: 9, ok: 9, errors: 0, success_rate: 1, last_run_at: "2026-10-01T09:26:04Z", last_error: null, recent_failing: false, users_count: 3, users: [{ id: "u1", name: "Vishal" }, { id: "u2", name: "Priya" }, { id: "u3", name: "Rahul" }] },
-      { id: "a2", label: "SEO Analyst", model: { id: "claude-sonnet-5-5", name: "Claude Sonnet", source: "global" }, runs: 2, ok: 1, errors: 1, success_rate: 0.5, last_run_at: "2026-09-30T11:31:00Z", last_error: { at: "2026-09-30T11:31:00Z", message: "fetch timeout on /resources" }, recent_failing: false, users_count: 1, users: [{ id: "u1", name: "Vishal" }] },
-      { id: "a6", label: "Marketing Research", model: { id: "claude-sonnet-5-5", name: "Claude Sonnet", source: "global" }, runs: 7, ok: 7, errors: 0, success_rate: 1, last_run_at: "2026-10-01T09:05:00Z", last_error: null, recent_failing: false, users_count: 2, users: [{ id: "u1", name: "Vishal" }, { id: "u2", name: "Priya" }] },
-      { id: "a9", label: "Blog Writer", model: { id: "claude-opus-5-5", name: "Claude Opus", source: "agent" }, runs: 5, ok: 5, errors: 0, success_rate: 1, last_run_at: "2026-09-29T12:40:00Z", last_error: null, recent_failing: false, users_count: 2, users: [{ id: "u2", name: "Priya" }, { id: "u1", name: "Vishal" }] },
-      { id: "a10", label: "GEO", model: { id: "sonar", name: "Perplexity Sonar + engines", source: "env" }, runs: 5, ok: 5, errors: 0, success_rate: 1, last_run_at: "2026-09-30T16:52:00Z", last_error: null, recent_failing: false, users_count: 1, users: [{ id: "u1", name: "Vishal" }] },
-      { id: "a12", label: "Inbox Triage", model: { id: "claude-haiku-4-5", name: "Claude Haiku", source: "global" }, runs: 288, ok: 288, errors: 0, success_rate: 1, last_run_at: "2026-10-01T09:25:00Z", last_error: null, recent_failing: false, users_count: 1, users: [{ id: "u1", name: "Vishal" }] },
     ],
   }),
 

@@ -14,7 +14,7 @@ import { seoOverview, type SeoOverview } from "@/lib/api";
 import { loadPending, useLoadSession, type Load } from "@/lib/load";
 import { useHeadline, useHub, useWorkNav, type WorkSection } from "../context";
 import { initials } from "../model";
-import { Oops, Wait } from "../ui";
+import { Blank, Oops, Wait } from "../ui";
 import { SeoAgent } from "@/components/console/seo/SeoAgent";
 import { SeoDashboard } from "./seo/SeoDashboard";
 
@@ -66,6 +66,15 @@ export function SeoWorkspace({ subject, section }: { subject: string; section: s
 
   if (ov.phase === "failed" && !ov.data) {
     return <Oops what="The brands could not be read." error={ov.error || ""} onRetry={() => setBeat((b) => b + 1)} />;
+  }
+  // A reply that succeeded with no brands is an answer, not a wait: the
+  // skeleton would otherwise stand for ever on an account with nothing set up.
+  if (ov.phase === "ready" && !brands.length) {
+    return (
+      <Blank title="No SEO brands yet.">
+        Add the first one from the console and this dashboard draws itself.
+      </Blank>
+    );
   }
   if (!card) return <Wait what="Reading the brands" rows={3} />;
 

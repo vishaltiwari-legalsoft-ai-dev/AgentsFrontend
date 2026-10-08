@@ -27,8 +27,8 @@ import { Blank, Oops, PageHead, RuleHead, Wait } from "../ui";
 import { workspaceBySlug } from "../workspaces";
 import {
   GOOGLE_PERMISSIONS_URL, INBOX_POLL_MS, NO_RETURN, disconnectNotice, facts, hasRead, headline,
-  isConnected, isSheetOk, readReturn, recheckHelps, sheetCheckSentence, sheetCheckShort, stateOf,
-  stripReturn, trimStop,
+  isConnected, isSheetOk, orderingNotice, readReturn, recheckHelps, sheetCheckSentence,
+  sheetCheckShort, stateOf, stripReturn, trimStop,
   type ReturnFlags, type Statement,
 } from "./inbox";
 
@@ -279,6 +279,9 @@ export function InboxWorkspace() {
   // and a named sheet with no check yet still gets its sentence.
   const sheetSentence = refErr
     ?? (sheetNamed || data.sheet.check !== null ? sheetCheckSentence(data.sheet.check, serviceAccount) : null);
+  // The server's sentence about the Inbox tab's row order, or null — which is
+  // every payload from a backend that does not send the fields.
+  const orderNote = orderingNotice(data);
 
   const checking = status.phase === "loading";
   const at = clock(data.generated_at);
@@ -338,6 +341,7 @@ export function InboxWorkspace() {
                   columns are set up for you.
                 </span>
               )}
+              {orderNote && <span className="onote" role="status">{orderNote}</span>}
               {!sheetOk && (
                 <div className="sa">
                   <code>{serviceAccount}</code>

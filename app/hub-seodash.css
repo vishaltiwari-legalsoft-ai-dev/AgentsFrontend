@@ -460,3 +460,49 @@
   .sdb-tiles { grid-template-columns: 1fr; }
   .sdb-opp { grid-template-columns: minmax(0, 42%) minmax(0, 1fr) auto; gap: 8px; }
 }
+
+/* ---------- honest trend: the two measured periods ---------- */
+
+.sdb-pair { display: grid; gap: 12px; padding: 6px 0 2px; }
+.sdb-pair__row {
+  display: grid;
+  grid-template-columns: 128px 1fr 64px;
+  align-items: center;
+  gap: 12px;
+  font-size: 12.5px;
+  color: var(--fg-3);
+}
+.sdb-pair__row.is-now { color: var(--fg); }
+.sdb-pair__bar {
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--rule-soft);
+  overflow: hidden;
+}
+.sdb-pair__bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--viz-area);
+  transition: width 240ms ease;
+}
+.sdb-pair__row.is-now .sdb-pair__bar i { background: var(--viz); }
+.sdb-pair__val { font-variant-numeric: tabular-nums; text-align: right; }
+
+/* ---------- what the run could not measure ---------- */
+
+.sdb-notice {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-left: 2px solid var(--warn, #c98a1b);
+  border-radius: 0 8px 8px 0;
+  background: color-mix(in srgb, var(--warn, #c98a1b) 8%, transparent);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+.sdb-notice p { margin: 0; }
+.sdb-notice .sdb-link { margin-left: 8px; }

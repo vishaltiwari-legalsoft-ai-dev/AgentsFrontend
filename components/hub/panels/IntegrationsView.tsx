@@ -72,7 +72,9 @@ export function IntegrationsView() {
 
   const hooks: Hook[] = [];
 
-  (mr.data || []).forEach((c) => {
+  // "available" is the manual CSV/Excel upload path the backend lists beside
+  // the connectors; it is neither connected nor missing, so it is not a hook.
+  (mr.data || []).filter((c) => c.status !== "available").forEach((c) => {
     hooks.push({
       key: `mr-${c.key}`,
       glyph: (c.label || "?").slice(0, 2).toUpperCase(),

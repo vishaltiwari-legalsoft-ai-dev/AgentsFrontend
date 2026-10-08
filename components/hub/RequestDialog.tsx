@@ -15,26 +15,32 @@ import type { ToastFn } from "./context";
 
 export type AskKind = "feedback" | "issue" | "agent";
 
+/** The toast and the note under the form say the same true thing: nothing is
+ *  sent anywhere yet. A "filed — we're on it" that reached nobody would be a
+ *  canned success, which this console does not do. */
 const COPY: Record<AskKind, { title: string; lede: string; thanks: string; cta: string }> = {
   feedback: {
     title: "Submit feedback",
     lede: "What is working, what is rubbing wrong — plain words are perfect.",
-    thanks: "Feedback filed — thank you.",
-    cta: "Send feedback",
+    thanks: "Feedback kept on this device. Nobody is notified yet — tell the team directly for now.",
+    cta: "Keep feedback",
   },
   issue: {
     title: "Report a problem",
-    lede: "Say what went wrong and where it happened; we will chase it down.",
-    thanks: "Problem filed — we're on it.",
-    cta: "File the problem",
+    lede: "Say what went wrong and where it happened.",
+    thanks: "Problem kept on this device. Nobody is notified yet — tell the team directly for now.",
+    cta: "Keep the note",
   },
   agent: {
     title: "Request a new agent",
     lede: "Describe the specialist you wish was on staff. The clearer the job, the faster it gets sized up.",
-    thanks: "Request filed — we'll size it up and come back to you.",
-    cta: "Submit request",
+    thanks: "Request kept on this device. Nobody is notified yet — tell the team directly for now.",
+    cta: "Keep the request",
   },
 };
+
+const KEPT_LOCALLY =
+  "For now this is kept in this browser only — no endpoint receives it and nobody is notified.";
 
 function keep(kind: AskKind, body: Record<string, string>) {
   try {
@@ -96,6 +102,7 @@ export function RequestDialog({
           </button>
         </header>
         <p>{c.lede}</p>
+        <p className="rqd__kept" role="note">{KEPT_LOCALLY}</p>
 
         {kind === "agent" && (
           <>
