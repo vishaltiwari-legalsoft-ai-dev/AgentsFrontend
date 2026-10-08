@@ -635,52 +635,128 @@
 /* the studio's setup screen: the two quiet buttons under the brand picker */
 .gdx-kitrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 
-/* ---------- Home: usage by your team, and by people ----------------------
+/* ---------- Home: the usage board in the hero ---------------------------
  *
- * Two bands under the hero, fed by one read, and mounted below the greeting
- * so the hero and the guide never wait on them. The table is the prototype's
- * `.tbl`; the agent chips are the studio's `.chip`, held still inside a cell
- * (no pointer, no hover lift, smaller). Every colour is a token, so dark
- * follows from `[data-theme="dark"]` swapping them. The one red is
+ * One card under the greeting, beside the cosmos, fed by one read. A tab a
+ * view — "Your team" for a chart manager, a month for an admin — and inside,
+ * only figures the backend stands behind: tabular, every colour a token, so
+ * dark follows from `[data-theme="dark"]` swapping them. The card is the
+ * specialists module's card (`.hgm`) at the hero's scale. The one red is
  * `.tag.is-bad`, and it appears only on a row whose record could not be read.
+ * The agent chips are the studio's `.chip`, held still (no pointer, no hover
+ * lift, smaller).
  */
 
-.tu--wait { margin-bottom: var(--s5); }
-.tu--wait .wait { padding: 6px 2px; }
-
-.tu__scroll { overflow-x: auto; }
-.tu__tbl { min-width: 620px; }
-.tu__tbl td b { font-weight: 650; }
-.tu__tbl tfoot td { border-top: 1px solid var(--rule-hard); border-bottom: 0; font-weight: 650; color: var(--fg-2); }
-.tu__tbl tfoot .num { color: var(--fg); }
-.tu__tbl .tag { display: inline-block; padding-top: 2px; }
-
-/* the chips sit in a row of a table, not in the studio's step rail */
-.tu__chips { margin: 0; gap: 4px; }
-.tu__chips .chip { padding: 3px 9px 3px 4px; gap: 5px; font-size: 11px; cursor: default; }
-.tu__chips .chip:hover:not(:disabled) { border-color: var(--rule); color: var(--fg-2); }
-.tu__chips .chip__n { width: 17px; height: 17px; font-size: 10px; }
-
-.tu__foot { margin: var(--s3) 0 0; font-size: 11.5px; line-height: 1.55; color: var(--fg-3); }
-
-/* by humans: one disclosure a month, the people inside it */
-.tu__months { display: grid; border-top: 1px solid var(--rule-hard); }
-.tu__month { border-bottom: 1px solid var(--rule-soft); }
-.tu__month summary {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--s4);
-  padding: 11px 2px; cursor: pointer; list-style: none;
-  font-size: 13px; color: var(--fg);
+.hboard {
+  margin-top: 22px;
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(13, 15, 18, 0.04), 0 24px 56px -44px rgba(13, 15, 18, 0.4);
+  overflow: hidden;
+  animation: hboard-in var(--t-slow) var(--ease) both;
 }
-.tu__month summary::-webkit-details-marker { display: none; }
-.tu__month summary b { flex: 1 1 auto; font-weight: 650; }
-.tu__month summary .num { font-variant-numeric: tabular-nums; color: var(--fg-2); white-space: nowrap; }
-.tu__month summary svg {
-  flex: 0 0 auto; width: 13px; height: 13px;
-  fill: none; stroke: var(--fg-3); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
-  transition: transform var(--t-fast) var(--ease);
+@keyframes hboard-in { from { opacity: 0; } to { opacity: 1; } }
+.hero .hboard + .lede { margin-top: 18px; }
+
+/* the strip: a real tablist, the open tab underlined in the mark */
+.hboard__tabs {
+  display: flex; gap: 2px;
+  padding: 6px 10px 0;
+  border-bottom: 1px solid var(--rule-soft);
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  overflow-x: auto;
 }
-.tu__month summary:hover b { color: var(--fg-2); }
-.tu__month[open] summary svg { transform: rotate(90deg); stroke: var(--fg); }
-.tu__month > .tu__scroll { padding: 0 2px var(--s4); }
-.tu__month .tu__tbl { min-width: 0; }
-.tu__none { margin: 0; padding: 0 2px var(--s4); font-size: 12.5px; color: var(--fg-3); }
+.hboard__tab {
+  flex: 0 0 auto;
+  padding: 9px 11px 8px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  border-radius: var(--r-mark) var(--r-mark) 0 0;
+  font-size: 12.5px; font-weight: 600;
+  color: var(--fg-3); white-space: nowrap;
+  transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.hboard__tab:hover { color: var(--fg-2); }
+.hboard__tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--mark); }
+.hboard__tab:focus-visible { outline-offset: -2px; }
+
+.hboard__body { padding: 14px 16px 12px; min-height: 212px; }
+.hboard__body--oops { display: grid; align-content: center; }
+.hboard__body--oops .oops { max-width: none; }
+
+.hboard__none { margin: 0; padding: 14px 2px; max-width: 48ch; font-size: 12.5px; line-height: 1.55; color: var(--fg-2); }
+.hboard__foot { margin: 10px 0 0; font-size: 11px; line-height: 1.5; color: var(--fg-3); }
+
+/* a month: two figures, then everyone who ran something, busiest first */
+.hboard__figs { display: flex; align-items: flex-end; gap: 28px; margin-bottom: 12px; }
+.hboard__fig { margin: 0; display: grid; gap: 3px; }
+.hboard__fig b {
+  font-size: 30px; font-weight: 600; line-height: 1; letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums; color: var(--fg);
+}
+.hboard__fig span { font-size: 10px; font-weight: 650; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); }
+.hboard__as { margin-left: auto; align-self: flex-start; font-size: 11px; color: var(--fg-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.hboard__people {
+  list-style: none; margin: 0; padding: 0;
+  max-height: 176px; overflow-y: auto;
+  border-top: 1px solid var(--rule-hard);
+}
+.hboard__people li {
+  display: flex; align-items: center; gap: 6px 12px;
+  padding: 6px 2px; border-bottom: 1px solid var(--rule-soft);
+  font-size: 12.5px;
+}
+.hboard__people .num { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; color: var(--fg); }
+.hboard__who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1px 8px; min-width: 0; flex: 0 1 auto; }
+.hboard__who b { font-weight: 650; color: var(--fg); }
+.hboard__who em { font-style: normal; font-size: 11.5px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+
+/* the team: a compact table that scrolls inside the card, its header and
+   its totals held in place */
+.hboard__scroll { max-height: 236px; overflow: auto; }
+.hboard__tbl { width: 100%; min-width: 520px; border-collapse: separate; border-spacing: 0; }
+.hboard__tbl th {
+  position: sticky; top: 0; z-index: 1;
+  padding: 0 10px 6px 0; text-align: left;
+  background: var(--surface); border-bottom: 1px solid var(--rule-hard);
+  font-size: 10px; font-stretch: 76%; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--fg-2); white-space: nowrap;
+}
+.hboard__tbl td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--rule-soft); font-size: 12.5px; vertical-align: middle; }
+.hboard__tbl td b { font-weight: 650; color: var(--fg); }
+.hboard__tbl .sub { display: block; margin-top: 1px; font-size: 11px; color: var(--fg-3); }
+.hboard__tbl .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hboard__tbl .dim { color: var(--fg-3); white-space: nowrap; }
+.hboard__tbl tfoot .dim { white-space: normal; font-weight: 500; }
+.hboard__tbl .tag { display: inline-block; padding-top: 2px; }
+.hboard__tbl tfoot td {
+  position: sticky; bottom: 0;
+  background: var(--surface); border-top: 1px solid var(--rule-hard); border-bottom: 0;
+  font-weight: 650; color: var(--fg-2);
+}
+.hboard__tbl tfoot .num { color: var(--fg); }
+
+.hboard__chips { margin: 0; gap: 4px; }
+.hboard__chips .chip { padding: 2px 8px 2px 3px; gap: 5px; font-size: 11px; cursor: default; }
+.hboard__chips .chip:hover:not(:disabled) { border-color: var(--rule); color: var(--fg-2); }
+.hboard__chips .chip__n { width: 16px; height: 16px; font-size: 10px; }
+
+/* the same card while the read is in flight, so nothing moves when it lands */
+.hboard.is-wait .hboard__tabs { gap: 8px; padding: 10px 12px; }
+.hboard.is-wait i {
+  display: block; border-radius: var(--r-cell);
+  background: linear-gradient(90deg, var(--surface-2) 0%, var(--rule-soft) 50%, var(--surface-2) 100%);
+  background-size: 220% 100%;
+  animation: hub-sheen 1.4s var(--ease) infinite;
+}
+.hboard.is-wait .hboard__tabs i { width: 64px; height: 15px; }
+.hboard.is-wait .hboard__body { display: grid; gap: 10px; align-content: start; }
+.hboard.is-wait .hboard__body i { height: 30px; }
+.hboard.is-wait .hboard__body i:first-child { width: 40%; height: 46px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hboard { animation: none; }
+}

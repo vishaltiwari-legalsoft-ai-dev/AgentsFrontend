@@ -384,6 +384,9 @@ export interface HumansUser {
   email: string;
   name: string;
   runs: number;
+  /** Runs this month by hub agent id, when the backend sends it (additive,
+   *  2026-10-08). Absent or empty means no chips, never "no runs". */
+  by_agent?: Record<string, number>;
 }
 
 export interface HumansMonth {

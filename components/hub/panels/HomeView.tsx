@@ -10,17 +10,17 @@
  *  running on Runs — and the two links at the foot go there.
  *
  *  The guide is not fetched. It is authored (`../guide`), so the front page
- *  opens instantly and can never greet somebody with an error card. The two
- *  usage blocks between the hero and the specialists are fetched — what your
- *  reportees asked of the agents, and for an admin what humans ran per month —
- *  and they own their own loading: the hero and the guide never wait on them,
- *  and a failure there is one card below the greeting, never the greeting.
+ *  opens instantly and can never greet somebody with an error card. The one
+ *  fetched thing is the board in the hero — what your reportees asked of the
+ *  agents, and for an admin what humans ran per month — and it owns its own
+ *  loading: the greeting and the guide never wait on it, and a failure there
+ *  is one card beside the cosmos, never the greeting.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
 import {
   apiStatus, teamUsage,
-  type HumansMonth, type HumansUsage, type TeamReportee, type TeamUsage, type TeamUsageTeam,
+  type HumansMonth, type HumansUser, type TeamReportee, type TeamUsage, type TeamUsageTeam,
 } from "@/lib/api";
 import { loadPending, useLoadSession, type Load } from "@/lib/load";
 import { useHeadline, useHub } from "../context";
@@ -30,11 +30,11 @@ import { JOBS } from "../jobs";
 import { WORKSPACE_SLUG, agentsFor, greeting, n, word, type HubAgent } from "../model";
 import { ago, clock } from "../format";
 import {
-  ROW_NOTE, agentChips, hasExtras, monthLabel, monthsNewestFirst, rowState,
-  summaryNote, teamSummary, usersByRuns, windowNote,
+  ROW_NOTE, agentChips, boardTabs, hasExtras, monthLabel, pickTab, rowState,
+  summaryNote, teamSummary, usersByRuns, windowNote, type AgentChip, type BoardTab,
 } from "../teamUsage";
 import { Ic } from "../Sprite";
-import { Blank, Oops, RuleHead, Wait } from "../ui";
+import { Oops, RuleHead } from "../ui";
 
 export function HomeView() {
   const { user, revision, openWork, openBrief, go, toast } = useHub();
@@ -61,9 +61,9 @@ export function HomeView() {
 
   return (
     <>
-      {/* The hero: the greeting choreographed line by line on the left, and
-          on the right the cosmos — AI at the centre, the staff in orbit
-          around it (see Cosmos). */}
+      {/* The hero: the greeting choreographed line by line on the left, the
+          usage board under it, and on the right the cosmos — AI at the
+          centre, the staff in orbit around it (see Cosmos). */}
       <div className="hero">
         <div className="hero__copy">
           <p className="statement">
@@ -72,6 +72,11 @@ export function HomeView() {
               <span>You have <b>{word(mine.length)} specialist{mine.length === 1 ? "" : "s"}</b> on staff.</span>
             </span>
           </p>
+
+          {/* A GEO-only account is refused this read with a 403, like every
+              other route outside its allowance, so it is never asked. */}
+          {!user.is_geo_only && <UsageBoard revision={revision} expected={!!user.is_admin} />}
+
           <p className="lede">
             <span className="hgw">
               <span><b>1</b> Brief one</span>
@@ -87,10 +92,6 @@ export function HomeView() {
           <Cosmos agents={mine} onPick={pickFromCosmos} />
         </div>
       </div>
-
-      {/* A GEO-only account is refused this read with a 403, like every other
-          route outside its allowance, so it is never asked. */}
-      {!user.is_geo_only && <UsageBlocks revision={revision} />}
 
       {mine.length > 0 && (
         <section className="band" id="specialists">
@@ -127,16 +128,16 @@ export function HomeView() {
   );
 }
 
-/* ------------------------------------------------------ the usage blocks -- */
+/* ------------------------------------------------------- the usage board -- */
 
-/** One read for both bands, bound to `lib/load` the way `useRuns` is. Re-read
+/** One read for the board, bound to `lib/load` the way `useRuns` is. Re-read
  *  when the console's revision moves and when the window regains focus — a
  *  manager glancing back at the tab after a reportee's run should see it —
  *  and nothing more aggressive than that.
  *
  *  A 404 is the backend not serving this endpoint yet (the frontend deploys
  *  minutes ahead of Cloud Run), and the right rendering of that is nothing:
- *  `data` becomes `null` while the phase is `ready`, which the blocks read as
+ *  `data` becomes `null` while the phase is `ready`, which the board reads as
  *  "no sections". Every other failure is shown, with a retry. */
 function useTeamUsage(revision: number) {
   const session = useLoadSession();
@@ -166,53 +167,147 @@ function useTeamUsage(revision: number) {
   return { state, reload };
 }
 
-function UsageBlocks({ revision }: { revision: number }) {
+/** The tab a viewer last chose, remembered in this browser only. Storage can
+ *  be absent or refuse (a private window, cleared site data); either way the
+ *  board simply opens on its first tab. */
+const TAB_KEY = "home.board.tab";
+
+function rememberedTab(): string | null {
+  if (typeof window === "undefined") return null;
+  try { return window.localStorage.getItem(TAB_KEY); } catch { return null; }
+}
+
+function rememberTab(id: string): void {
+  try { window.localStorage.setItem(TAB_KEY, id); } catch { /* a convenience, not state */ }
+}
+
+/** `expected` — an admin is sure to get a board, so a skeleton of its size
+ *  holds the place and nothing under it moves when the figures land. A member
+ *  may or may not be a manager on the chart, and their Home must not flash a
+ *  card that then vanishes, so for them the board waits in silence and
+ *  appears only once the read says there is one. */
+function UsageBoard({ revision, expected }: { revision: number; expected: boolean }) {
   const { state, reload } = useTeamUsage(revision);
   const data = state.data;
 
   if (state.phase === "failed" && !data) {
     return (
-      <section className="band tu">
-        <Oops what="Usage could not be read." error={state.error || ""} onRetry={reload} />
+      <section className="hboard" aria-label="Usage by your team">
+        <div className="hboard__body hboard__body--oops">
+          <Oops what="Usage could not be read." error={state.error || ""} onRetry={reload} />
+        </div>
       </section>
     );
   }
-  if (state.phase === "loading" && !data) {
-    return <div className="tu tu--wait"><Wait what="Reading usage" /></div>;
-  }
+  if (state.phase === "loading" && !data) return expected ? <BoardWait /> : null;
   // Ready with nothing: the backend does not serve this yet, or the reader is
-  // a plain member. Home is exactly what it was.
+  // a plain member. The hero is exactly what it was.
   if (!data || !hasExtras(data)) return null;
 
+  return <Board data={data} />;
+}
+
+function BoardWait() {
   return (
-    <>
-      {data.team && <TeamBand team={data.team} />}
-      {data.humans && <HumansBand humans={data.humans} generatedAt={data.generated_at} />}
-    </>
+    <div className="hboard is-wait" role="status" aria-live="polite" aria-label="Reading usage…">
+      <div className="hboard__tabs" aria-hidden="true"><i /><i /><i /></div>
+      <div className="hboard__body" aria-hidden="true"><i /><i /><i /><i /></div>
+    </div>
+  );
+}
+
+const tabDom = (id: string) => `hboard-tab-${id.replace(/\W/g, "-")}`;
+
+/** One card, a tab a view. The strip is a real tablist: the selected tab is
+ *  the one in the tab order, arrows move along it, Home and End jump. */
+function Board({ data }: { data: TeamUsage }) {
+  const tabs = boardTabs(data);
+  const [chosen, setChosen] = useState<string | null>(rememberedTab);
+  const tab = pickTab(tabs, chosen);
+
+  const choose = (t: BoardTab) => {
+    setChosen(t.id);
+    rememberTab(t.id);
+  };
+
+  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!tab) return;
+    const i = tabs.findIndex((t) => t.id === tab.id);
+    let next = i;
+    if (e.key === "ArrowRight") next = (i + 1) % tabs.length;
+    else if (e.key === "ArrowLeft") next = (i - 1 + tabs.length) % tabs.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = tabs.length - 1;
+    if (next === i) return;
+    e.preventDefault();
+    choose(tabs[next]);
+    e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+  };
+
+  return (
+    <section className="hboard" aria-label="Usage by your team">
+      {tabs.length > 0 && (
+        <div className="hboard__tabs" role="tablist" aria-label="Usage views" onKeyDown={onKey}>
+          {tabs.map((t) => {
+            const on = tab?.id === t.id;
+            return (
+              <button
+                type="button"
+                role="tab"
+                key={t.id}
+                id={tabDom(t.id)}
+                className="hboard__tab"
+                aria-selected={on}
+                aria-controls="hboard-panel"
+                tabIndex={on ? 0 : -1}
+                onClick={() => choose(t)}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <div
+        className="hboard__body"
+        role="tabpanel"
+        id="hboard-panel"
+        aria-labelledby={tab ? tabDom(tab.id) : undefined}
+        key={tab?.id ?? "none"}
+      >
+        {tab === null ? (
+          <>
+            <p className="hboard__none">
+              Nothing has been recorded yet. Runs that people start appear here by month, with who started them.
+            </p>
+            {data.humans && <p className="hboard__foot">{data.humans.excluded}</p>}
+          </>
+        ) : tab.id === "team" ? (
+          <TeamPanel team={tab.team} />
+        ) : (
+          <MonthPanel month={tab.month} excluded={tab.excluded} generatedAt={data.generated_at} />
+        )}
+      </div>
+    </section>
   );
 }
 
 /* --- your team --- */
 
-function TeamBand({ team }: { team: TeamUsageTeam }) {
+function TeamPanel({ team }: { team: TeamUsageTeam }) {
   const rows = team.reportees;
   const summary = teamSummary(team);
-  const who = `${n(rows.length)} reportee${rows.length === 1 ? "" : "s"}`;
 
   return (
-    <section className="band tu">
-      <RuleHead
-        title="Your team"
-        note="What your reportees asked of the specialists — today, the last seven days, this month."
-        aside={<span className="aside">{who}</span>}
-      />
+    <>
       {rows.length === 0 ? (
-        <Blank title="Nobody reports to you on the chart yet.">
-          When the chart lists someone under you, what they ask of the specialists appears here.
-        </Blank>
+        <p className="hboard__none">
+          Nobody reports to you on the chart yet. When the chart lists someone under you, what they ask of
+          the specialists appears here.
+        </p>
       ) : (
-        <div className="tu__scroll">
-          <table className="tbl tu__tbl">
+        <div className="hboard__scroll">
+          <table className="hboard__tbl">
             <caption className="vh">Agent usage by your reportees</caption>
             <thead>
               <tr>
@@ -220,7 +315,7 @@ function TeamBand({ team }: { team: TeamUsageTeam }) {
                 <th scope="col" className="num">Today</th>
                 <th scope="col" className="num">Week</th>
                 <th scope="col" className="num">Month</th>
-                <th scope="col">Agents</th>
+                <th scope="col">Specialists</th>
                 <th scope="col">Last run</th>
               </tr>
             </thead>
@@ -239,8 +334,8 @@ function TeamBand({ team }: { team: TeamUsageTeam }) {
           </table>
         </div>
       )}
-      <p className="tu__foot">{windowNote(team)}</p>
-    </section>
+      <p className="hboard__foot">{windowNote(team)}</p>
+    </>
   );
 }
 
@@ -248,10 +343,9 @@ function TeamBand({ team }: { team: TeamUsageTeam }) {
  *  zero, which would be a claim that this person did nothing. */
 function ReporteeRow({ r }: { r: TeamReportee }) {
   const state = rowState(r);
-  const chips = state === "counted" ? agentChips(r.by_agent) : [];
 
   return (
-    <tr className={`tu__r is-${state}`}>
+    <tr className={`hboard__r is-${state}`}>
       <td>
         <b>{r.name}</b>
         {r.title && <span className="sub">{r.title}</span>}
@@ -261,19 +355,7 @@ function ReporteeRow({ r }: { r: TeamReportee }) {
           <td className="num">{n(r.today)}</td>
           <td className="num">{n(r.week)}</td>
           <td className="num">{n(r.month)}</td>
-          <td>
-            {chips.length > 0 ? (
-              <ul className="chips tu__chips" aria-label={`Specialists ${r.name} used this month`}>
-                {chips.map((c) => (
-                  <li key={c.id} className="chip" title={`${c.name}: ${n(c.count)} this month`}>
-                    <span className="chip__n">{n(c.count)}</span>{c.name}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <span className="dim">—</span>
-            )}
-          </td>
+          <td><Chips chips={agentChips(r.by_agent)} who={r.name} /></td>
           <td className="dim">
             {r.last_run_at ? <span title={r.last_run_at}>{ago(r.last_run_at)}</span> : "—"}
           </td>
@@ -291,71 +373,67 @@ function ReporteeRow({ r }: { r: TeamReportee }) {
   );
 }
 
-/* --- by humans --- */
-
-function HumansBand({ humans, generatedAt }: { humans: HumansUsage; generatedAt: string }) {
-  const months = monthsNewestFirst(humans.months);
-  const at = clock(generatedAt);
-
+/** The specialists one person used this month, busiest first; a dash when
+ *  there is nothing to list. */
+function Chips({ chips, who }: { chips: AgentChip[]; who: string }) {
+  if (chips.length === 0) return <span className="dim">—</span>;
   return (
-    <section className="band tu">
-      <RuleHead
-        title="Agent usage by humans"
-        note={humans.excluded}
-        aside={at ? <span className="aside">as of {at}</span> : undefined}
-      />
-      {months.length === 0 ? (
-        <Blank title="Nothing has been recorded yet.">
-          Runs that people start appear here by month, with who started them.
-        </Blank>
-      ) : (
-        <div className="tu__months">
-          {months.map((m) => <MonthFold key={m.year_month} month={m} />)}
-        </div>
-      )}
-    </section>
+    <ul className="chips hboard__chips" aria-label={`Specialists ${who} used this month`}>
+      {chips.map((c) => (
+        <li key={c.id} className="chip" title={`${c.name}: ${n(c.count)} this month`}>
+          <span className="chip__n">{n(c.count)}</span>{c.name}
+        </li>
+      ))}
+    </ul>
   );
 }
 
-/** A native disclosure: the month line is the control, the people are inside. */
-function MonthFold({ month }: { month: HumansMonth }) {
+/* --- by humans, one month --- */
+
+function MonthPanel({ month, excluded, generatedAt }: { month: HumansMonth; excluded: string; generatedAt: string }) {
   const users = usersByRuns(month.by_user);
   const label = monthLabel(month.year_month);
+  const at = clock(generatedAt);
 
   return (
-    <details className="tu__month">
-      <summary>
-        <b>{label}</b>
-        <span className="num">{n(month.runs)} run{month.runs === 1 ? "" : "s"}</span>
-        <span className="num">{n(month.users)} {month.users === 1 ? "person" : "people"}</span>
-        <Ic name="chevron" />
-      </summary>
+    <>
+      <div className="hboard__figs">
+        <p className="hboard__fig">
+          <b>{n(month.runs)}</b>
+          <span>run{month.runs === 1 ? "" : "s"}</span>
+        </p>
+        <p className="hboard__fig">
+          <b>{n(month.users)}</b>
+          <span>{month.users === 1 ? "person" : "people"}</span>
+        </p>
+        {at && <span className="hboard__as">as of {at}</span>}
+      </div>
       {users.length === 0 ? (
-        <p className="tu__none">Nobody is on record for this month.</p>
+        <p className="hboard__none">Nobody is on record for {label}.</p>
       ) : (
-        <div className="tu__scroll">
-          <table className="tbl tu__tbl">
-            <caption className="vh">Who ran the specialists in {label}</caption>
-            <thead>
-              <tr>
-                <th scope="col">Person</th>
-                <th scope="col">Email</th>
-                <th scope="col" className="num">Runs</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.user_id}>
-                  <td><b>{u.name || u.email}</b></td>
-                  <td className="dim">{u.email}</td>
-                  <td className="num">{n(u.runs)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ol className="hboard__people" aria-label={`Who ran the specialists in ${label}`}>
+          {users.map((u) => <Person key={u.user_id} u={u} />)}
+        </ol>
       )}
-    </details>
+      <p className="hboard__foot">{excluded}</p>
+    </>
+  );
+}
+
+/** Name, email dim, the specialists they used when the backend says which
+ *  (absent or empty: no chips, which is not "no runs"), runs on the right.
+ *  A person with no name is their email, said once. */
+function Person({ u }: { u: HumansUser }) {
+  const chips = agentChips(u.by_agent ?? {});
+  return (
+    <li>
+      <span className="hboard__who">
+        <b>{u.name || u.email}</b>
+        {u.name && <em>{u.email}</em>}
+      </span>
+      {chips.length > 0 && <Chips chips={chips} who={u.name || u.email} />}
+      <span className="num">{n(u.runs)}</span>
+    </li>
   );
 }
 

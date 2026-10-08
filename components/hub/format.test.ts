@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { until } from "./format";
 import type { HumansMonth, TeamReportee } from "@/lib/api";
 import {
-  agentChips, dayName, hasExtras, monthLabel, monthsNewestFirst, rowState,
+  agentChips, boardTabs, dayName, hasExtras, monthLabel, monthShort, monthsNewestFirst, pickTab, rowState,
   summaryNote, teamSummary, usersByRuns, windowNote,
 } from "./teamUsage";
 import {
@@ -344,6 +344,45 @@ describe("hasExtras", () => {
     expect(hasExtras({ team, humans: null })).toBe(true);
     expect(hasExtras({ team: null, humans })).toBe(true);
     expect(hasExtras({ team, humans })).toBe(true);
+  });
+});
+
+/* The board in the hero: one tab a view. "Your team" leads for a manager, an
+ * admin's months follow newest first, and the remembered tab is honoured only
+ * while the strip still has it. */
+describe("the board's tabs", () => {
+  const team = { manager: { name: "V", title: "Head" }, today: "2026-10-08", week_from: "2026-10-02", month: "2026-10", reportees: [], totals: { today: 0, week: 0, month: 0 } };
+  const month = (year_month: string): HumansMonth => ({ year_month, runs: 0, users: 0, by_user: [] });
+  const humans = { months: [month("2026-08"), month("2026-10"), month("2026-09")], excluded: "Scheduled runs are not counted." };
+
+  it("labels a month the short way", () => {
+    expect(monthShort("2026-10")).toBe("Oct 2026");
+    expect(monthShort("2026-13")).toBe("2026-13");
+  });
+
+  it("puts Your team first, then the months newest first, each carrying its own data", () => {
+    const tabs = boardTabs({ team, humans });
+    expect(tabs.map((t) => [t.id, t.label])).toEqual([
+      ["team", "Your team"], ["m:2026-10", "Oct 2026"], ["m:2026-09", "Sep 2026"], ["m:2026-08", "Aug 2026"],
+    ]);
+    const last = tabs[3];
+    expect(last.id === "team" ? null : last.month.year_month).toBe("2026-08");
+    expect(last.id === "team" ? null : last.excluded).toBe(humans.excluded);
+  });
+
+  it("gives a manager alone one tab and a member none", () => {
+    expect(boardTabs({ team, humans: null }).map((t) => t.id)).toEqual(["team"]);
+    expect(boardTabs({ team: null, humans: null })).toEqual([]);
+    expect(boardTabs({ team: null, humans: { months: [], excluded: "" } })).toEqual([]);
+  });
+
+  it("opens the remembered tab while it exists, otherwise the first", () => {
+    const tabs = boardTabs({ team, humans });
+    expect(pickTab(tabs, "m:2026-09")?.id).toBe("m:2026-09");
+    expect(pickTab(tabs, "m:2026-07")?.id).toBe("team");
+    expect(pickTab(tabs, null)?.id).toBe("team");
+    expect(pickTab(boardTabs({ team: null, humans }), "team")?.id).toBe("m:2026-10");
+    expect(pickTab([], "team")).toBeNull();
   });
 });
 

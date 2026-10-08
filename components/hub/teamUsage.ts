@@ -1,10 +1,11 @@
-/** Home's two usage blocks: the decisions behind the rows, with no React in them.
+/** Home's usage board: the decisions behind the rows, with no React in them.
  *
  *  The payload says several things that are not a number — a person who has
  *  not signed in, a chart row two accounts could be, a record that could not
  *  be read — and each has to stay distinct from a count of zero all the way to
- *  the cell. Those rules, the window sentence and the chip order live here so
- *  `format.test.ts` can pin them without rendering anything.
+ *  the cell. Those rules, the window sentence, the chip order and the board's
+ *  tab strip live here so `format.test.ts` can pin them without rendering
+ *  anything.
  */
 
 import type { HumansMonth, HumansUser, TeamReportee, TeamUsage, TeamUsageTeam } from "@/lib/api";
@@ -84,6 +85,13 @@ export function monthLabel(ym: string): string {
   return `${MONTH_NAMES[c.m - 1]} ${c.y}`;
 }
 
+/** `Oct 2026` — a tab's width, not a heading's. */
+export function monthShort(ym: string): string {
+  const c = calendar(ym);
+  if (!c) return ym;
+  return `${MONTH_NAMES[c.m - 1].slice(0, 3)} ${c.y}`;
+}
+
 /** The sentence under the table that says which days the three columns cover,
  *  taken from the backend's own window rather than the reader's clock. */
 export function windowNote(w: Pick<TeamUsageTeam, "today" | "week_from" | "month">): string {
@@ -146,3 +154,31 @@ export function usersByRuns(users: readonly HumansUser[]): HumansUser[] {
 /** A plain member gets both sections null, and Home shows nothing extra. */
 export const hasExtras = (p: Pick<TeamUsage, "team" | "humans">): boolean =>
   p.team !== null || p.humans !== null;
+
+/* ------------------------------------------------------------- the tabs -- */
+
+/** One tab a view. "Your team" leads when the viewer is a manager; an admin's
+ *  months follow, newest first. Each tab carries what its panel renders, so
+ *  the board never reaches back into a section that might be null. */
+export type BoardTab =
+  | { id: "team"; label: string; team: TeamUsageTeam }
+  | { id: `m:${string}`; label: string; month: HumansMonth; excluded: string };
+
+export function boardTabs(p: Pick<TeamUsage, "team" | "humans">): BoardTab[] {
+  const tabs: BoardTab[] = [];
+  if (p.team) tabs.push({ id: "team", label: "Your team", team: p.team });
+  if (p.humans) {
+    for (const month of monthsNewestFirst(p.humans.months)) {
+      tabs.push({ id: `m:${month.year_month}`, label: monthShort(month.year_month), month, excluded: p.humans.excluded });
+    }
+  }
+  return tabs;
+}
+
+/** The tab to open: the remembered one if the strip still has it, otherwise
+ *  the first. A month that has since dropped off the window, or a "Your team"
+ *  remembered by someone no longer a manager, must not leave the board blank. */
+export function pickTab(tabs: readonly BoardTab[], remembered: string | null | undefined): BoardTab | null {
+  if (tabs.length === 0) return null;
+  return tabs.find((t) => t.id === remembered) ?? tabs[0];
+}
