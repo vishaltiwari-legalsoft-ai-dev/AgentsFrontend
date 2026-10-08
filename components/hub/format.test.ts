@@ -9,7 +9,7 @@ import {
   GEO_AGENT_ID, LIVE_AGENTS, PANELS,
   agentsFor, canOpen, canOpenAgent, canOpenWorkspace, panelsFor, routeFromHash,
   type PanelId, type Viewer,
-} from "./model";
+ } from "./model";
 
 /* `until` mirrors `ago`, and like it takes an explicit `now` so a test never
  * depends on the machine's clock. */
@@ -72,7 +72,9 @@ const panel = (id: PanelId) => PANELS.find((p) => p.id === id)!;
 
 describe("the rail a GEO-only account is offered", () => {
   it("is exactly the panels whose every read the backend still answers", () => {
-    expect(panelIds(SCOPED)).toEqual(["home", "issues", "agents", "runs", "settings"]);
+    // Issues and Runs left this rail on 2026-10-08: both are the admin's now,
+    // and /api/issues refuses a non-admin outright.
+    expect(panelIds(SCOPED)).toEqual(["home", "agents", "settings"]);
   });
 
   it("keeps Agents, because it is the only way into the GEO workspace", () => {
@@ -105,10 +107,8 @@ describe("the rail a GEO-only account is offered", () => {
 });
 
 describe("what the scope wall leaves untouched", () => {
-  it("shows a member the same eight entries as before", () => {
-    expect(panelIds(MEMBER)).toEqual([
-      "home", "issues", "agents", "runs", "library", "integrations", "settings",
-    ]);
+  it("shows a member Home, the specialists and Settings — the 2026-10-08 decision", () => {
+    expect(panelIds(MEMBER)).toEqual(["home", "agents", "settings"]);
   });
 
   it("shows an admin and a creator what they saw before", () => {
@@ -182,9 +182,10 @@ describe("routeFromHash under the scope wall", () => {
     expect(routeFromHash("#/integrations", SCOPED)).toEqual({ panel: "home", work: null });
   });
 
-  it("still opens Runs and Issues, which the backend answers", () => {
-    expect(routeFromHash("#/runs", SCOPED)).toEqual({ panel: "runs", work: null });
-    expect(routeFromHash("#/issues", SCOPED)).toEqual({ panel: "issues", work: null });
+  it("no longer opens Runs and Issues by link — they are the admin's since 2026-10-08", () => {
+    expect(routeFromHash("#/runs", SCOPED)).toEqual({ panel: "home", work: null });
+    expect(routeFromHash("#/issues", SCOPED)).toEqual({ panel: "home", work: null });
+    expect(routeFromHash("#/runs", MEMBER)).toEqual({ panel: "home", work: null });
   });
 });
 
@@ -343,5 +344,43 @@ describe("hasExtras", () => {
     expect(hasExtras({ team, humans: null })).toBe(true);
     expect(hasExtras({ team: null, humans })).toBe(true);
     expect(hasExtras({ team, humans })).toBe(true);
+  });
+});
+
+/* ------------------------------------------------ who sees which panel -- */
+/* Joins this module (house rule: a change ships with its tests in the owning
+ * area's existing module). Pins the 2026-10-08 decision: a member — a
+ * sub-manager or a reportee — gets Home, the specialists and Settings; the
+ * workspace-wide panels are the admin's. */
+
+describe("panel gates", () => {
+  const ids = (v: Parameters<typeof panelsFor>[0]) => panelsFor(v).map((p) => p.id);
+
+  it("a member sees Home, Agents and Settings only", () => {
+    expect(ids({})).toEqual(["home", "agents", "settings"]);
+    expect(ids({ is_admin: false, is_creator: false })).toEqual(["home", "agents", "settings"]);
+  });
+
+  it("an admin also sees Issues, Runs, Brands, Integrations and Admin", () => {
+    expect(ids({ is_admin: true })).toEqual(
+      ["home", "issues", "agents", "runs", "library", "integrations", "settings", "admin"],
+    );
+  });
+
+  it("a creator who is not an admin gets the creator panels but not the admin ones", () => {
+    const got = ids({ is_creator: true });
+    expect(got).toContain("models");
+    expect(got).toContain("schedule");
+    expect(got).not.toContain("issues");
+    expect(got).not.toContain("runs");
+  });
+
+  it("the scope wall still outranks every gate", () => {
+    expect(ids({ is_geo_only: true, is_admin: true })).toEqual(["home", "issues", "agents", "runs", "settings"]);
+    expect(ids({ is_geo_only: true })).toEqual(["home", "agents", "settings"]);
+  });
+
+  it("every gated panel answers canOpen the same way panelsFor does", () => {
+    for (const p of PANELS) expect(canOpen(p, {})).toBe(ids({}).includes(p.id));
   });
 });

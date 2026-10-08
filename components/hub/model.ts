@@ -138,13 +138,19 @@ export interface Panel {
  *   admin        the admin reads                             — 403s
  */
 export const PANELS: Panel[] = [
+  // Since 2026-10-08 a member — a sub-manager or a reportee — gets Home, the
+  // specialists and Settings. The workspace-wide views (Issues, Runs, Brands,
+  // Integrations) are the admin's: what the team is doing is read on Home by
+  // the sub-manager, for their own reportees only. The backend refuses
+  // `/api/issues` to a member as well; the other three read only what the
+  // caller may see, and are hidden here because they are not the member's job.
   { id: "home", label: "Home", icon: "home", group: "Work", title: "Home", gate: null, inGeoScope: true },
-  { id: "issues", label: "Issues", icon: "issues", group: "Work", title: "Issues", gate: null, inGeoScope: true },
+  { id: "issues", label: "Issues", icon: "issues", group: "Work", title: "Issues", gate: "admin", inGeoScope: true },
   { id: "agents", label: "Agents", icon: "agents", group: "Work", title: "Agents", gate: null, inGeoScope: true },
-  { id: "runs", label: "Runs", icon: "runs", group: "Work", title: "Runs", gate: null, inGeoScope: true },
-  { id: "library", label: "Brands", icon: "vendors", group: "Assets", title: "Brands", gate: null, inGeoScope: false },
+  { id: "runs", label: "Runs", icon: "runs", group: "Work", title: "Runs", gate: "admin", inGeoScope: true },
+  { id: "library", label: "Brands", icon: "vendors", group: "Assets", title: "Brands", gate: "admin", inGeoScope: false },
   { id: "models", label: "Models", icon: "models", group: "Setup", title: "Models", gate: "creator", inGeoScope: false },
-  { id: "integrations", label: "Integrations", icon: "integrations", group: "Setup", title: "Integrations", gate: null, inGeoScope: false },
+  { id: "integrations", label: "Integrations", icon: "integrations", group: "Setup", title: "Integrations", gate: "admin", inGeoScope: false },
   { id: "schedule", label: "Schedule", icon: "plan", group: "Setup", title: "Schedule", gate: "creator", inGeoScope: false },
   { id: "settings", label: "Settings", icon: "settings", group: "Setup", title: "Settings", gate: null, inGeoScope: true },
   { id: "admin", label: "Admin", icon: "admin", group: "Setup", title: "Admin", gate: "admin", inGeoScope: false },

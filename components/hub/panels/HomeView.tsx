@@ -76,7 +76,7 @@ export function HomeView() {
             <span className="hgw">
               <span><b>1</b> Brief one</span>
               <i aria-hidden="true" />
-              <span><b>2</b> Watch the run on Runs</span>
+              <span><b>2</b> {user.is_admin ? "Watch the run on Runs" : "Watch it work in the workspace"}</span>
               <i aria-hidden="true" />
               <span><b>3</b> Collect it in the workspace</span>
             </span>
@@ -113,12 +113,16 @@ export function HomeView() {
         <Faqs />
       </section>
 
-      <p className="hgfoot">
-        Looking for what needs you?{" "}
-        <button type="button" onClick={() => go("issues")}>Issues</button>
-        {" "}· Watching something run?{" "}
-        <button type="button" onClick={() => go("runs")}>Runs</button>
-      </p>
+      {/* Issues and Runs are the admin's panels; a member's Home ends at the
+          questions, with nothing offered that the shell would refuse. */}
+      {user.is_admin && (
+        <p className="hgfoot">
+          Looking for what needs you?{" "}
+          <button type="button" onClick={() => go("issues")}>Issues</button>
+          {" "}· Watching something run?{" "}
+          <button type="button" onClick={() => go("runs")}>Runs</button>
+        </p>
+      )}
     </>
   );
 }

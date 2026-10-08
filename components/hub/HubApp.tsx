@@ -240,7 +240,7 @@ export default function HubApp() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const stats = useShellStats(!!user, revision, agents.length);
+  const stats = useShellStats(!!user, revision, agents.length, !!user?.is_admin);
 
   const ctx: HubContextValue | null = useMemo(
     () => (user ? {

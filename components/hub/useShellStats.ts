@@ -47,7 +47,12 @@ const usd0 = (v: number) => `$${Math.round(v).toLocaleString("en-US")}`;
 /** `openAgents` is how many specialists this reader may actually open. It is
  *  the whole live roster for everyone but an account the backend has scoped, and
  *  the rail must not badge Agents with a five that opens a page listing one. */
-export function useShellStats(enabled: boolean, revision: number, openAgents = LIVE_AGENTS.length): ShellStats {
+/** `admin` gates the two rail counts only an admin's rail carries: the Issues
+ *  badge (the route is admin-only) and the Brands count (the panel is). A
+ *  member's rail never asks for them, so nothing 403s behind their back. */
+export function useShellStats(
+  enabled: boolean, revision: number, openAgents = LIVE_AGENTS.length, admin = false,
+): ShellStats {
   const [counts, setCounts] = useState<Partial<Record<PanelId, number>>>({});
   const [totalRuns, setTotalRuns] = useState<number | null>(null);
   const [spend, setSpend] = useState<SpendCell[]>([]);
@@ -75,17 +80,19 @@ export function useShellStats(enabled: boolean, revision: number, openAgents = L
         })
         .catch(() => { if (!dead) setSpend([]); });
 
-      loadLibrary(1)
-        .then((brands) => { if (!dead) setCounts((c) => ({ ...c, library: brands.length })); })
-        .catch(() => { /* the rail simply carries no count */ });
+      if (admin) {
+        loadLibrary(1)
+          .then((brands) => { if (!dead) setCounts((c) => ({ ...c, library: brands.length })); })
+          .catch(() => { /* the rail simply carries no count */ });
 
-      // The badge counts what deserves attention — high + medium. Low-severity
-      // rows are in the panel but do not earn a number on the rail.
-      getIssues()
-        .then((p) => {
-          if (!dead) setCounts((c) => ({ ...c, issues: p.counts.high + p.counts.medium }));
-        })
-        .catch(() => { /* no count rather than a wrong one */ });
+        // The badge counts what deserves attention — high + medium. Low-severity
+        // rows are in the panel but do not earn a number on the rail.
+        getIssues()
+          .then((p) => {
+            if (!dead) setCounts((c) => ({ ...c, issues: p.counts.high + p.counts.medium }));
+          })
+          .catch(() => { /* no count rather than a wrong one */ });
+      }
 
       listRuns({ limit: 1 })
         .then((r) => {
@@ -108,7 +115,7 @@ export function useShellStats(enabled: boolean, revision: number, openAgents = L
       dead = true;
       window.removeEventListener("focus", load);
     };
-  }, [enabled, revision]);
+  }, [enabled, revision, admin]);
 
   const live = openAgents === LIVE_AGENTS.length
     ? `${LIVE_AGENTS.length} specialists live`
