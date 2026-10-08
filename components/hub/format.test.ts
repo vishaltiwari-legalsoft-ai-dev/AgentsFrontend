@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { until } from "./format";
+import type { HumansMonth, TeamReportee } from "@/lib/api";
+import {
+  agentChips, dayName, hasExtras, monthLabel, monthsNewestFirst, rowState,
+  summaryNote, teamSummary, usersByRuns, windowNote,
+} from "./teamUsage";
 import {
   GEO_AGENT_ID, LIVE_AGENTS, PANELS,
   agentsFor, canOpen, canOpenAgent, canOpenWorkspace, panelsFor, routeFromHash,
@@ -201,5 +206,142 @@ describe("routeFromHash with a query on the hash", () => {
     expect(routeFromHash("#/w/inbox?connected=1", SCOPED)).toEqual({ panel: "home", work: null });
     expect(canOpenWorkspace("inbox", SCOPED)).toBe(false);
     expect(canOpenWorkspace("inbox", MEMBER)).toBe(true);
+  });
+});
+
+/* ----------------------------------------------------- Home: usage blocks -- */
+
+/* New tests join the owning area's module: Home's usage rules are pinned here
+ * beside the rest of the hub's pure logic rather than in a file of their own.
+ *
+ * The contract: `match` says whether the chart row is tied to an account,
+ * `read_ok` whether that account's record could be read, and a row that is
+ * either untied or unread shows a note where its figures would be — never a
+ * zero, whatever the payload's counts hold. */
+
+const reportee = (over: Partial<TeamReportee> = {}): TeamReportee => ({
+  name: "Priya Nair", title: "Content Lead", email: "priya@legalsoft.com", user_id: "u1",
+  match: "email", last_login: "2026-10-08T08:00:00Z",
+  today: 2, week: 9, month: 21, by_agent: { a9: 12, a2: 9 },
+  last_run_at: "2026-10-08T09:00:00Z", read_ok: true,
+  ...over,
+});
+
+describe("rowState", () => {
+  it("counts a row tied by email or by name whose record was read", () => {
+    expect(rowState(reportee())).toBe("counted");
+    expect(rowState(reportee({ match: "name" }))).toBe("counted");
+  });
+
+  it("marks a person who has not signed in, whatever the counts say", () => {
+    expect(rowState(reportee({ match: "none", today: 0, week: 0, month: 0 }))).toBe("not-signed-in");
+    // Nothing is attached, so there was nothing to read: match wins.
+    expect(rowState(reportee({ match: "none", read_ok: false }))).toBe("not-signed-in");
+  });
+
+  it("marks a row two accounts could be", () => {
+    expect(rowState(reportee({ match: "ambiguous", email: null, user_id: null }))).toBe("ambiguous");
+  });
+
+  it("marks a record that could not be read, so its zeros are never shown", () => {
+    expect(rowState(reportee({ read_ok: false, today: 0, week: 0, month: 0 }))).toBe("unread");
+  });
+});
+
+describe("agentChips", () => {
+  it("puts the busiest specialist first and names it from the catalogue", () => {
+    expect(agentChips({ a2: 4, a9: 8, a1: 2 })).toEqual([
+      { id: "a9", name: "Blog Writer", count: 8 },
+      { id: "a2", name: "SEO Analyst", count: 4 },
+      { id: "a1", name: "Graphic Designer", count: 2 },
+    ]);
+  });
+
+  it("breaks a tie by the catalogue's order", () => {
+    expect(agentChips({ a10: 3, a1: 3, a6: 3 }).map((c) => c.id)).toEqual(["a1", "a6", "a10"]);
+  });
+
+  it("drops a zero and keeps an id the catalogue does not know", () => {
+    expect(agentChips({ a1: 0, a99: 1 })).toEqual([{ id: "a99", name: "a99", count: 1 }]);
+    expect(agentChips({})).toEqual([]);
+  });
+});
+
+describe("the window sentence", () => {
+  it("reads the backend's calendar dates without the reader's zone shifting them", () => {
+    expect(dayName("2026-10-08")).toBe("8 October 2026");
+    expect(dayName("2026-10-02", false)).toBe("2 October");
+    expect(monthLabel("2026-10")).toBe("October 2026");
+  });
+
+  it("names all three windows in one line", () => {
+    expect(windowNote({ today: "2026-10-08", week_from: "2026-10-02", month: "2026-10" }))
+      .toBe("Today is 8 October 2026 · the week counts from 2 October · the month is October 2026.");
+  });
+
+  it("shows what it cannot parse as it came, rather than inventing a date", () => {
+    expect(dayName("soon")).toBe("soon");
+    expect(monthLabel("2026-13")).toBe("2026-13");
+  });
+});
+
+describe("teamSummary and its note", () => {
+  const team = {
+    reportees: [
+      reportee(),
+      reportee({ name: "Arjun", match: "name" }),
+      reportee({ name: "Sana", match: "none", email: null, user_id: null }),
+      reportee({ name: "Rohit", match: "ambiguous", email: null, user_id: null }),
+      reportee({ name: "Meera", read_ok: false }),
+    ],
+    totals: { today: 3, week: 20, month: 41 },
+  };
+
+  it("tallies each state and passes the backend's totals through untouched", () => {
+    expect(teamSummary(team)).toEqual({
+      counted: 2, notSignedIn: 1, ambiguous: 1, unread: 1,
+      totals: { today: 3, week: 20, month: 41 },
+    });
+  });
+
+  it("says what was left out of the totals", () => {
+    expect(summaryNote(teamSummary(team)))
+      .toBe("2 of 5 counted · 1 not signed in yet · 1 matched two accounts · 1 could not be read");
+    expect(summaryNote(teamSummary({ reportees: [reportee(), reportee()], totals: team.totals })))
+      .toBe("all 2 counted");
+    expect(summaryNote(teamSummary({ reportees: [], totals: team.totals }))).toBe("");
+  });
+});
+
+describe("usage by humans", () => {
+  const month = (year_month: string, runs = 0): HumansMonth => ({ year_month, runs, users: 0, by_user: [] });
+
+  it("orders months newest first whatever order they arrived in, without mutating the payload", () => {
+    const given = [month("2026-08"), month("2026-10"), month("2026-09")];
+    expect(monthsNewestFirst(given).map((m) => m.year_month)).toEqual(["2026-10", "2026-09", "2026-08"]);
+    expect(given.map((m) => m.year_month)).toEqual(["2026-08", "2026-10", "2026-09"]);
+  });
+
+  it("lists people by runs, ties by name", () => {
+    const users = [
+      { user_id: "b", email: "b@x", name: "Bo", runs: 3 },
+      { user_id: "a", email: "a@x", name: "Al", runs: 3 },
+      { user_id: "c", email: "c@x", name: "Cy", runs: 9 },
+    ];
+    expect(usersByRuns(users).map((u) => u.user_id)).toEqual(["c", "a", "b"]);
+  });
+});
+
+describe("hasExtras", () => {
+  it("is false for a plain member, so Home shows nothing extra", () => {
+    expect(hasExtras({ team: null, humans: null })).toBe(false);
+  });
+
+  it("is true for a manager, an admin, or both", () => {
+    const team = { manager: { name: "V", title: "Head" }, today: "2026-10-08", week_from: "2026-10-02", month: "2026-10", reportees: [], totals: { today: 0, week: 0, month: 0 } };
+    const humans = { months: [], excluded: "Scheduled runs (the cron user) are not counted." };
+    expect(hasExtras({ team, humans: null })).toBe(true);
+    expect(hasExtras({ team: null, humans })).toBe(true);
+    expect(hasExtras({ team, humans })).toBe(true);
   });
 });

@@ -634,3 +634,53 @@
 
 /* the studio's setup screen: the two quiet buttons under the brand picker */
 .gdx-kitrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+
+/* ---------- Home: usage by your team, and by people ----------------------
+ *
+ * Two bands under the hero, fed by one read, and mounted below the greeting
+ * so the hero and the guide never wait on them. The table is the prototype's
+ * `.tbl`; the agent chips are the studio's `.chip`, held still inside a cell
+ * (no pointer, no hover lift, smaller). Every colour is a token, so dark
+ * follows from `[data-theme="dark"]` swapping them. The one red is
+ * `.tag.is-bad`, and it appears only on a row whose record could not be read.
+ */
+
+.tu--wait { margin-bottom: var(--s5); }
+.tu--wait .wait { padding: 6px 2px; }
+
+.tu__scroll { overflow-x: auto; }
+.tu__tbl { min-width: 620px; }
+.tu__tbl td b { font-weight: 650; }
+.tu__tbl tfoot td { border-top: 1px solid var(--rule-hard); border-bottom: 0; font-weight: 650; color: var(--fg-2); }
+.tu__tbl tfoot .num { color: var(--fg); }
+.tu__tbl .tag { display: inline-block; padding-top: 2px; }
+
+/* the chips sit in a row of a table, not in the studio's step rail */
+.tu__chips { margin: 0; gap: 4px; }
+.tu__chips .chip { padding: 3px 9px 3px 4px; gap: 5px; font-size: 11px; cursor: default; }
+.tu__chips .chip:hover:not(:disabled) { border-color: var(--rule); color: var(--fg-2); }
+.tu__chips .chip__n { width: 17px; height: 17px; font-size: 10px; }
+
+.tu__foot { margin: var(--s3) 0 0; font-size: 11.5px; line-height: 1.55; color: var(--fg-3); }
+
+/* by humans: one disclosure a month, the people inside it */
+.tu__months { display: grid; border-top: 1px solid var(--rule-hard); }
+.tu__month { border-bottom: 1px solid var(--rule-soft); }
+.tu__month summary {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--s4);
+  padding: 11px 2px; cursor: pointer; list-style: none;
+  font-size: 13px; color: var(--fg);
+}
+.tu__month summary::-webkit-details-marker { display: none; }
+.tu__month summary b { flex: 1 1 auto; font-weight: 650; }
+.tu__month summary .num { font-variant-numeric: tabular-nums; color: var(--fg-2); white-space: nowrap; }
+.tu__month summary svg {
+  flex: 0 0 auto; width: 13px; height: 13px;
+  fill: none; stroke: var(--fg-3); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  transition: transform var(--t-fast) var(--ease);
+}
+.tu__month summary:hover b { color: var(--fg-2); }
+.tu__month[open] summary svg { transform: rotate(90deg); stroke: var(--fg); }
+.tu__month > .tu__scroll { padding: 0 2px var(--s4); }
+.tu__month .tu__tbl { min-width: 0; }
+.tu__none { margin: 0; padding: 0 2px var(--s4); font-size: 12.5px; color: var(--fg-3); }

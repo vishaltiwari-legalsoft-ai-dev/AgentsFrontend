@@ -20,7 +20,7 @@ import type {
   InboxStatus, IssuesPayload, LibraryBrand,
   MrConfig, MrConnector, MrLeadAnalysis, MrOverview, MrPortfolio,
   MrReportPeriods, MrRunSummary, MrSheetSources, MrTargets, MrTrends,
-  RunsPage, SeoBrand, SeoOverview, SeoRun,
+  RunsPage, SeoBrand, SeoOverview, SeoRun, TeamUsage,
 } from "./api";
 
 const NOW = "2026-10-01T09:30:00Z";
@@ -320,6 +320,37 @@ const STATIC: Record<string, Fix> = {
   "/api/runs": runs,
   "/api/issues": issues,
   "/api/news": () => ({ text: "Festive campaign assets are due Friday — brief the Graphic Designer early.", updated_at: "2026-09-30T08:00:00Z" }),
+  "/api/usage/team": (): TeamUsage => ({
+    generated_at: NOW,
+    viewer: { manager: true, admin: true, matched_as: "Vishal Tiwari" },
+    team: {
+      manager: { name: "Vishal Tiwari", title: "Head of Growth" },
+      today: "2026-10-01", week_from: "2026-09-25", month: "2026-10",
+      reportees: [
+        { name: "Priya Nair", title: "Content Lead", email: "priya@legalsoft.com", user_id: "u-priya", match: "email", last_login: "2026-10-01T08:10:00Z", today: 3, week: 14, month: 14, by_agent: { a9: 8, a2: 4, a1: 2 }, last_run_at: "2026-10-01T09:02:00Z", read_ok: true },
+        { name: "Arjun Mehta", title: "Performance Marketer", email: "arjun@legalsoft.com", user_id: "u-arjun", match: "name", last_login: "2026-09-30T17:40:00Z", today: 0, week: 6, month: 6, by_agent: { a6: 5, a10: 1 }, last_run_at: "2026-09-30T17:55:00Z", read_ok: true },
+        { name: "Sana Khan", title: "Designer", email: null, user_id: null, match: "none", last_login: null, today: 0, week: 0, month: 0, by_agent: {}, last_run_at: null, read_ok: true },
+        { name: "Rohit Verma", title: "SEO Specialist", email: null, user_id: null, match: "ambiguous", last_login: null, today: 0, week: 0, month: 0, by_agent: {}, last_run_at: null, read_ok: true },
+        { name: "Meera Iyer", title: "Analyst", email: "meera@legalsoft.com", user_id: "u-meera", match: "email", last_login: "2026-09-29T11:00:00Z", today: 0, week: 0, month: 0, by_agent: {}, last_run_at: null, read_ok: false },
+      ],
+      totals: { today: 3, week: 20, month: 20 },
+    },
+    humans: {
+      months: [
+        { year_month: "2026-09", runs: 61, users: 4, by_user: [
+          { user_id: "u-priya", email: "priya@legalsoft.com", name: "Priya Nair", runs: 27 },
+          { user_id: "u-arjun", email: "arjun@legalsoft.com", name: "Arjun Mehta", runs: 18 },
+          { user_id: "u-vishal", email: "vishal@legalsoft.com", name: "Vishal Tiwari", runs: 12 },
+          { user_id: "u-meera", email: "meera@legalsoft.com", name: "Meera Iyer", runs: 4 },
+        ] },
+        { year_month: "2026-10", runs: 3, users: 1, by_user: [
+          { user_id: "u-priya", email: "priya@legalsoft.com", name: "Priya Nair", runs: 3 },
+        ] },
+        { year_month: "2026-08", runs: 0, users: 0, by_user: [] },
+      ],
+      excluded: "Scheduled runs (the cron user) are not counted.",
+    },
+  }),
   "/api/library": library,
   "/api/seo-geo/overview": seoOverview,
 

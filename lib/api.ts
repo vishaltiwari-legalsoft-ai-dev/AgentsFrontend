@@ -343,6 +343,78 @@ export async function getAdminAnalytics(): Promise<Analytics> {
   return getJson("/api/admin/analytics");
 }
 
+/* ------------------------ Usage by your team, by people ------------------ */
+
+/** How a row on the chart was tied to an account. `none` means the person has
+ *  not signed in yet; `ambiguous` means two accounts look like them and nothing
+ *  was attached. Neither is a count of zero. */
+export type TeamMatch = "email" | "name" | "ambiguous" | "none";
+
+export interface TeamReportee {
+  name: string;
+  title: string;
+  email: string | null;
+  user_id: string | null;
+  match: TeamMatch;
+  last_login: string | null;
+  today: number;
+  week: number;
+  month: number;
+  /** Runs this month by hub agent id (`a1`, `a2`, …); names via `AGENTS`. */
+  by_agent: Record<string, number>;
+  last_run_at: string | null;
+  /** False when this person's record could not be read. The counts above are
+   *  then not figures, and must not be shown as any number — 0 included. */
+  read_ok: boolean;
+}
+
+export interface TeamUsageTeam {
+  manager: { name: string; title: string };
+  /** The three windows the counts cover, as the backend drew them:
+   *  `YYYY-MM-DD`, `YYYY-MM-DD`, `YYYY-MM`. */
+  today: string;
+  week_from: string;
+  month: string;
+  reportees: TeamReportee[];
+  totals: { today: number; week: number; month: number };
+}
+
+export interface HumansUser {
+  user_id: string;
+  email: string;
+  name: string;
+  runs: number;
+}
+
+export interface HumansMonth {
+  year_month: string;
+  runs: number;
+  users: number;
+  by_user: HumansUser[];
+}
+
+export interface HumansUsage {
+  months: HumansMonth[];
+  /** The backend's own sentence about what is left out. Shown verbatim. */
+  excluded: string;
+}
+
+export interface TeamUsage {
+  generated_at: string;
+  viewer: { manager: boolean; admin: boolean; matched_as: string | null };
+  /** Null unless the viewer is a sub-manager on the chart. */
+  team: TeamUsageTeam | null;
+  /** Null unless the viewer is an admin. */
+  humans: HumansUsage | null;
+}
+
+/** What the viewer's reportees asked of the agents (today, week, month) and,
+ *  for an admin, agent runs by humans per month. Both sections are null for a
+ *  plain member; a viewer can be both. */
+export function teamUsage(months = 3, opts?: RequestOptions): Promise<TeamUsage> {
+  return getJson(`/api/usage/team?months=${months}`, opts);
+}
+
 // Admin-only runtime settings (OpenRouter key + model ids). The key is never
 // returned in full — only a masked hint and whether it's set.
 export interface AdminSettings {
