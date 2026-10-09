@@ -20,7 +20,7 @@ import {
   Download, ExternalLink, Feather, Files, FileText, Filter, Gauge, Globe, GripVertical,
   Hash, HeartPulse, Upload,
   House, Images, Inbox, Info, Layers, LayoutDashboard, LayoutGrid, Link2, MailPlus,
-  Megaphone, MessageCircle, Moon, NotebookPen, Palette, PenLine, Plug, Plus,
+  Megaphone, MessageCircle, Minus, Moon, NotebookPen, Palette, PenLine, Plug, Plus,
   RotateCcw, Search, SearchCheck, Send, Settings, ShieldCheck,
   SlidersVertical, Sparkles, Store, Sun, Swords, Target, TrendingUp,
   TriangleAlert, Type, UserRound, Wrench, X,
@@ -36,6 +36,8 @@ const ICONS: Record<string, LucideIcon> = {
   plus: Plus, check: Check, x: X, up: ArrowUp, send: Send, download: Download,
   external: ExternalLink, upload: Upload, copy: Copy, grip: GripVertical, down: ArrowDown,
   fix: Wrench, tries: RotateCcw, sweep: Sparkles,
+  // direction, for a change on the period before (`down` is listed with the verbs)
+  flat: Minus,
   // appearance
   sun: Sun, moon: Moon,
   // the workspaces
