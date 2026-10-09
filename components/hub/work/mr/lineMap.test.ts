@@ -10,9 +10,18 @@ import type {
 // Values from the API client come in by relative path: the suite runs without
 // the `@/` alias, which only the erased type imports above can use.
 import {
-  ApiError, MR_VENDOR_OFF, isCampaignKind, isVendorKind, mrBoardReportHtml, mrVendorReportHtml,
-  mrVendorReportPeriods, readVendorPeriods,
+  ApiError, MR_TEMPLATES_OFF, MR_VENDOR_OFF, apiBody, apiCode, isCampaignKind, isVendorKind,
+  mrActivateTemplate, mrBoardReportHtml, mrBuildVendorReport, mrReadTemplateSample,
+  mrReportTemplates, mrSaveTemplate, mrTemplateLayout, mrTemplateStarterFileUrl, mrVendorReportHtml,
+  mrVendorReportPeriods, readTemplateListing, readTemplateReading, readVendorPeriods,
+  type MrTemplateLine, type MrTemplatePlaceholder, type MrTemplatePreview, type MrTemplateVersion,
 } from "../../../../lib/api";
+import {
+  arrange, handPlan, historyRows, layoutOf, madeBy, madeFrom, matchedLine, moveRow, moveRowTo,
+  noPreviewLine, previewHoldsSave, previewOf, problemParts, problemsHeading, rateLimitedLine,
+  readFailure, readingsLeftLine, removedLine, renameRow, sameLayout, sectionTitles, sectionTypes,
+  setByLine, showRow, switchedLine, templateBandLine, versionLabel,
+} from "./templateModel";
 import {
   REPORT_META, REPORT_PERIOD_LIST, absentMetrics, boardPeriodOptions, boardPeriodValues,
   filledOf, missingFigures, periodsFor, takesPeriod, vendorBuiltLine, vendorMonthPick,
@@ -1095,7 +1104,7 @@ describe("the vendor periods reply", () => {
 
   it("defaults every field a skewed backend leaves out: off, PDF asked of the server, no months", () => {
     expect(readVendorPeriods({})).toEqual({
-      enabled: false, pdf_available: true, pdf_unavailable_reason: null, months: [],
+      enabled: false, pdf_available: true, pdf_unavailable_reason: null, months: [], template: null,
     });
     expect(readVendorPeriods(null).enabled).toBe(false);
     expect(readVendorPeriods({ enabled: "yes" }).enabled).toBe(false);
@@ -1153,8 +1162,26 @@ describe("vendorBuiltLine", () => {
 
   it("names a saved version by its number", () => {
     expect(vendorBuiltLine({
-      generated_at: at(21, 5), sweep_date: "2026-10-02", template: { kind: "uploaded", version: 4 },
+      generated_at: at(21, 5), sweep_date: "2026-10-02",
+      template: { kind: "layout", number: 4, id: "tv_4" },
     })).toBe("Built 2 Oct 2026, 9:05 pm, from the workbook pulled on 2 Oct. Template: version 4.");
+  });
+
+  it("says when the built-in stood in because the team template failed — the spec's sentence", () => {
+    expect(vendorBuiltLine({
+      generated_at: at(9, 14), sweep_date: "2026-10-02",
+      template: { kind: "builtin", number: null, id: null,
+                  fallback: { number: 4, id: "tv_4", reason: "it broke" } },
+    })).toBe("Built 2 Oct 2026, 9:14 am, from the workbook pulled on 2 Oct. "
+      + "Built with the built-in template because the team template failed.");
+  });
+
+  it("keeps a chosen built-in apart from a failed team template", () => {
+    expect(vendorBuiltLine({
+      generated_at: at(9, 14), sweep_date: "2026-10-02",
+      template: { kind: "builtin", override_of: { number: 4, id: "tv_4" } },
+    })).toBe("Built 2 Oct 2026, 9:14 am, from the workbook pulled on 2 Oct. "
+      + "Template: built-in, chosen instead of version 4.");
   });
 
   it("writes midnight as 12, and gives the pull's year when it differs", () => {
@@ -1219,7 +1246,7 @@ describe("the Vendor Performance band's own words", () => {
       "It's built from the vendor tabs. Pull the workbook and months appear here.",
       "Build the report",
       '"Building…"',
-      "The team's reports use the built-in template.",
+      "{templateBandLine(load.data?.template ?? null, me)}",
       "is built and filed under Already written.",
       "Pull the workbook, then build again.",
       "Open in a new tab",
@@ -1251,12 +1278,790 @@ describe("the Vendor Performance band's own words", () => {
     expect(reports()).toMatch(/\{empty && \([\s\S]{0,120}<PullWorkbook pull=\{pull\} \/>/);
   });
 
-  it("has no Change template control yet — Phase 2 brings it with its API", () => {
-    expect(reports()).not.toContain("Change template");
+  it("offers Change template only where team templates are on, and opens the panel inline", () => {
+    expect(reports()).toMatch(/\{templatesOn && \(\s*<p>\s*<button[\s\S]{0,260}aria-controls="mr-team-template"[\s\S]{0,80}Change template/);
+    // On when the server says so, or when the read failed (the panel then opens
+    // on its Oops) — never when the server said off.
+    expect(reports()).toContain("const templatesOn = vendorOn && (templates.data?.enabled === true");
+    expect(reports()).toContain('|| (templates.data === null && templates.phase === "failed"));');
+    expect(reports()).toMatch(/\{templatesOn && templatesOpen && \(\s*<TemplatePanel/);
+    // Inline under the band, above the board report — never a dialog.
+    expect(reports().indexOf("<TemplatePanel")).toBeGreaterThan(reports().indexOf("<VendorBuild"));
+    expect(reports().indexOf("<TemplatePanel")).toBeLessThan(reports().indexOf("<BoardBuild"));
+  });
+
+  it("chooses the build's refusal by its code, and offers the built-in on a failed team template", () => {
+    expect(reports()).toContain('if (code === "template_failed")');
+    expect(reports()).toContain('code === "empty_month" || (code === null && status === 422)');
+    expect(reports()).toContain('what="The team template couldn\'t build this report."');
+    expect(reports()).toContain("Nothing was built.");
+    expect(reports()).toMatch(/onClick=\{\(\) => void build\(\{ builtin: true \}\)\}[\s\S]{0,80}Build with the built-in template/);
+    // No state is picked by matching the server's wording.
+    expect(reports()).not.toMatch(/\.message\.(includes|startsWith|match)\(/);
   });
 
   it("describes the ten in the reader's terms, not the developer's", () => {
     expect(reports()).toContain('note="What each one contains."');
     expect(reports()).not.toContain("In the app being replaced this sits in a title attribute");
+  });
+});
+
+/* --------------------------------------------------------------------------
+   Team report templates: the contract, read with a default for every field.
+   Shapes below are the backend's own router tests (test_mr_vendor_report_router.py).
+   -------------------------------------------------------------------------- */
+
+const json = (status: number, body: unknown) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+/** The live listing shape, trimmed: the built-in active, one saved version. */
+/** The backend tests' layout: a theme colour, three sections. */
+const LAYOUT = { theme: { colors: { ink: "#101010" } },
+                 sections: [{ type: "header" }, { type: "vendor_scorecard" }, { type: "data_gaps" }] };
+
+/** The built-in's sections as `default_layout` sends them (trimmed). */
+const DEFAULT_LAYOUT = { theme: { colors: {} }, sections: [
+  { type: "header", title: null, options: {} },
+  { type: "benchmark_movers", title: null, options: {} },
+  { type: "vendor_scorecard", title: null, options: {} },
+  { type: "data_gaps", title: null, options: {} },
+  { type: "footer", title: null, options: {} },
+] };
+
+const LISTING = {
+  enabled: true,
+  active: { id: "tv_1", kind: "layout", number: 1, source_kind: "pdf", filename: "Q3 sample.pdf",
+            created_by: "priya@legalsoft.com", created_by_name: "Priya Shah",
+            created_at: "2026-10-03T08:50:00+00:00",
+            set_by: "priya@legalsoft.com", set_by_name: "Priya Shah", set_at: "2026-10-03T08:50:00+00:00" },
+  versions: [{ id: "tv_1", kind: "layout", number: 1, source_kind: "pdf", filename: "Q3 sample.pdf",
+               created_by: "priya@legalsoft.com", created_by_name: "Priya Shah",
+               created_at: "2026-10-03T08:50:00+00:00",
+               set_by: "priya@legalsoft.com", set_by_name: "Priya Shah",
+               set_at: "2026-10-03T08:50:00+00:00", active: true }],
+  placeholders: [
+    { token: "{{total_spend}}", title: "Total Spend", description: "Total spend, the portfolio figure (dollars)", kind: "scalar", example: "$2,737" },
+    { token: "{{band:header}}", title: "Header band", description: "Header band: a band drawn from this report", kind: "band", example: "September 2" },
+    { token: "{{chart:benchmark_movers}}", title: "Biggest movers vs. benchmark", description: "Biggest movers vs. benchmark: a chart drawn from this report", kind: "chart", example: "6 benchmarks charted" },
+    { token: "{{table:vendor_scorecard}}", title: "Vendor scorecard", description: "Vendor scorecard: a table drawn from this report", kind: "table", example: "11 vendors + portfolio total" },
+    { token: "{{list:standouts}}", title: "Standouts", description: "Standouts: a list drawn from this report", kind: "list", example: "2 standouts" },
+    { token: "{{note:data_gaps}}", title: "Basis & data gaps", description: "Basis & data gaps: a note drawn from this report", kind: "note", example: "14 missing figures" },
+    { token: "{{band:footer}}", title: "Footer", description: "Footer: a band drawn from this report", kind: "band", example: "Built from the 2026-09-02 pull" },
+  ],
+  examples_from: { year_month: "2026-09", label: "September 2026" },
+  readings_left_today: 10,
+  limits: { readings_per_day: 10, readings_reset: "00:00 UTC", pdf_max_bytes: 10485760,
+            pdf_max_pages: 10, image_max_bytes: 5242880, image_max_side: 4096, html_max_bytes: 524288 },
+  default_layout: DEFAULT_LAYOUT,
+};
+
+describe("the template listing", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("reads the live shape", () => {
+    const l = readTemplateListing(LISTING);
+    expect(l.enabled).toBe(true);
+    expect(l.active?.number).toBe(1);
+    expect(l.versions.map((v) => [v.number, v.active])).toEqual([[1, true]]);
+    expect(l.placeholders.find((p) => p.token === "{{total_spend}}")?.example).toBe("$2,737");
+    expect(l.examples_from).toEqual({ year_month: "2026-09", label: "September 2026" });
+    expect(l.readings_left_today).toBe(10);
+    expect(l.readings_per_day).toBe(10);
+    expect(l.default_layout?.sections.map((s) => s.type))
+      .toEqual(["header", "benchmark_movers", "vendor_scorecard", "data_gaps", "footer"]);
+    expect(l.placeholders.find((p) => p.token === "{{table:vendor_scorecard}}")?.title).toBe("Vendor scorecard");
+    expect([l.active?.created_by_name, l.active?.set_by_name]).toEqual(["Priya Shah", "Priya Shah"]);
+  });
+
+  it("reads names and titles a backend older than them leaves out as null — the email stands in", () => {
+    const old = readTemplateListing({ ...LISTING,
+      active: { ...LISTING.active, created_by_name: undefined, set_by_name: undefined },
+      placeholders: [{ token: "{{total_spend}}", description: "d", kind: "scalar", example: null }],
+      default_layout: undefined });
+    expect([old.active?.created_by_name, old.active?.set_by_name]).toEqual([null, null]);
+    expect(old.placeholders[0].title).toBeNull();
+    expect(old.default_layout).toBeNull();
+  });
+
+  it("hides everything when the server says off, or says nothing", () => {
+    expect(readTemplateListing({ enabled: false, active: null, versions: [] })).toEqual(MR_TEMPLATES_OFF);
+    expect(readTemplateListing({})).toEqual(MR_TEMPLATES_OFF);
+    expect(readTemplateListing(null)).toEqual(MR_TEMPLATES_OFF);
+  });
+
+  it("defaults every field a skewed backend leaves out", () => {
+    const l = readTemplateListing({ enabled: true });
+    expect(l).toEqual({ ...MR_TEMPLATES_OFF, enabled: true });
+    // Absent examples are null, never invented; absent readings are unknown, never zero.
+    expect(l.examples_from).toBeNull();
+    expect(l.readings_left_today).toBeNull();
+  });
+
+  it("drops a version with no id and a placeholder with no token, rather than guessing", () => {
+    const l = readTemplateListing({ ...LISTING, versions: [{ number: 2 }, LISTING.versions[0]],
+                                    placeholders: [{ description: "x" }, LISTING.placeholders[0]] });
+    expect(l.versions.map((v) => v.id)).toEqual(["tv_1"]);
+    expect(l.placeholders.map((p) => p.token)).toEqual(["{{total_spend}}"]);
+  });
+
+  it("reads a backend that predates the route as off, and passes any other failure through", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(404, { detail: "Not Found" })));
+    expect(await mrReportTemplates()).toEqual(MR_TEMPLATES_OFF);
+    vi.stubGlobal("fetch", vi.fn(async () => json(500, { detail: "boom" })));
+    await expect(mrReportTemplates()).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("the periods' template line", () => {
+  it("is null from a backend older than templates — where every build is the built-in", () => {
+    expect(readVendorPeriods({ enabled: true }).template).toBeNull();
+  });
+
+  it("keeps 'the store could not be read' apart from the built-in", () => {
+    expect(readVendorPeriods({ enabled: true, template: { kind: null, number: null } }).template)
+      .toEqual({ kind: null, number: null, set_by: null, set_by_name: null, set_at: null });
+  });
+
+  it("reads the live shape, with the name to show", () => {
+    expect(readVendorPeriods({ enabled: true, template: {
+      kind: "layout", number: 4, set_by: "priya@legalsoft.com", set_by_name: "Priya Shah",
+      set_at: "2026-10-03T08:50:00+00:00" } }).template)
+      .toEqual({ kind: "layout", number: 4, set_by: "priya@legalsoft.com", set_by_name: "Priya Shah",
+                 set_at: "2026-10-03T08:50:00+00:00" });
+  });
+});
+
+describe("reading a sample", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("reads a PDF's layout, its unmatched sections and its preview", () => {
+    const r = readTemplateReading({
+      source_kind: "pdf", upload: { filename: "q3 sample.html", kind: "pdf", size: 40, sha256: "x" },
+      layout: LAYOUT, unsupported: [{ title: "Social reach", description: "a follower chart" }],
+      matched_count: 3, notes: [], preview_html: "<!DOCTYPE html><p>x</p>",
+      preview_unavailable_reason: null, readings_left_today: 9,
+    });
+    expect(r.source_kind).toBe("pdf");
+    if (r.source_kind === "html") throw new Error("read as HTML");
+    expect(r.layout.sections.map((s) => s.type)).toEqual(["header", "vendor_scorecard", "data_gaps"]);
+    expect(r.layout.theme).toEqual({ colors: { ink: "#101010" } });
+    expect(r.unsupported).toEqual([{ title: "Social reach", description: "a follower chart" }]);
+    expect(r.matched_count).toBe(3);
+    expect(r.readings_left_today).toBe(9);
+  });
+
+  it("reads an HTML check, keeps only what was removed, and never offers a save it was not told of", () => {
+    const r = readTemplateReading({
+      source_kind: "html", sanitized_html: "", can_save: undefined,
+      errors: [{ line: 14, placeholder: "{{totl_spend}}", message: "unknown", suggestion: "{{total_spend}}" }],
+      removed: { scripts: 1, handlers: 0, comments: 2 }, placeholders_used: [],
+      upload: { filename: "t.html", kind: "html", size: 9 }, preview_html: null,
+      preview_unavailable_reason: "Fix the errors listed to see a preview.",
+    });
+    if (r.source_kind !== "html") throw new Error("not read as HTML");
+    expect(r.can_save).toBe(false);
+    expect(r.sanitized_html).toBeNull();
+    expect(r.removed).toEqual({ scripts: 1, comments: 2 });
+    expect(r.errors[0]).toEqual({ line: 14, placeholder: "{{totl_spend}}", message: "unknown",
+                                  suggestion: "{{total_spend}}" });
+  });
+
+  it("refuses an answer it cannot read rather than guessing a layout", () => {
+    expect(() => readTemplateReading({ source_kind: "pdf" })).toThrow(/Nothing was saved/);
+    expect(() => readTemplateReading({})).toThrow(/Nothing was saved/);
+  });
+
+  it("reads why a preview is missing as a code to act on, null from an older backend", () => {
+    const at = (code?: string) => readTemplateReading({
+      source_kind: "pdf", layout: LAYOUT, preview_html: null,
+      preview_unavailable_reason: "There are no vendor figures yet.", preview_unavailable_code: code });
+    expect(at("no_data").preview_unavailable_code).toBe("no_data");
+    expect(at("store_unavailable").preview_unavailable_code).toBe("store_unavailable");
+    expect(at("template_failed").preview_unavailable_code).toBe("template_failed");
+    expect(at(undefined).preview_unavailable_code).toBeNull();
+  });
+
+  it("hands a 413 refused on size and a checker that could not run to the panel by their codes", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(413, { code: "too_large",
+      reason: "The request is larger than this action accepts (10 MB).",
+      detail: "The request is larger than this action accepts (10 MB)." })));
+    const big = await mrReadTemplateSample(new File(["x"], "big.pdf")).catch((x: unknown) => x);
+    expect([apiCode(big), readFailure(apiCode(big), 413)]).toEqual(["too_large", "upload"]);
+    expect((big as Error).message).toBe("The request is larger than this action accepts (10 MB).");
+
+    vi.stubGlobal("fetch", vi.fn(async () => json(503, { code: "check_unavailable",
+      reason: "The template checker could not run just now, so the file was not checked and nothing was saved. Try again in a minute.",
+      detail: "The template checker could not run just now, so the file was not checked and nothing was saved. Try again in a minute." })));
+    const down = await mrReadTemplateSample(new File(["<p></p>"], "t.html")).catch((x: unknown) => x);
+    expect([apiCode(down), readFailure(apiCode(down), 503)]).toEqual(["check_unavailable", "check"]);
+  });
+
+  it("carries a coded refusal's code and fields to the screen", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(503, {
+      code: "timeout", reason: "The AI reader did not answer within 150 seconds.",
+      detail: "The AI reader did not answer within 150 seconds.", billed: true, readings_left_today: 9 })));
+    const e = await mrReadTemplateSample(new File(["%PDF-1.7"], "a.pdf")).catch((x: unknown) => x);
+    expect(apiCode(e)).toBe("timeout");
+    expect(apiBody(e).billed).toBe(true);
+    expect(apiBody(e).readings_left_today).toBe(9);
+    expect((e as Error).message).toBe("The AI reader did not answer within 150 seconds.");
+  });
+
+  it("sends the file as multipart 'file' to the one extract route — the server decides its kind", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => json(200, {
+      source_kind: "html", errors: [], removed: {}, placeholders_used: [], can_save: true,
+      sanitized_html: "<p>{{total_spend}}</p>", upload: {}, preview_html: "<p>$2,737</p>",
+      preview_unavailable_reason: null }));
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await mrReadTemplateSample(new File(["<p>{{total_spend}}</p>"], "ours.html"));
+    expect(r.source_kind).toBe("html");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/api\/mr\/report-templates\/extract$/);
+    expect((init?.body as FormData).get("file")).toBeInstanceOf(File);
+  });
+});
+
+describe("building with the team's template", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("sends template: 'builtin' only when asked, and never otherwise", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
+      json(200, { id: "r", kind: "vendor_report", generated_at: "x", structured: {} }));
+    vi.stubGlobal("fetch", fetchMock);
+    await mrBuildVendorReport("2026-09");
+    await mrBuildVendorReport("2026-09", { builtin: true });
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ year_month: "2026-09" });
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body)))
+      .toEqual({ year_month: "2026-09", template: "builtin" });
+  });
+
+  it("hands the 409 template_failed to the band by its code", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(409, {
+      code: "template_failed", reason: "This template can't be rendered: it broke.",
+      detail: "This template can't be rendered: it broke.", can_use_builtin: true,
+      template: { kind: "layout", number: 1, id: "tv_1" } })));
+    const e = await mrBuildVendorReport("2026-09").catch((x: unknown) => x);
+    expect(apiCode(e)).toBe("template_failed");
+    expect(apiBody(e).can_use_builtin).toBe(true);
+  });
+});
+
+describe("saving, switching and the starter file", () => {
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it("reads the saved version back", async () => {
+    const v = { ...LISTING.versions[0], number: 5, id: "tv_5" };
+    vi.stubGlobal("fetch", vi.fn(async () => json(200, { version: v, active: v })));
+    expect((await mrSaveTemplate({ source_kind: "builder", layout: { sections: [] } }))?.number).toBe(5);
+  });
+
+  it("switches by id, and to the built-in by the literal 'builtin'", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
+      json(200, { active: { id: "builtin", kind: "builtin", number: null } }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect((await mrActivateTemplate("builtin"))?.kind).toBe("builtin");
+    await mrActivateTemplate("tv/1");
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/api\/mr\/report-templates\/builtin\/activate$/);
+    expect(String(fetchMock.mock.calls[1][0])).toMatch(/\/report-templates\/tv%2F1\/activate$/);
+  });
+
+  it("reads one version's sections from its layout route", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
+      json(200, { id: "tv_1", kind: "layout", number: 1, layout: LAYOUT }));
+    vi.stubGlobal("fetch", fetchMock);
+    const got = await mrTemplateLayout("tv_1");
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/api\/mr\/report-templates\/tv_1\/layout$/);
+    expect([got.id, got.kind, got.number]).toEqual(["tv_1", "layout", 1]);
+    expect(got.layout.sections.map((s) => s.type)).toEqual(["header", "vendor_scorecard", "data_gaps"]);
+    expect(got.layout.theme).toEqual({ colors: { ink: "#101010" } });
+  });
+
+  it("hands the layout route's refusals to the panel by code, and refuses an empty answer", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(422, { code: "not_a_layout",
+      reason: "Version 2 is an HTML template; it has no section layout to arrange.",
+      detail: "Version 2 is an HTML template; it has no section layout to arrange." })));
+    expect(apiCode(await mrTemplateLayout("tv_2").catch((x: unknown) => x))).toBe("not_a_layout");
+    vi.stubGlobal("fetch", vi.fn(async () => json(404, { code: "not_found", reason: "x", detail: "x" })));
+    expect(apiCode(await mrTemplateLayout("nope").catch((x: unknown) => x))).toBe("not_found");
+    vi.stubGlobal("fetch", vi.fn(async () => json(200, { id: "tv_1", kind: "layout", layout: { sections: [] } })));
+    await expect(mrTemplateLayout("tv_1")).rejects.toThrow(/nothing to arrange/);
+  });
+
+  it("saves the starter as bytes a browser cannot render — never as HTML in this origin", async () => {
+    const made: Blob[] = [];
+    vi.spyOn(URL, "createObjectURL").mockImplementation((b) => { made.push(b as Blob); return "blob:x"; });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("<!DOCTYPE html><script>x</script>",
+      { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } })));
+    expect(await mrTemplateStarterFileUrl()).toBe("blob:x");
+    expect(made).toHaveLength(1);
+    expect(made[0].type).toBe("application/octet-stream");
+  });
+});
+
+/* --------------------------------------------------------------------------
+   Team report templates: what the panel decides.
+   -------------------------------------------------------------------------- */
+
+describe("templateBandLine", () => {
+  const at = new Date(2026, 9, 3, 14, 20).toISOString();
+
+  const line = (over: Partial<MrTemplateLine>): MrTemplateLine =>
+    ({ kind: "layout", number: 4, set_by: null, set_by_name: null, set_at: null, ...over });
+
+  it("says the built-in — also for a backend that does not say", () => {
+    expect(templateBandLine(null)).toBe("The team's reports use the built-in template.");
+    expect(templateBandLine(line({ kind: "builtin", number: null })))
+      .toBe("The team's reports use the built-in template.");
+  });
+
+  it("names the version, who set it by name, and when — the spec's line", () => {
+    expect(templateBandLine(line({ set_by: "priya@legalsoft.com", set_by_name: "Priya Shah", set_at: at })))
+      .toBe("The team's reports use version 4, set by Priya Shah on 3 Oct 2026.");
+    // A backend older than names: the email stands in.
+    expect(templateBandLine(line({ set_by: "priya@legalsoft.com", set_at: at })))
+      .toBe("The team's reports use version 4, set by priya@legalsoft.com on 3 Oct 2026.");
+    // The reader is "you", whatever their name is.
+    expect(templateBandLine(line({ kind: "html", set_by: "me@legalsoft.com", set_by_name: "Me Myself", set_at: at }),
+      "ME@legalsoft.com")).toBe("The team's reports use version 4, set by you on 3 Oct 2026.");
+    expect(templateBandLine(line({}))).toBe("The team's reports use version 4.");
+  });
+
+  it("never claims the built-in when the server could not read its store", () => {
+    expect(templateBandLine(line({ kind: null, number: null })))
+      .toBe("Which template the team's reports use could not be read just now.");
+  });
+});
+
+describe("readFailure — a sample's refusal, chosen by its code", () => {
+  it("puts the day's limit apart, calm", () => {
+    expect(readFailure("rate_limited", 429)).toBe("limit");
+    expect(readFailure(null, 429)).toBe("limit");
+  });
+
+  it("puts every reader code with the reader", () => {
+    for (const code of ["no_key", "offline", "provider_error", "timeout", "refused", "truncated", "invalid_output"]) {
+      expect(readFailure(code, code.startsWith("re") || code.startsWith("tr") || code.startsWith("in") ? 502 : 503), code)
+        .toBe("reader");
+    }
+  });
+
+  it("puts every upload code with the file", () => {
+    for (const code of ["invalid_file", "unreadable", "encrypted", "too_large", "too_many_pages",
+                        "cost_ceiling", "nothing_matched", "not_html"]) {
+      expect(readFailure(code, 422), code).toBe("upload");
+    }
+  });
+
+  it("places a code it has never seen by its status, and no reply at all with the reader", () => {
+    expect(readFailure("something_new", 502)).toBe("reader");
+    expect(readFailure("something_new", 422)).toBe("upload");
+    expect(readFailure(null, null)).toBe("reader");
+  });
+
+  it("keeps a checker that could not run apart from the AI reader — it is not 'couldn't read your sample'", () => {
+    expect(readFailure("check_unavailable", 503)).toBe("check");
+  });
+
+  it("treats the 413 refused on size, before auth, as the file's — shown with the server's reason", () => {
+    expect(readFailure("too_large", 413)).toBe("upload");
+  });
+});
+
+describe("the readings and the limit", () => {
+  it("counts down only from three, and never says zero", () => {
+    expect(readingsLeftLine(10)).toBeNull();
+    expect(readingsLeftLine(4)).toBeNull();
+    expect(readingsLeftLine(3)).toBe("3 sample readings left today for the team.");
+    expect(readingsLeftLine(1)).toBe("1 sample reading left today for the team.");
+    expect(readingsLeftLine(0)).toBeNull();
+    expect(readingsLeftLine(null)).toBeNull();
+  });
+
+  it("says the spec's sentence in full — arranging by hand always has somewhere to start now", () => {
+    expect(rateLimitedLine(10)).toBe(
+      "The team has used today's 10 sample readings. Try again tomorrow; HTML templates and arranging by hand work now.");
+    expect(rateLimitedLine(null)).toBe(
+      "The team has used today's sample readings. Try again tomorrow; HTML templates and arranging by hand work now.");
+  });
+});
+
+describe("an HTML template, checked", () => {
+  it("says the spec's sentence when only scripts went", () => {
+    expect(removedLine({ scripts: 1 })).toBe("We removed 1 script. Templates can't run code; everything else is kept.");
+  });
+
+  it("names everything else that went, so 'everything else is kept' stays true", () => {
+    expect(removedLine({ scripts: 2, handlers: 1, external_urls: 3 })).toBe(
+      "We removed 2 scripts, 1 event handler and 3 outside addresses. Templates can't run code or load anything from outside; everything else is kept.");
+  });
+
+  it("says nothing for comments alone", () => {
+    expect(removedLine({ comments: 4 })).toBeNull();
+    expect(removedLine({})).toBeNull();
+  });
+
+  it("heads placeholder problems with the spec's line, and anything else plainly", () => {
+    const ph = { line: 14, placeholder: "{{totl_spend}}", message: "x", suggestion: "{{total_spend}}" };
+    expect(problemsHeading([ph, { ...ph, line: 20 }]))
+      .toBe("2 placeholders aren't recognised, so this template can't be saved.");
+    expect(problemsHeading([ph])).toBe("1 placeholder isn't recognised, so this template can't be saved.");
+    expect(problemsHeading([ph, { line: null, placeholder: null, message: "No placeholders.", suggestion: null }]))
+      .toBe("2 problems stop this template from being saved.");
+  });
+
+  it("writes a row the spec's way", () => {
+    expect(problemParts({ line: 14, placeholder: "{{totl_spend}}", message: "unknown", suggestion: "{{total_spend}}" }))
+      .toEqual({ line: "Line 14", placeholder: "{{totl_spend}}", text: "Did you mean {{total_spend}}?" });
+    expect(problemParts({ line: null, placeholder: null, message: "This file uses no placeholders.", suggestion: null }))
+      .toEqual({ line: null, placeholder: null, text: "This file uses no placeholders." });
+  });
+});
+
+describe("matchedLine", () => {
+  it("is the spec's sentence", () => {
+    expect(matchedLine(6, "September 2026")).toBe("We matched 6 sections. Here they are with your September 2026 figures.");
+    expect(matchedLine(1, null)).toBe("We matched 1 section.");
+  });
+});
+
+describe("the version history", () => {
+  const listing = readTemplateListing(LISTING);
+
+  it("lists saved versions newest first and pins the built-in last", () => {
+    const rows = historyRows(listing);
+    expect(rows.map((r) => r.id)).toEqual(["tv_1", "builtin"]);
+    expect(rows.map((r) => [versionLabel(r), madeFrom(r), r.active])).toEqual([
+      ["Version 1", "Sample: Q3 sample.pdf", true],
+      ["Built-in", "Built in", false],
+    ]);
+  });
+
+  it("says how each version was made", () => {
+    const v = (source_kind: string, filename: string | null) =>
+      ({ kind: "layout", source_kind, filename }) as Pick<MrTemplateVersion, "kind" | "source_kind" | "filename">;
+    expect(madeFrom(v("image", "board.png"))).toBe("Sample: board.png");
+    expect(madeFrom(v("html", "ours.html"))).toBe("HTML: ours.html");
+    expect(madeFrom(v("builder", null))).toBe("Arranged by hand");
+  });
+
+  it("marks the built-in in use when the team switched back to it, and says who did, by name", () => {
+    const back = readTemplateListing({ ...LISTING, active: { id: "builtin", kind: "builtin",
+      set_by: "rahul@legalsoft.com", set_by_name: "Rahul Mehta",
+      set_at: new Date(2026, 9, 5, 10).toISOString() },
+      versions: [{ ...LISTING.versions[0], active: false }] });
+    const rows = historyRows(back);
+    expect(rows.map((r) => r.active)).toEqual([false, true]);
+    expect(setByLine(rows[1])).toBe("Set by Rahul Mehta on 5 Oct");
+  });
+
+  it("adds 'Set by' under In use only for a version switched back to, not one just saved", () => {
+    const saved = historyRows(listing)[0];
+    expect(setByLine(saved)).toBeNull();
+    const reverted: MrTemplateVersion = { ...saved, set_by: "rahul@legalsoft.com",
+      set_by_name: "Rahul Mehta", set_at: new Date(2026, 9, 5, 10).toISOString() };
+    expect(setByLine(reverted)).toBe("Set by Rahul Mehta on 5 Oct");
+    expect(setByLine(reverted, "rahul@legalsoft.com")).toBe("Set by you on 5 Oct");
+    expect(setByLine({ ...reverted, set_by_name: null })).toBe("Set by rahul@legalsoft.com on 5 Oct");
+  });
+
+  it("names who made each version: their name, the email when there is none, 'you' for the reader", () => {
+    const v = historyRows(listing)[0];
+    expect(madeBy(v)).toBe("Priya Shah");
+    expect(madeBy({ ...v, created_by_name: null })).toBe("priya@legalsoft.com");
+    expect(madeBy(v, "Priya@LegalSoft.com")).toBe("you");
+    expect(madeBy(historyRows(listing)[1])).toBe("—");            // the built-in: nobody made it
+  });
+
+  it("says the switch the spec's way", () => {
+    expect(switchedLine({ kind: "layout", number: 2 })).toBe("Switched to version 2. The team's next report will use it.");
+    expect(switchedLine({ kind: "builtin", number: null }))
+      .toBe("Switched to the built-in template. The team's next report will use it.");
+  });
+});
+
+describe("arranging by hand", () => {
+  const placeholders = readTemplateListing(LISTING).placeholders;
+  const types = sectionTypes(placeholders);
+  const layout = { theme: { colors: { ink: "#101010" } }, sections: [
+    { type: "header", title: null, options: {} },
+    { type: "vendor_scorecard", title: null, options: { show_new_this_period: false } },
+    { type: "data_gaps", title: null, options: {} },
+  ] };
+
+  it("reads the section types off the block placeholders, and their names from each one's title", () => {
+    expect(types).toEqual(["header", "benchmark_movers", "vendor_scorecard", "standouts", "data_gaps", "footer"]);
+    const titles = sectionTitles(placeholders);
+    expect(titles.benchmark_movers).toBe("Biggest movers vs. benchmark");
+    expect(titles.data_gaps).toBe("Basis & data gaps");
+  });
+
+  it("never parses a description for a name — a title, or the key spelled out", () => {
+    const p = (title: string | null): MrTemplatePlaceholder => ({
+      token: "{{chart:new_thing}}", title, kind: "chart", example: null,
+      description: "Something Else Entirely: a chart drawn from this report" });
+    expect(sectionTitles([p("Real name")]).new_thing).toBe("Real name");
+    expect(sectionTitles([p(null)]).new_thing).toBe("New thing");
+    expect(sourceOf("./templateModel.ts")).not.toContain("drawn from this report$");
+  });
+
+  it("pins the header and footer, lists the sample's own sections shown and every other one hidden", () => {
+    const a = arrange(layout, types);
+    expect(a.top.map((r) => r.type)).toEqual(["header"]);
+    expect(a.bottom.map((r) => r.type)).toEqual(["data_gaps", "footer"]);
+    expect(a.rows.map((r) => [r.type, r.shown])).toEqual([
+      ["vendor_scorecard", true], ["benchmark_movers", false], ["standouts", false]]);
+  });
+
+  it("gives back the theme and every option untouched — the UI reorders, hides and renames only", () => {
+    const out = layoutOf(arrange(layout, types));
+    expect(out.theme).toEqual({ colors: { ink: "#101010" } });
+    expect(out.sections).toEqual([
+      { type: "header", title: null, options: {} },
+      { type: "vendor_scorecard", title: null, options: { show_new_this_period: false } },
+      { type: "data_gaps", title: null, options: {} },
+      { type: "footer", title: null, options: {} },
+    ]);
+  });
+
+  it("moves, shows, hides and renames — and leaves hidden sections out of the layout", () => {
+    let a = arrange(layout, types);
+    const movers = a.rows.find((r) => r.type === "benchmark_movers")!.key;
+    const card = a.rows.find((r) => r.type === "vendor_scorecard")!.key;
+    a = showRow(a, movers, true);
+    a = moveRow(a, movers, -1);
+    a = renameRow(a, card, "  Who did what  ");
+    expect(layoutOf(a).sections.map((s) => [s.type, s.title])).toEqual([
+      ["header", null], ["benchmark_movers", null], ["vendor_scorecard", "Who did what"],
+      ["data_gaps", null], ["footer", null]]);
+    a = showRow(a, card, false);
+    expect(layoutOf(a).sections.map((s) => s.type)).toEqual(["header", "benchmark_movers", "data_gaps", "footer"]);
+    a = renameRow(a, card, "");
+    expect(a.rows.find((r) => r.key === card)!.title).toBeNull();
+  });
+
+  it("does nothing past either end, and drops a dragged row into its target's place", () => {
+    const a = arrange(layout, types);
+    expect(moveRow(a, a.rows[0].key, -1)).toBe(a);
+    expect(moveRow(a, a.rows[a.rows.length - 1].key, 1)).toBe(a);
+    const moved = moveRowTo(a, a.rows[2].key, a.rows[0].key);
+    expect(moved.rows.map((r) => r.type)).toEqual(["standouts", "vendor_scorecard", "benchmark_movers"]);
+  });
+
+  it("knows when an arrangement renders exactly what the sample did — and when pinning added a section", () => {
+    const a = arrange(layout, types);
+    expect(sameLayout(layoutOf(a), layout)).toBe(false);          // the footer was added
+    const full = { sections: [...layout.sections, { type: "footer", title: null, options: {} }] };
+    expect(sameLayout(layoutOf(arrange(full, types)), full)).toBe(true);
+  });
+
+  it("always has somewhere to start: the built-in, the layout version in use, or the built-in for HTML", () => {
+    const active = readTemplateListing(LISTING).active!;
+    expect(handPlan(null)).toEqual({ from: "builtin", note: null });
+    expect(handPlan({ ...active, id: "builtin", kind: "builtin", number: null }))
+      .toEqual({ from: "builtin", note: null });
+    // A layout version in use: its own sections, through the layout route.
+    expect(handPlan(active)).toEqual({ from: "version", id: "tv_1" });
+    // An HTML version has no sections: the built-in's, said in one quiet line.
+    expect(handPlan({ ...active, kind: "html", number: 3 })).toEqual({ from: "builtin",
+      note: "Version 3 is an HTML template, which has no sections to arrange, so this starts from the built-in layout." });
+  });
+});
+
+describe("a missing preview, by its code", () => {
+  const p = (code: string | null, html: string | null = null): MrTemplatePreview => ({
+    preview_html: html, preview_unavailable_reason: html ? null : "The reason, from the server.",
+    preview_unavailable_code: code });
+
+  it("holds Save only when THIS template does not render", () => {
+    expect(previewHoldsSave(p("template_failed"))).toBe(true);
+    expect(previewHoldsSave(p("no_data"))).toBe(false);
+    expect(previewHoldsSave(p("store_unavailable"))).toBe(false);
+    // A backend older than the code: no guess — Save stays open, the server re-checks.
+    expect(previewHoldsSave(p(null))).toBe(false);
+    expect(previewHoldsSave(p(null, "<!DOCTYPE html>"))).toBe(false);
+  });
+
+  it("says the spec's sentence for a template that fails, and the server's reason otherwise", () => {
+    expect(noPreviewLine(p("template_failed"))).toBe(
+      "This template doesn't render with your figures: The reason, from the server. It can't be saved as it is.");
+    expect(noPreviewLine(p("no_data"))).toBe(
+      "There's no preview: The reason, from the server. You can still save it — it is checked again when you do.");
+    expect(noPreviewLine(p("store_unavailable"))).toBe(
+      "There's no preview: The reason, from the server. You can still save it — it is checked again when you do.");
+    expect(noPreviewLine(p(null, "<!DOCTYPE html>"))).toBeNull();
+  });
+});
+
+describe("the template panel's own words and wiring", () => {
+  const panel = () => sourceOf("./Templates.tsx");
+
+  it("shows every preview in the sandboxed viewer and nothing else", () => {
+    expect(panel()).toContain("<ReportFrame html={preview.preview_html}");
+    expect(panel()).not.toMatch(/<iframe\b|srcDoc|dangerouslySetInnerHTML|window\.open\(|createObjectURL/);
+    expect(panel()).not.toMatch(/innerHTML/);
+  });
+
+  it("chooses every state by the reply's code, never its wording", () => {
+    expect(panel()).toContain("readFailure(apiCode(e), apiStatus(e))");
+    expect(panel()).toContain('code === "template_invalid"');
+    expect(panel()).not.toMatch(/(message|reason)\.(includes|startsWith|match)\(/);
+  });
+
+  it("gates nothing on a role — any member may read, save and switch", () => {
+    expect(panel()).not.toMatch(/is_admin|is_creator|mayEdit|mrDataActions/);
+  });
+
+  it("carries the spec's copy", () => {
+    for (const line of [
+      "Drop a sample report here, or choose a file",
+      "A PDF or picture of a report you like. We match its sections, order, colours\n                    and fonts to the figures we have.",
+      "Upload a sample report",
+      "Arrange sections by hand",
+      "Use built-in template",
+      "Earlier versions ({data.versions.length})",
+      "Building your own HTML template",
+      "Download starter HTML",
+      "Reading ${step.file.name}. This takes a few seconds",
+      "Every section in your sample was matched.",
+      "Not supported yet ({items.length})",
+      "We couldn't read your sample.",
+      ". Nothing was saved.",
+      "Fix the file and upload it again to see the preview.",
+      "Upload the fixed file",
+      "This template doesn't render with your figures: ",
+      ". It can't be saved as it is.",
+      "Save this template for the whole team?",
+      "Save for the whole team",
+      "Discard",
+      "Switch to this",
+      "In use",
+      '"Copied"',
+      "Saved as version ${version.number}. The team's next report will use it.",
+      "Always shown",
+    ]) expect(panel(), line).toContain(line);
+    expect(panel()).toMatch(/From the next report on, every Vendor Performance report anyone on the team builds will\s+use it\. Reports already built won't change\. You can switch back to any earlier version\./);
+    expect(panel()).toMatch(/Your sample has these, but we have no figures for them, so they're left out rather than\s+made up\./);
+  });
+
+  it("always offers arranging by hand, starting where handPlan says", () => {
+    // Both places it is offered — the first screen, and the way on when the
+    // reader fails — call the one function, with no guard in front.
+    expect(panel().match(/onClick=\{\(\) => void arrangeByHand\(\)\}/g)).toHaveLength(2);
+    expect(panel().match(/>\s*Arrange sections by hand\s*</g)).toHaveLength(2);
+    expect(panel()).not.toMatch(/handStart|\{start && \(/);
+    expect(panel()).toContain("const plan = handPlan(data.active);");
+    expect(panel()).toContain('mrTemplateLayout(plan.from === "version" ? plan.id : "builtin")');
+    expect(panel()).toContain('if (apiCode(e) === "not_a_layout" && data.default_layout)');
+    expect(panel()).toContain('{step.note && <p className="calm" role="note">{step.note}</p>}');
+    expect(panel()).toContain("rateLimitedLine(data.readings_per_day)");
+  });
+
+  it("puts the confirmation in front of every save, and holds it only on the preview's code", () => {
+    expect(panel()).toMatch(/onSave=\{\(\) => setConfirming\(true\)\}/);
+    expect(panel()).toMatch(/onClick=\{\(\) => setConfirming\(true\)\}/);
+    expect(panel()).not.toMatch(/onClick=\{\(\) => void save\(\)\}/);
+    expect(panel()).toContain("<ConfirmSave saving={saving}");
+    expect(panel()).toContain("disabled={saving || arrangeKey !== step.previewKey || previewHoldsSave(step.preview)}");
+    expect(panel()).toContain("disabled={previewHoldsSave(check)}");
+    // The guess from figures being on file is gone.
+    expect(panel()).not.toMatch(/examples_from !== null|haveFigures/);
+  });
+
+  it("shows a checker that could not run as an honest Oops with Try again — nothing was saved", () => {
+    expect(panel()).toMatch(/\} else if \(failure === "check"\) \{\s*setStep\(\{ kind: "check", file, reason: message \}\);/);
+    expect(panel()).toMatch(/\{step\.kind === "check" && \([\s\S]{0,120}<Oops\s+what="We couldn't check your template, so nothing was saved\."\s+error=\{step\.reason\}\s+onRetry=\{\(\) => void read\(step\.file\)\}/);
+    // On save, the same: an Oops whose Try again sends the same save.
+    expect(panel()).toContain('} else if (code === "check_unavailable") {');
+    expect(panel()).toMatch(/saveError\.tone === "check" \? \(\s*<Oops\s+what="We couldn't check your template, so nothing was saved\."\s+error=\{saveError\.text\}\s+onRetry=\{\(\) => void save\(\)\}/);
+  });
+
+  it("shows the server's own reason for a 413 too_large, on reading and on saving", () => {
+    // Reading: readFailure puts it with the file, and the step prints the reason.
+    expect(panel()).toContain('setStep({ kind: "upload", reason: message, unsupported });');
+    expect(panel()).toContain('<p className="calm" role="status">{step.reason}</p>');
+    // Saving: the reason, then "Nothing was saved."
+    expect(panel()).toMatch(/code === "invalid_layout" \|\| code === "invalid_template" \|\| code === "too_large"\) \{[\s\S]{0,260}text: `\$\{clause\(reason\)\}\. Nothing was saved\.`/);
+  });
+
+  it("names people the spec's way — by name, the email when there is none, 'you' for the reader", () => {
+    expect(panel()).toContain("<td className=\"dim\">{madeBy(v, me)}</td>");
+    expect(panel()).toContain("const setBy = setByLine(v, me);");
+  });
+
+  it("lists each placeholder by its title", () => {
+    expect(panel()).toContain("{p.title && <b>{p.title}</b>}");
+  });
+
+  it("gives a section's title field the whole first line of its row, and keeps focus order visual", () => {
+    // Squeezed beside Show and the moves, it was ~150px: "Budget allocation vs. sp".
+    const css = sourceOf("../../../../app/hub-live.css");
+    expect(css).toContain('grid-template-areas: "grip title title" ". show move";');
+    expect(css).toContain(".tsec__r > .tsec__in { grid-area: title; width: 100%; }");
+    const row = panel().slice(panel().indexOf('className="tsec__g"'), panel().indexOf('className="tsec__mv"'));
+    expect(row.indexOf('className="inp tsec__in"')).toBeLessThan(row.indexOf('className="tsec__show"'));
+  });
+
+  it("never paints the daily limit or a placeholder problem red", () => {
+    expect(panel()).toMatch(/readingsLeft === 0 \? \(\s*<p className="calm" role="status">\{rateLimitedLine/);
+    expect(panel()).toMatch(/<div className="cov">\s*<p className="cov__n">\{problemsHeading/);
+  });
+});
+
+/* --------------------------------------------------------------------------
+   Security audit: an HTML check's `sanitized_html` is emitted WITHOUT the
+   Content-Security-Policy, so it never reaches a frame or a page. Previews come
+   only from `preview_html` (which carries the CSP), only through the shared
+   sandboxed viewer.
+   -------------------------------------------------------------------------- */
+
+describe("sanitized_html is never shown", () => {
+  const SENTINEL = "<p>SANITIZED-NO-CSP {{total_spend}}</p>";
+  const check = readTemplateReading({
+    source_kind: "html", sanitized_html: SENTINEL, errors: [], removed: {}, placeholders_used: [],
+    can_save: true, upload: { filename: "t.html" },
+    preview_html: '<!DOCTYPE html><html lang="en"><head><meta http-equiv="Content-Security-Policy" content="default-src \'none\'"></head><body>$2,737</body></html>',
+    preview_unavailable_reason: null,
+  });
+
+  it("hands the viewer the CSP preview and nothing of the sanitized text", () => {
+    const shown = previewOf(check);
+    expect(Object.keys(shown).sort())
+      .toEqual(["preview_html", "preview_unavailable_code", "preview_unavailable_reason"]);
+    expect(JSON.stringify(shown)).not.toContain("SANITIZED-NO-CSP");
+    expect(shown.preview_html).toContain("Content-Security-Policy");
+  });
+
+  it("renders the viewer from that preview only — the sentinel never reaches a frame", () => {
+    const markup = renderToStaticMarkup(createElement(ReportFrame, {
+      html: previewOf(check).preview_html!, title: "Preview" }));
+    expect(markup).toMatch(/\ssandbox=""/);
+    expect(markup).not.toContain("SANITIZED-NO-CSP");
+  });
+
+  it("uses sanitized_html in exactly one place — the body of a save, sent back to the server", () => {
+    const panel = sourceOf("./Templates.tsx");
+    const uses = panel.split("\n").filter((l) => l.includes("sanitized_html") && !l.trim().startsWith("//")
+      && !l.trim().startsWith("*"));
+    // The save body, and the type that forbids it reaching the viewer — nothing else.
+    expect(uses.map((l) => l.replace(/\r$/, ""))).toEqual([
+      "            html: step.check.sanitized_html ?? await step.file.text() }",
+      "  preview: MrTemplatePreview & { sanitized_html?: never };",
+    ]);
+    // Every frame in the panel is drawn from `preview_html`, and the HTML check
+    // passes the viewer `previewOf(check)`, never the check itself.
+    expect(panel.match(/<ReportFrame [^>]*/g)).toEqual([
+      '<ReportFrame html={preview.preview_html} title="Preview of this template with your figures" /']);
+    expect(panel).toContain("<PreviewPane preview={previewOf(check)}");
+    expect(panel).not.toMatch(/preview=\{check\}/);
+    // The prop type itself refuses an object carrying it.
+    expect(panel).toContain("preview: MrTemplatePreview & { sanitized_html?: never };");
+  });
+
+  it("is not read anywhere else in the panel's tree or the viewer", () => {
+    for (const file of ["./Reports.tsx", "./reportFrame.ts", "./templateModel.ts"]) {
+      const code = sourceOf(file).split("\n")
+        .filter((l) => !/^\s*(\/\/|\*|\/\*\*)/.test(l)).join("\n");
+      expect(code, file).not.toMatch(/\.sanitized_html|\["sanitized_html"\]/);
+    }
   });
 });

@@ -37,6 +37,10 @@ describe("deadlineFor", () => {
     // documents render server-side.
     expect(deadlineFor("/api/mr/board-report", "POST")).toBe(SLOW_TIMEOUT_MS);
     expect(deadlineFor("/api/mr/board-report/run_1/pdf")).toBe(SLOW_TIMEOUT_MS);
+    // Reading a sample for a team template is a vision-model call the backend
+    // allows 150 seconds on its own; checking HTML or previewing is not.
+    expect(deadlineFor("/api/mr/report-templates/extract", "POST")).toBe(SLOW_TIMEOUT_MS);
+    expect(deadlineFor("/api/mr/report-templates/preview", "POST")).toBe(DEFAULT_TIMEOUT_MS);
   });
 
   it("separates the two methods that share the briefs path", () => {

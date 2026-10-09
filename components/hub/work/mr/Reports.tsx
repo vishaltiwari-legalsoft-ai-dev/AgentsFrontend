@@ -12,12 +12,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  MR_REPORT_KINDS, apiStatus, isBoardKind, isCampaignKind, isVendorKind, mrBoardReportHtml,
-  mrBoardReportPdfUrl, mrBuildBoardReport, mrBuildReport, mrBuildVendorReport, mrGetBoardRun,
-  mrGetRun, mrGetVendorRun, mrListRuns, mrReportPeriods, mrReportPdfUrl, mrVendorReportHtml,
-  mrVendorReportPdfUrl, mrVendorReportPeriods,
+  MR_REPORT_KINDS, apiCode, apiStatus, isBoardKind, isCampaignKind, isVendorKind,
+  mrBoardReportHtml, mrBoardReportPdfUrl, mrBuildBoardReport, mrBuildReport, mrBuildVendorReport,
+  mrGetBoardRun, mrGetRun, mrGetVendorRun, mrListRuns, mrReportPeriods, mrReportPdfUrl,
+  mrReportTemplates, mrVendorReportHtml, mrVendorReportPdfUrl, mrVendorReportPeriods,
   type MrBoardCoverageColumn, type MrBoardReport, type MrReport, type MrReportKind,
-  type MrReportPeriods, type MrRunSummary, type MrVendorPeriods, type MrVendorRun,
+  type MrReportPeriods, type MrRunSummary, type MrTemplateLine, type MrTemplateListing,
+  type MrVendorPeriods, type MrVendorRun,
 } from "@/lib/api";
 import { describeFailure, loadPending, useLoadSession, type Load } from "@/lib/load";
 import {
@@ -28,11 +29,13 @@ import { proseBlocks } from "@/components/console/mr/proseBlocks";
 import { Ic } from "../../Sprite";
 import { PageHead, RuleHead, Blank, Oops, Wait } from "../../ui";
 import { n } from "../../model";
-import type { ToastFn } from "../../context";
+import { useHub, type ToastFn } from "../../context";
 import type { MrData_ } from "../MrWorkspace";
 import { SourceList } from "./parts";
 import { PullWorkbook, useWorkbookPull, type WorkbookPull } from "./Data";
 import { ReportFrame, openReportTab } from "./reportFrame";
+import { TemplatePanel, saveFile } from "./Templates";
+import { clause, templateBandLine } from "./templateModel";
 
 /** The report on screen. One slot, three readers: a campaign narrative, the
  *  board ledger and the vendor document are different shapes, and holding them
@@ -54,6 +57,12 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
   // through a failed click. A backend too old to know the route reads as off.
   const [vendor, setVendor] = useState<Load<MrVendorPeriods>>(loadPending);
   const [vendorRetry, setVendorRetry] = useState(false);
+  // The team's report template. `enabled: false` — or a backend too old to
+  // have the route — hides "Change template" and the panel it opens.
+  const [templates, setTemplates] = useState<Load<MrTemplateListing>>(loadPending);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const { user } = useHub();
+  const me = user?.email ?? null;
   const [chosen, setChosen] = useState<Partial<Record<MrReportKind, string>>>({});
   const [shown, setShown] = useState<Shown | null>(null);
   const [opening, setOpening] = useState(false);
@@ -74,6 +83,8 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
       "The months and quarters on file could not be read.", { keepStale: true });
     void session.run("mr-vendor-periods", () => mrVendorReportPeriods(), setVendor,
       "The months with vendor figures could not be read.", { keepStale: true });
+    void session.run("mr-templates", () => mrReportTemplates(), setTemplates,
+      "The team's template could not be read.", { keepStale: true });
   }, [session, beat]);
 
   useEffect(() => { if (vendor.phase !== "loading") setVendorRetry(false); }, [vendor.phase]);
@@ -85,6 +96,11 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
   const vendorBand = vendorOn || (vendor.data === null
     && (vendor.phase === "failed" || (vendor.phase === "loading" && vendorRetry)));
   const retryVendor = () => { setVendorRetry(true); setVendor(loadPending); setBeat((b) => b + 1); };
+  // Templates belong to the vendor report: they never show without its band.
+  // On when the server says so, or when the read failed — "we never found out"
+  // is not "off", so the panel opens on its own Oops rather than vanishing.
+  const templatesOn = vendorOn && (templates.data?.enabled === true
+    || (templates.data === null && templates.phase === "failed"));
 
   const list = visibleRuns(runs.data || [], vendorOn);
   // Until both reads land, an empty list is "not known yet", not "nothing written".
@@ -217,10 +233,25 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
           load={vendor}
           pull={pull}
           disabled={opening}
+          me={me}
+          templatesOn={templatesOn}
+          templatesOpen={templatesOpen}
+          onTemplates={() => setTemplatesOpen((o) => !o)}
           onBuilt={(run) => { setShown({ kind: "vendor", run }); setBeat((b) => b + 1); }}
           onGone={() => setBeat((b) => b + 1)}
           onToast={onToast}
           onRetry={retryVendor}
+        />
+      )}
+
+      {templatesOn && templatesOpen && (
+        <TemplatePanel
+          listing={templates}
+          me={me}
+          onChanged={() => setBeat((b) => b + 1)}
+          onRetry={() => setBeat((b) => b + 1)}
+          onClose={() => setTemplatesOpen(false)}
+          onToast={onToast}
         />
       )}
 
@@ -340,14 +371,22 @@ function PeriodPick({ kind, periods, value, onPick }: {
 /** One month select and a button: the whole control.
  *
  *  Only months the server says hold a vendor sweep are offered, newest first
- *  and preselected. A month that turns out to have no vendor rows is the
- *  server's 422, and its sentence is printed as it came — it names the month
- *  and the way out. The template line is a statement, not a control: Phase 1
- *  builds with the built-in template only. */
-function VendorBuild({ load, pull, disabled, onBuilt, onGone, onToast, onRetry }: {
+ *  and preselected. Every answer that builds nothing is chosen by its `code`:
+ *  `empty_month` is calm and offers the pull; `template_failed` (409) is the
+ *  team template not rendering this report, with the two ways on — build with
+ *  the built-in, or change the template — and never a silent swap. Under the
+ *  button, the line saying which template the team's reports use. */
+function VendorBuild({
+  load, pull, disabled, me, templatesOn, templatesOpen, onTemplates, onBuilt, onGone, onToast, onRetry,
+}: {
   load: Load<MrVendorPeriods>;
   pull: WorkbookPull;
   disabled: boolean;
+  me: string | null;
+  /** Team templates are on here: "Change template" is offered. */
+  templatesOn: boolean;
+  templatesOpen: boolean;
+  onTemplates: () => void;
   onBuilt: (run: MrVendorRun) => void;
   /** The build answered 404: the switch went off since the months were read.
    *  Re-reading the periods is what hides the band. */
@@ -357,22 +396,25 @@ function VendorBuild({ load, pull, disabled, onBuilt, onGone, onToast, onRetry }
 }) {
   const [chosen, setChosen] = useState("");
   const [building, setBuilding] = useState(false);
-  // The two answers that leave nothing built, kept apart: an empty month is the
-  // server saying "no figures for that month", calm and actionable; anything
-  // else is a failure and reads as one.
+  // The answers that leave nothing built, kept apart: an empty month is the
+  // server saying "no figures for that month", calm and actionable; a team
+  // template that fails is its own state with its own ways on; anything else
+  // is a failure and reads as one.
   const [empty, setEmpty] = useState<string | null>(null);
+  const [teamFailed, setTeamFailed] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
 
   const months = load.data?.months ?? [];
   const pick = vendorMonthPick(months, chosen);
   const labelOf = (ym: string) => months.find((m) => m.year_month === ym)?.label || ym;
 
-  const build = async () => {
+  const build = async (opts: { builtin?: boolean } = {}) => {
     setBuilding(true);
     setEmpty(null);
+    setTeamFailed(null);
     setFailed(null);
     try {
-      const run = await mrBuildVendorReport(pick || undefined);
+      const run = await mrBuildVendorReport(pick || undefined, opts);
       const month = run.structured?.month_label || labelOf(pick);
       onBuilt(run);
       onToast(
@@ -383,7 +425,13 @@ function VendorBuild({ load, pull, disabled, onBuilt, onGone, onToast, onRetry }
       );
     } catch (e: unknown) {
       const status = apiStatus(e);
-      if (status === 422) {
+      const code = apiCode(e);
+      if (code === "template_failed") {
+        setTeamFailed(`${clause(e instanceof Error ? e.message : "")
+          || "The team template could not render this report"}. Nothing was built.`);
+      } else if (code === "empty_month" || (code === null && status === 422)) {
+        // A backend from before the codes answered every refusal 422 with no
+        // code, and its only one was the empty month.
         setEmpty(describeFailure(e,
           `The last pull has no vendor figures for ${labelOf(pick)}. Pull the workbook, then build again.`));
       } else if (status === 404) {
@@ -446,13 +494,46 @@ function VendorBuild({ load, pull, disabled, onBuilt, onGone, onToast, onRetry }
             </button>
           </div>
 
-          <p className="calm">The team's reports use the built-in template.</p>
+          <p className="calm">{templateBandLine(load.data?.template ?? null, me)}</p>
+          {templatesOn && (
+            <p>
+              <button
+                type="button"
+                className="btn btn--quiet btn--sm"
+                aria-expanded={templatesOpen}
+                aria-controls="mr-team-template"
+                onClick={onTemplates}
+              >
+                Change template
+              </button>
+            </p>
+          )}
 
           {empty && (
             <>
               <p className="calm" role="status">{empty}</p>
               <PullWorkbook pull={pull} />
             </>
+          )}
+          {teamFailed && (
+            <Oops
+              what="The team template couldn't build this report."
+              error={teamFailed}
+              actions={
+                <>
+                  <button type="button" className="btn btn--solid btn--sm" disabled={building}
+                    onClick={() => void build({ builtin: true })}>
+                    {building ? "Building…" : "Build with the built-in template"}
+                  </button>
+                  {templatesOn && (
+                    <button type="button" className="btn btn--quiet btn--sm"
+                      onClick={() => { if (!templatesOpen) onTemplates(); }}>
+                      Change template
+                    </button>
+                  )}
+                </>
+              }
+            />
           )}
           {failed && <p className="err" role="alert">{failed}</p>}
         </>
@@ -636,19 +717,6 @@ function OpenInTab({ title, read, onToast }: {
       {busy ? "Opening…" : "Open in a new tab"}
     </button>
   );
-}
-
-/** Hand an object URL to the browser as a download, then let it go. */
-function saveFile(url: string, fileName: string) {
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  // Not revoked at once: some browsers still read the URL a moment after the
-  // click. Ten seconds is long past that and short of leaking it for the session.
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 /* ------------------------------- board report ----------------------------- */

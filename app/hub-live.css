@@ -121,7 +121,7 @@
 }
 .oops b { display: block; margin-bottom: 2px; font-weight: 700; }
 .oops p { margin: 0; color: var(--fg-2); }
-.oops__act { margin-top: 10px; }
+.oops__act { margin-top: 10px; display: flex; flex-wrap: wrap; gap: var(--s2); }
 
 /* A figure the backend has no endpoint for yet is written as a dash with a
    reason on hover — never as a number, and never as a zero. */
@@ -548,6 +548,86 @@
   display: block; width: 100%; height: 80dvh;
   border: 1px solid var(--rule-hard); border-radius: var(--r-card);
   background: var(--surface);
+}
+
+/* ---------- Marketing Research: the team report template ------------------
+ *
+ * Opened inline under the Vendor Performance band, not in a dialog: a preview
+ * needs the width. One drop zone on --surface-2; a 300px section list beside
+ * the sandboxed preview. Nothing here is red — placeholder problems and the
+ * daily limit are calm notes; only a real failure uses `.oops`.
+ */
+
+.tpl .tw { padding-bottom: 0; }
+.tpl .rt { min-width: 640px; }
+.tpl code { font-family: inherit; font-stretch: 84%; font-weight: 650; color: var(--fg); }
+.tpl__set { display: block; margin-top: 2px; font-size: 11px; color: var(--fg-3); }
+
+.tdrop { position: relative; margin: 0 0 var(--s4); }
+/* The real file input: visually hidden, still in the tab order, so the zone
+   is reached and opened from the keyboard and shows the focus ring. */
+.tdrop__in {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.tdrop__z {
+  display: grid; justify-items: center; gap: var(--s2);
+  padding: var(--s5) var(--s4);
+  border: 1px dashed var(--rule-hard); border-radius: var(--r-card);
+  background: var(--surface-2); color: var(--fg-2);
+  font-size: 12px; line-height: 1.5; text-align: center; cursor: pointer;
+}
+.tdrop__z b { font-size: 13px; font-weight: 700; color: var(--fg); }
+.tdrop__z span { max-width: 56ch; }
+.tdrop__z svg { width: 20px; height: 20px; }
+.tdrop__z:hover, .tdrop.is-over .tdrop__z { border-color: var(--fg); }
+.tdrop__in:focus-visible + .tdrop__z { outline: 2px solid var(--mark); outline-offset: 2px; }
+
+.tarr {
+  display: grid; grid-template-columns: 300px minmax(0, 1fr);
+  gap: var(--s5); align-items: start; margin-top: var(--s4);
+}
+.tarr__v { min-width: 0; }
+
+.tsec { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+/* Two lines per movable row, so the title is never squeezed: the grip and the
+   title field across the full width of the 300px list, then Show on the left
+   and the Move buttons on the right under it. */
+.tsec__r {
+  display: grid; grid-template-columns: 14px minmax(0, 1fr) auto;
+  grid-template-areas: "grip title title" ". show move";
+  align-items: center; gap: var(--s1) var(--s2);
+  padding: var(--s2) 0; border-bottom: 1px solid var(--rule);
+  background: var(--surface);
+}
+.tsec__r > .tsec__g { grid-area: grip; }
+.tsec__r > .tsec__in { grid-area: title; width: 100%; }
+.tsec__r > .tsec__show { grid-area: show; }
+.tsec__r > .tsec__mv { grid-area: move; }
+.tsec__r.is-pinned {
+  grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: none;
+  padding-left: var(--s1);
+}
+.tsec__r.is-hidden .tsec__in { color: var(--fg-3); }
+.tsec__r.is-dragging { opacity: 0.5; }
+.tsec__g { display: grid; color: var(--fg-3); cursor: grab; }
+.tsec__g svg { width: 14px; height: 14px; }
+.tsec__show { display: flex; align-items: center; gap: var(--s1); font-size: 11px; color: var(--fg-2); }
+.tsec__in { min-height: 28px; padding: 3px 8px; font-size: 12px; }
+.tsec__mv { display: flex; gap: 2px; }
+.tsec__mv .btn { padding: 0 6px; }
+.tsec__t { font-size: 12px; font-weight: 650; }
+
+.tprob { margin: var(--s3) 0 0; padding: 0; list-style: none; }
+.tprob li {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2);
+  margin: 4px 0; font-size: 12px; line-height: 1.5; color: var(--fg-2);
+}
+.tprob code { font-family: inherit; font-stretch: 84%; font-weight: 650; color: var(--fg); }
+.tprob__l { color: var(--fg-3); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 900px) {
+  .tarr { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ---------- Graphic Designer: the brand-kit sheet ------------------------

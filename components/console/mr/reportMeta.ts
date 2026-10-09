@@ -241,11 +241,23 @@ function vendorDay(ymd: string | null | undefined, builtYear: number | null): st
 }
 
 /** "Template: built-in." / "Template: version 4." — or nothing, for a run that
- *  does not say which template made it. */
+ *  does not say which template made it.
+ *
+ *  A built-in build made while the team had its own template says which of the
+ *  two it was, because they mean different things to the reader: `fallback`
+ *  is the team template failing on this report (the spec's sentence), and
+ *  `override_of` is someone choosing the built-in over one that worked. */
 export function vendorTemplateLine(template: MrVendorRun["template"]): string {
   if (!template || typeof template.kind !== "string") return "";
-  if (template.kind === "builtin") return "Template: built-in.";
-  if (typeof template.version === "number") return `Template: version ${template.version}.`;
+  if (template.kind === "builtin") {
+    if (template.fallback) return "Built with the built-in template because the team template failed.";
+    if (template.override_of) {
+      const n = template.override_of.number;
+      return `Template: built-in, chosen instead of ${typeof n === "number" ? `version ${n}` : "the team's"}.`;
+    }
+    return "Template: built-in.";
+  }
+  if (typeof template.number === "number") return `Template: version ${template.number}.`;
   return "Template: the team's.";
 }
 

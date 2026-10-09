@@ -143,17 +143,28 @@ export function Blank({ title, children, action }: { title: string; children?: R
   );
 }
 
-/** We never found out. Distinct from empty on purpose. */
-export function Oops({ what, error, onRetry }: { what: string; error: string; onRetry?: () => void }) {
+/** We never found out. Distinct from empty on purpose.
+ *
+ *  `actions` are the ways on that are not "try the same thing again" — build
+ *  with the built-in template, arrange by hand — drawn before Try again. */
+export function Oops({ what, error, onRetry, actions }: {
+  what: string;
+  error: string;
+  onRetry?: () => void;
+  actions?: ReactNode;
+}) {
   return (
     <div className="oops" role="alert">
       <Ic name="x" />
       <div>
         <b>{what}</b>
         <p>{error}</p>
-        {onRetry && (
+        {(actions || onRetry) && (
           <div className="oops__act">
-            <button type="button" className="btn btn--quiet btn--sm" onClick={onRetry}>Try again</button>
+            {actions}
+            {onRetry && (
+              <button type="button" className="btn btn--quiet btn--sm" onClick={onRetry}>Try again</button>
+            )}
           </div>
         )}
       </div>

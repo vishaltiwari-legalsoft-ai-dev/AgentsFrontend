@@ -44,7 +44,14 @@ export function setUnauthorizedHandler(fn: () => void): void {
  *  identical as prose, and telling them apart by matching on that prose is how
  *  a reworded sentence silently turns one into the other. */
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(
+    message: string,
+    readonly status: number,
+    /** The reply's JSON object, when it sent one. Routes that answer
+     *  `{code, reason, detail, ...}` put what a screen branches on here, so a
+     *  state is chosen by its code and never by matching the wording. */
+    readonly body: Readonly<Record<string, unknown>> | null = null,
+  ) {
     super(message);
     this.name = "ApiError";
   }
@@ -55,13 +62,35 @@ export class ApiError extends Error {
 export const apiStatus = (e: unknown): number | null =>
   e instanceof ApiError ? e.status : null;
 
-async function parseError(response: Response): Promise<string> {
+/** The `code` a coded error reply carried, or null — a route that sends none,
+ *  a backend older than the code, or no reply at all. */
+export const apiCode = (e: unknown): string | null =>
+  e instanceof ApiError && typeof e.body?.code === "string" ? e.body.code : null;
+
+/** The rest of a coded error reply (`billed`, `unsupported`, `errors`…), or an
+ *  empty object. Every field read from it needs its own default. */
+export const apiBody = (e: unknown): Readonly<Record<string, unknown>> =>
+  (e instanceof ApiError && e.body) || {};
+
+async function readErrorReply(response: Response): Promise<{ message: string; body: Record<string, unknown> | null }> {
   try {
-    const data = await response.json();
-    return typeof data?.detail === "string" ? data.detail : "Request failed";
+    const data: unknown = await response.json();
+    const body = data && typeof data === "object" && !Array.isArray(data)
+      ? data as Record<string, unknown> : null;
+    return { message: typeof body?.detail === "string" ? body.detail : "Request failed", body };
   } catch {
-    return `Request failed (${response.status})`;
+    return { message: `Request failed (${response.status})`, body: null };
   }
+}
+
+async function parseError(response: Response): Promise<string> {
+  return (await readErrorReply(response)).message;
+}
+
+/** A non-2xx reply as an `ApiError`, carrying its status and its JSON body. */
+async function apiError(response: Response): Promise<ApiError> {
+  const { message, body } = await readErrorReply(response);
+  return new ApiError(message, response.status, body);
 }
 
 /** The single choke point for every call in this file, so the deadline and the
@@ -144,7 +173,7 @@ async function requestJson<T>(
 ): Promise<T> {
   const { response, deadline, timedOut } = await send(path, init, opts ?? {});
   try {
-    if (!response.ok) throw new ApiError(await parseError(response), response.status);
+    if (!response.ok) throw await apiError(response);
     return (await response.json()) as T;
   } catch (e) {
     if (deadline.expired) throw timedOut();
@@ -207,7 +236,7 @@ async function fetchBlob(
   // own "Not Found", and a caller that can read the status can say that in
   // words instead of printing two vague ones. Still an `Error`, so the call
   // sites that only read `.message` are untouched.
-  if (!response.ok) throw new ApiError(await parseError(response), response.status);
+  if (!response.ok) throw await apiError(response);
   return response.blob();
 }
 
@@ -1302,7 +1331,7 @@ export function gdUploadBrandReferences(
 async function deleteNoContent(path: string, opts?: RequestOptions): Promise<void> {
   const { response, deadline } = await send(path, { method: "DELETE" }, opts ?? {});
   try {
-    if (!response.ok) throw new ApiError(await parseError(response), response.status);
+    if (!response.ok) throw await apiError(response);
   } finally {
     deadline.clear();
   }
@@ -2332,12 +2361,39 @@ export interface MrVendorPeriods {
   pdf_unavailable_reason: string | null;
   /** Months with a vendor sweep, newest first. */
   months: MrVendorMonth[];
+  /** Which template the next build uses. `null` when the server did not say —
+   *  a backend older than team templates, where it is always the built-in. */
+  template: MrTemplateLine | null;
+}
+
+/** The band's one-line "which template" answer. `kind: null` is the server
+ *  saying it could not read its template store — not a claim of the built-in. */
+export interface MrTemplateLine {
+  kind: string | null;
+  number: number | null;
+  /** The email the change was recorded under, and the name to show. A
+   *  backend older than names sends none; the email stands in. */
+  set_by: string | null;
+  set_by_name: string | null;
+  set_at: string | null;
 }
 
 /** What a backend that does not build vendor reports amounts to. */
 export const MR_VENDOR_OFF: MrVendorPeriods = {
-  enabled: false, pdf_available: false, pdf_unavailable_reason: null, months: [],
+  enabled: false, pdf_available: false, pdf_unavailable_reason: null, months: [], template: null,
 };
+
+const str = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
+const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const obj = (v: unknown): Record<string, unknown> =>
+  (v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {});
+
+function readTemplateLine(raw: unknown): MrTemplateLine | null {
+  if (!raw || typeof raw !== "object") return null;
+  const t = obj(raw);
+  return { kind: str(t.kind), number: num(t.number), set_by: str(t.set_by),
+           set_by_name: str(t.set_by_name), set_at: str(t.set_at) };
+}
 
 /** The periods reply, with every field read against a default.
  *
@@ -2363,6 +2419,7 @@ export function readVendorPeriods(raw: unknown): MrVendorPeriods {
     pdf_unavailable_reason:
       typeof r.pdf_unavailable_reason === "string" ? r.pdf_unavailable_reason : null,
     months,
+    template: readTemplateLine(r.template),
   };
 }
 
@@ -2387,11 +2444,16 @@ export interface MrVendorMissing {
   reason: string;
 }
 
-/** Which template a run was built with. `builtin` is the only kind Phase 1
- *  builds; a saved team version carries its number. */
+/** Which template a run was built with: `{kind, number, id}`, kind `builtin`,
+ *  `layout` or `html`. A built-in build made while the team had its own
+ *  template says why: `fallback` (the team template failed on this report, with
+ *  the reason) or `override_of` (it would have worked; the built-in was chosen). */
 export interface MrVendorTemplate {
   kind: string;
-  version?: number | null;
+  number?: number | null;
+  id?: string | null;
+  fallback?: { number?: number | null; id?: string | null; reason?: string | null } | null;
+  override_of?: { number?: number | null; id?: string | null } | null;
 }
 
 /** The parts of `structured` the panel reads. The document itself is the
@@ -2424,10 +2486,17 @@ export interface MrVendorRun {
 
 /** Build — or re-serve — the vendor report for one month. No `year_month` is
  *  the newest month with a sweep. No `template` is the workspace's active one;
- *  the server never swaps it silently. An empty month is a 422 whose `detail`
- *  is the sentence the panel shows. */
-export const mrBuildVendorReport = (yearMonth?: string) =>
-  postJson<MrVendorRun>("/api/mr/vendor-report", yearMonth ? { year_month: yearMonth } : {});
+ *  `builtin: true` sends `template: "builtin"`, the only way a build uses the
+ *  built-in while the team has its own — the server never swaps it silently.
+ *
+ *  Refusals are coded: 422 `empty_month` / `invalid_month` /
+ *  `invalid_template`, and 409 `template_failed` (with `can_use_builtin`) when
+ *  the team template cannot render this report. Nothing is built on either. */
+export const mrBuildVendorReport = (yearMonth?: string, opts: { builtin?: boolean } = {}) =>
+  postJson<MrVendorRun>("/api/mr/vendor-report", {
+    ...(yearMonth ? { year_month: yearMonth } : {}),
+    ...(opts.builtin ? { template: "builtin" } : {}),
+  });
 
 /** The same run read back off the rail — same URL as `mrGetRun`, typed for
  *  the vendor reader. */
@@ -2439,6 +2508,342 @@ export const mrVendorReportHtml = (id: string) =>
   fetchText(`/api/mr/vendor-report/${id}/html`);
 export const mrVendorReportPdfUrl = (id: string) =>
   blobUrl(`/api/mr/vendor-report/${id}/pdf`);
+
+/* --------------------------- team report templates ------------------------ */
+// `/api/mr/report-templates*`. The template is the WORKSPACE's, and any member
+// may read a sample, save a version or switch — no admin gate, by the owner's
+// decision. Every reply below is read through a function that gives each field
+// a default, because for a few minutes after a deploy this console can be
+// talking to a backend that sends none of them.
+
+/** One section of a layout: `{type, title, options}`, `type` from the
+ *  renderer's section registry. The UI reorders, shows/hides and renames; it
+ *  never edits `options` or the theme — those go back to the server untouched. */
+export interface MrLayoutSection {
+  type: string;
+  title: string | null;
+  options: Record<string, unknown>;
+}
+
+export interface MrLayout {
+  /** The sample's colours and fonts. Opaque here: passed back as it came. */
+  theme?: Record<string, unknown>;
+  sections: MrLayoutSection[];
+}
+
+/** A saved template version, or the built-in (`id: "builtin"`). */
+export interface MrTemplateVersion {
+  id: string;
+  kind: string;                 // builtin | layout | html
+  number: number | null;
+  source_kind: string | null;   // pdf | image | html | builder
+  filename: string | null;
+  /** Emails, as the change was recorded; `_name` is who to show. A backend
+   *  older than names sends none, and the email stands in. */
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string | null;
+  /** Who last made this version the active one, and when. */
+  set_by: string | null;
+  set_by_name: string | null;
+  set_at: string | null;
+  active: boolean;
+}
+
+export interface MrTemplatePlaceholder {
+  token: string;                // "{{total_spend}}" / "{{table:vendor_scorecard}}"
+  /** "Total Spend" / "Vendor scorecard" — for a block, the section's name as
+   *  the report prints it. Null from a backend older than the field. */
+  title: string | null;
+  description: string;
+  kind: string;                 // scalar, or the section's kind (chart, table…)
+  /** The live value from the newest month ("$2,737"); null with no figures. */
+  example: string | null;
+}
+
+export interface MrTemplateListing {
+  enabled: boolean;
+  active: MrTemplateVersion | null;
+  /** Saved versions, newest first. The built-in is not among them. */
+  versions: MrTemplateVersion[];
+  placeholders: MrTemplatePlaceholder[];
+  examples_from: MrVendorMonth | null;
+  /** Sample readings the workspace has left today; null when not said. */
+  readings_left_today: number | null;
+  readings_per_day: number | null;
+  /** The built-in template's own layout, to arrange by hand from without a
+   *  round trip. Null from a backend older than the field; the layout route
+   *  (`mrTemplateLayout("builtin")`) answers the same thing. */
+  default_layout: MrLayout | null;
+}
+
+export const MR_TEMPLATES_OFF: MrTemplateListing = {
+  enabled: false, active: null, versions: [], placeholders: [], examples_from: null,
+  readings_left_today: null, readings_per_day: null, default_layout: null,
+};
+
+/** A layout as the server sent it, or null when it is not one. Sections that
+ *  are not `{type: string}` are dropped rather than guessed at. */
+export function readLayout(raw: unknown): MrLayout | null {
+  const r = obj(raw);
+  if (!Array.isArray(r.sections)) return null;
+  const sections = r.sections.flatMap((s): MrLayoutSection[] => {
+    const o = obj(s);
+    return typeof o.type === "string" && o.type
+      ? [{ type: o.type, title: str(o.title), options: obj(o.options) }]
+      : [];
+  });
+  const theme = obj(r.theme);
+  return Object.keys(theme).length ? { theme, sections } : { sections };
+}
+
+function readVersion(raw: unknown): MrTemplateVersion | null {
+  const v = obj(raw);
+  const id = str(v.id);
+  if (!id) return null;
+  return {
+    id,
+    kind: str(v.kind) || (id === "builtin" ? "builtin" : "layout"),
+    number: num(v.number),
+    source_kind: str(v.source_kind),
+    filename: str(v.filename),
+    created_by: str(v.created_by),
+    created_by_name: str(v.created_by_name),
+    created_at: str(v.created_at),
+    set_by: str(v.set_by),
+    set_by_name: str(v.set_by_name),
+    set_at: str(v.set_at),
+    active: v.active === true,
+  };
+}
+
+export function readTemplateListing(raw: unknown): MrTemplateListing {
+  const r = obj(raw);
+  if (r.enabled !== true) return MR_TEMPLATES_OFF;
+  const ex = obj(r.examples_from);
+  return {
+    enabled: true,
+    active: readVersion(r.active),
+    versions: Array.isArray(r.versions)
+      ? r.versions.flatMap((v) => { const read = readVersion(v); return read ? [read] : []; })
+      : [],
+    placeholders: Array.isArray(r.placeholders)
+      ? r.placeholders.flatMap((p): MrTemplatePlaceholder[] => {
+          const o = obj(p);
+          const token = str(o.token);
+          return token
+            ? [{ token, title: str(o.title), description: str(o.description) || "",
+                 kind: str(o.kind) || "scalar",
+                 example: typeof o.example === "string" ? o.example : null }]
+            : [];
+        })
+      : [],
+    examples_from: str(ex.year_month)
+      ? { year_month: str(ex.year_month)!, label: str(ex.label) || str(ex.year_month)! }
+      : null,
+    readings_left_today: num(r.readings_left_today),
+    readings_per_day: num(obj(r.limits).readings_per_day),
+    default_layout: readLayout(r.default_layout),
+  };
+}
+
+/** `GET /api/mr/report-templates`. `enabled: false` (or a 404 from a backend
+ *  older than the route) hides everything template-related. */
+export async function mrReportTemplates(): Promise<MrTemplateListing> {
+  try {
+    return readTemplateListing(await getJson<unknown>("/api/mr/report-templates"));
+  } catch (e) {
+    if (apiStatus(e) === 404) return MR_TEMPLATES_OFF;
+    throw e;
+  }
+}
+
+export interface MrTemplateUpload {
+  filename: string | null;
+  kind: string | null;
+  size: number | null;
+}
+
+export interface MrTemplatePreview {
+  preview_html: string | null;
+  /** Why there is no preview, in words to show. */
+  preview_unavailable_reason: string | null;
+  /** …and as a code to act on: `no_data` and `store_unavailable` leave Save
+   *  open (the server re-checks on save), `template_failed` holds it. Null
+   *  with a preview, or from a backend older than the code — where Save stays
+   *  open and the server's re-check is the guard. */
+  preview_unavailable_code: string | null;
+}
+
+/** A PDF or picture, read by the model into a layout. Nothing is saved. */
+export interface MrTemplateSampleReading extends MrTemplatePreview {
+  source_kind: "pdf" | "image";
+  upload: MrTemplateUpload;
+  layout: MrLayout;
+  /** Sections the sample has that no figures exist for — left out, not invented. */
+  unsupported: { title: string; description: string }[];
+  matched_count: number | null;
+  readings_left_today: number | null;
+}
+
+/** One reason an HTML template cannot be saved. */
+export interface MrTemplateProblem {
+  line: number | null;
+  placeholder: string | null;
+  message: string;
+  suggestion: string | null;
+}
+
+/** An HTML file, checked. No model call, no reading spent. */
+export interface MrTemplateHtmlCheck extends MrTemplatePreview {
+  source_kind: "html";
+  upload: MrTemplateUpload;
+  /** What a save stores — the file with everything unsafe taken out. */
+  sanitized_html: string | null;
+  errors: MrTemplateProblem[];
+  /** What was taken out, by kind (`scripts`, `handlers`, `external_urls`…). */
+  removed: Record<string, number>;
+  placeholders_used: string[];
+  can_save: boolean;
+}
+
+export type MrTemplateReading = MrTemplateSampleReading | MrTemplateHtmlCheck;
+
+function readUpload(raw: unknown): MrTemplateUpload {
+  const u = obj(raw);
+  return { filename: str(u.filename), kind: str(u.kind), size: num(u.size) };
+}
+
+export function readTemplateProblems(raw: unknown): MrTemplateProblem[] {
+  return Array.isArray(raw)
+    ? raw.map((e) => {
+        const o = obj(e);
+        return {
+          line: num(o.line), placeholder: str(o.placeholder),
+          message: str(o.message) || "This template has a problem the server did not describe.",
+          suggestion: str(o.suggestion),
+        };
+      })
+    : [];
+}
+
+function readPreview(r: Record<string, unknown>): MrTemplatePreview {
+  return {
+    preview_html: typeof r.preview_html === "string" && r.preview_html ? r.preview_html : null,
+    preview_unavailable_reason: str(r.preview_unavailable_reason),
+    preview_unavailable_code: str(r.preview_unavailable_code),
+  };
+}
+
+/** The extract answer, either shape. The server decides what the file is from
+ *  its bytes; an answer this console cannot read is a failure, not a guess. */
+export function readTemplateReading(raw: unknown): MrTemplateReading {
+  const r = obj(raw);
+  if (r.source_kind === "html") {
+    const removed: Record<string, number> = {};
+    for (const [k, v] of Object.entries(obj(r.removed))) {
+      if (typeof v === "number" && v > 0) removed[k] = v;
+    }
+    return {
+      source_kind: "html",
+      upload: readUpload(r.upload),
+      sanitized_html: typeof r.sanitized_html === "string" && r.sanitized_html ? r.sanitized_html : null,
+      errors: readTemplateProblems(r.errors),
+      removed,
+      placeholders_used: Array.isArray(r.placeholders_used)
+        ? r.placeholders_used.filter((p): p is string => typeof p === "string") : [],
+      // Absent is "cannot save": a save button the server never offered would
+      // only be refused.
+      can_save: r.can_save === true,
+      ...readPreview(r),
+    };
+  }
+  const layout = readLayout(r.layout);
+  if ((r.source_kind === "pdf" || r.source_kind === "image") && layout) {
+    return {
+      source_kind: r.source_kind,
+      upload: readUpload(r.upload),
+      layout,
+      unsupported: Array.isArray(r.unsupported)
+        ? r.unsupported.map((u) => ({ title: str(obj(u).title) || "A section",
+                                       description: str(obj(u).description) || "" }))
+        : [],
+      matched_count: num(r.matched_count),
+      readings_left_today: num(r.readings_left_today),
+      ...readPreview(r),
+    };
+  }
+  throw new Error("The server answered the sample in a shape this console does not read. Nothing was saved.");
+}
+
+/** Read a sample report — PDF, PNG, JPEG or HTML; the server decides the path.
+ *  A PDF or picture is one model call, metered per workspace per day; an HTML
+ *  file is checked and costs no reading. Refusals are coded: 422
+ *  `invalid_file` and the reader's upload codes, 413 `too_large` (refused
+ *  before auth, on the body's size), 429 `rate_limited`, 503/502 for the reader
+ *  itself — each with `billed` and `readings_left_today` — and, for an HTML
+ *  file, 503 `check_unavailable` when the checker could not run. */
+export async function mrReadTemplateSample(file: File): Promise<MrTemplateReading> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  return readTemplateReading(await sendForm<unknown>("/api/mr/report-templates/extract", form));
+}
+
+/** Preview a layout arranged by hand, in the newest month's real figures.
+ *  Nothing is saved. 422 `invalid_layout` carries the reason. */
+export async function mrPreviewTemplateLayout(layout: MrLayout): Promise<MrTemplatePreview> {
+  return readPreview(obj(await postJson<unknown>("/api/mr/report-templates/preview", { layout })));
+}
+
+export type MrTemplateSave =
+  | { source_kind: "pdf" | "image" | "builder"; filename?: string | null; layout: MrLayout }
+  | { source_kind: "html"; filename?: string | null; html: string };
+
+/** Save a version for the whole workspace; it becomes the active one. The
+ *  server re-checks everything. 422 `template_invalid` (with `errors` for
+ *  HTML), `invalid_layout`, `invalid_template`, `too_large`; 413 `too_large`
+ *  on the body's size; 503 `check_unavailable` when HTML could not be checked. */
+export async function mrSaveTemplate(body: MrTemplateSave): Promise<MrTemplateVersion | null> {
+  const r = obj(await postJson<unknown>("/api/mr/report-templates", body));
+  return readVersion(r.version) ?? readVersion(r.active);
+}
+
+/** One version's sections, to arrange by hand from: `{id, kind, number, layout}`.
+ *  `"builtin"` is the built-in's. The version list carries no bodies, so this
+ *  is one read when arranging starts. Refusals are coded: 404 `not_found` (not
+ *  this workspace's), 422 `not_a_layout` (an HTML version has no sections). */
+export interface MrTemplateLayout {
+  id: string;
+  kind: string;
+  number: number | null;
+  layout: MrLayout;
+}
+
+export async function mrTemplateLayout(id: string): Promise<MrTemplateLayout> {
+  const r = obj(await getJson<unknown>(
+    `/api/mr/report-templates/${encodeURIComponent(id)}/layout`));
+  const layout = readLayout(r.layout);
+  if (!layout || !layout.sections.length) {
+    throw new Error("The server sent no sections for that template, so there is nothing to arrange.");
+  }
+  return { id: str(r.id) || id, kind: str(r.kind) || "layout", number: num(r.number), layout };
+}
+
+/** Make a saved version — or `"builtin"` — the one the team's next report uses. */
+export async function mrActivateTemplate(id: string): Promise<MrTemplateVersion | null> {
+  const r = obj(await postJson<unknown>(
+    `/api/mr/report-templates/${encodeURIComponent(id)}/activate`, {}));
+  return readVersion(r.active);
+}
+
+/** The documented HTML starter, as a file to save. The bytes are re-typed as
+ *  `application/octet-stream` before they become an object URL: this is a
+ *  download, and a `blob:` URL that a browser would render as HTML runs in
+ *  this origin. Callers revoke the URL. */
+export async function mrTemplateStarterFileUrl(): Promise<string> {
+  const blob = await fetchBlob("/api/mr/report-templates/starter.html");
+  return URL.createObjectURL(new Blob([blob], { type: "application/octet-stream" }));
+}
 
 /** Download-report PDFs — the console panels rendered server-side in the same
  *  format. Returns an object URL ready for an <a download> click. */

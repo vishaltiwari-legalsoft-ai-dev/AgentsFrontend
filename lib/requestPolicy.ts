@@ -85,6 +85,9 @@ export const DEADLINE_RULES: readonly DeadlineRule[] = [
   { pattern: /^\/api\/mr\/(ingest|ingest-pdf|ingest-sheet|ask)$/, ms: SLOW_TIMEOUT_MS },
   { pattern: /^\/api\/mr\/(snapshots\/capture|workbook\/scan)$/, ms: SLOW_TIMEOUT_MS },
   { pattern: /^\/api\/mr\/reports\//, ms: SLOW_TIMEOUT_MS },
+  // Reading a sample report for a team template is one vision-model call, and
+  // the backend gives the reader 150 seconds on its own — past the default.
+  { pattern: /^\/api\/mr\/report-templates\/extract$/, methods: ["POST"], ms: SLOW_TIMEOUT_MS },
   // The board report writes no narrative, so it makes no model call — but it
   // loads the whole dataset like the campaign kinds do and then scans this
   // workspace's runs for one already keyed to the same capture. Same budget,
