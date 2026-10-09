@@ -440,7 +440,10 @@ describe("mayDisconnect", () => {
 /** Source of a sibling file, for the screens that cannot be rendered here — this
  *  suite has no DOM, and tsconfig's `jsx: "preserve"` means a .tsx module cannot
  *  be imported. The same device `geo/edits.test.ts` uses for its editor gate. */
-const sourceOf = (file: string) => readFileSync(new URL(file, import.meta.url), "utf8");
+// Line endings normalised: a Windows checkout (core.autocrlf) writes CRLF, and the
+// multi-line copy assertions below must not depend on how the file was checked out.
+const sourceOf = (file: string) =>
+  readFileSync(new URL(file, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 describe("mrDataActions", () => {
   const member = { is_admin: false, is_creator: false };
