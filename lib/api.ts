@@ -62,10 +62,23 @@ export class ApiError extends Error {
 export const apiStatus = (e: unknown): number | null =>
   e instanceof ApiError ? e.status : null;
 
+/** FastAPI's `HTTPException(detail={...})` arrives as `{"detail": {code,
+ *  message}}`: the coded refusal one level down. Null for a string `detail`,
+ *  a validation array, or no body. */
+const nestedDetail = (body: Readonly<Record<string, unknown>> | null | undefined): Record<string, unknown> | null => {
+  const d = body?.detail;
+  return d && typeof d === "object" && !Array.isArray(d) ? d as Record<string, unknown> : null;
+};
+
 /** The `code` a coded error reply carried, or null — a route that sends none,
- *  a backend older than the code, or no reply at all. */
-export const apiCode = (e: unknown): string | null =>
-  e instanceof ApiError && typeof e.body?.code === "string" ? e.body.code : null;
+ *  a backend older than the code, or no reply at all. Read at the top level
+ *  (`{code, detail}`) first, then inside an object `detail`. */
+export const apiCode = (e: unknown): string | null => {
+  if (!(e instanceof ApiError)) return null;
+  if (typeof e.body?.code === "string") return e.body.code;
+  const inner = nestedDetail(e.body)?.code;
+  return typeof inner === "string" ? inner : null;
+};
 
 /** The rest of a coded error reply (`billed`, `unsupported`, `errors`…), or an
  *  empty object. Every field read from it needs its own default. */
@@ -77,7 +90,13 @@ async function readErrorReply(response: Response): Promise<{ message: string; bo
     const data: unknown = await response.json();
     const body = data && typeof data === "object" && !Array.isArray(data)
       ? data as Record<string, unknown> : null;
-    return { message: typeof body?.detail === "string" ? body.detail : "Request failed", body };
+    // A coded refusal's `message` is written for the reader, same as a string
+    // `detail`; before this it collapsed to "Request failed".
+    const inner = nestedDetail(body)?.message;
+    const message = typeof body?.detail === "string" ? body.detail
+      : typeof inner === "string" && inner.trim() ? inner
+      : "Request failed";
+    return { message, body };
   } catch {
     return { message: `Request failed (${response.status})`, body: null };
   }
@@ -2903,6 +2922,9 @@ export interface SeoRunNums {
 export interface SeoBrandCard {
   brand: SeoBrand;
   gsc_connected?: boolean;
+  /** The brand's Search Console truth — absent on a backend older than the
+   *  console relay, where `gsc_connected` is all there is. */
+  gsc?: SeoGscStatus;
   headline?: string | null;
   last_run: {
     at: string;
@@ -2914,7 +2936,14 @@ export interface SeoBrandCard {
 }
 
 export interface SeoOverview {
-  sources: { gsc: boolean; serp: boolean };
+  sources: {
+    /** True only when some brand really has Search Console behind it. */
+    gsc: boolean;
+    /** Whether the Connect button can work on this server. Absent on an older
+     *  backend, where the connect flow could not finish — read as false. */
+    gsc_connect?: boolean;
+    serp: boolean;
+  };
   brands: SeoBrandCard[];
 }
 
@@ -2952,6 +2981,9 @@ export interface SeoTopic {
   avoided?: boolean;
   /** Why this topic was avoided, e.g. "overlaps https://example.com/page" — null/absent when not avoided. */
   avoided_reason?: string | null;
+  /** For a Google suggestion, the seed it was suggested for — absent on runs
+   *  that predate it. */
+  from_seed?: string | null;
 }
 
 export interface SeoGaTotals {
@@ -2992,6 +3024,13 @@ export const seoOverview = (opts?: RequestOptions) =>
 export interface SeoGscStatus {
   connected: boolean;
   property: string | null;
+  /** Who connected it and when — absent on a backend older than the relay. */
+  connected_by?: string | null;
+  connected_at?: string | null;
+  /** The property set for the shared service account, when one is. */
+  service_account_property?: string | null;
+  /** The latest run's summary is in Search Console mode. */
+  reading?: boolean;
 }
 
 export interface SeoSiteIssue {
@@ -3035,6 +3074,15 @@ export const seoAnalyzeSite = (brandId: string) =>
 
 export const seoOauthStart = (brandId: string) =>
   getJson<{ url: string }>(`/api/seo-geo/oauth/start/${brandId}`);
+
+/** Finish the Search Console connect with what Google sent back to
+ *  `/oauth/google`. The bearer ties the grant to this member; the state names
+ *  the brand. Refusals are coded under `detail` (`gsc_state_*` 400,
+ *  `gsc_scope_not_granted` / `gsc_no_property` 422, `gsc_exchange_failed` /
+ *  `gsc_google_unavailable` 502, `gsc_oauth_unconfigured` / `gsc_offline` 503)
+ *  with a `message` written for the reader. */
+export const seoOauthComplete = (code: string, state: string) =>
+  postJson<{ brand_id: string; gsc: SeoGscStatus }>("/api/seo-geo/oauth/complete", { code, state });
 
 export const seoOauthDisconnect = (brandId: string) =>
   postJson<{ connected: boolean }>(`/api/seo-geo/oauth/disconnect/${brandId}`, {});
