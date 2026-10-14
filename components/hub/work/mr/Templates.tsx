@@ -31,11 +31,11 @@ import { Oops, RuleHead, Wait } from "../../ui";
 import type { ToastFn } from "../../context";
 import { ReportFrame } from "./reportFrame";
 import {
-  arrange, clause, handPlan, historyRows, layoutOf, madeBy, madeFrom, matchedLine, moveRow,
-  moveRowTo, noPreviewLine, previewHoldsSave, previewOf, problemParts, problemsHeading,
-  rateLimitedLine, readFailure, readingsLeftLine, removedLine, renameRow, sameLayout,
-  sectionTitles, sectionTypes, setByLine, showRow, switchedLine, versionLabel,
-  type Arrangement, type ArrangeRow,
+  arrange, clause, handPlan, hasNoPlaceholders, historyRows, layoutOf, madeBy, madeFrom,
+  matchedLine, moveRow, moveRowTo, noPreviewLine, previewHoldsSave, previewOf, problemParts,
+  problemsHeading, rateLimitedLine, readFailure, readingsLeftLine, removedLine, renameRow,
+  sameLayout, sectionTitles, sectionTypes, setByLine, showRow, switchedLine, tooLargeLine,
+  versionLabel, type Arrangement, type ArrangeRow,
 } from "./templateModel";
 
 /** Where the panel is. One at a time, so a reading in flight and a preview
@@ -89,6 +89,20 @@ export function TemplatePanel({ listing, me, onChanged, onRetry, onClose, onToas
   const [saveError, setSaveError] = useState<{ text: string; tone: "calm" | "err" | "check" } | null>(null);
   const [switching, setSwitching] = useState(false);
   const [switched, setSwitched] = useState<{ line: string; back: Pick<MrTemplateVersion, "id" | "kind" | "number"> } | null>(null);
+  const [starterBusy, setStarterBusy] = useState(false);
+
+  /** The documented starter HTML, saved as a file. Offered on the start screen
+   *  and again under the "no placeholders" problem, so it lives here. */
+  const downloadStarter = async () => {
+    setStarterBusy(true);
+    try {
+      saveFile(await mrTemplateStarterFileUrl(), "vendor-report-template-starter.html");
+    } catch (e: unknown) {
+      onToast(`${clause(e instanceof Error ? e.message : "") || "The starter could not be fetched"}.`, "error");
+    } finally {
+      setStarterBusy(false);
+    }
+  };
 
   const data = listing.data;
   const placeholders = data?.placeholders ?? [];
@@ -168,6 +182,14 @@ export function TemplatePanel({ listing, me, onChanged, onRetry, onClose, onToas
     if (!file) return;
     if (fileRef.current) fileRef.current.value = "";
     setSaveError(null);
+    // Over the relay's ceiling the request would come back as a bodiless 413
+    // from Vercel, never reaching the backend: say so here, with the file's
+    // size and the limit, and send nothing.
+    const tooLarge = tooLargeLine(file.size);
+    if (tooLarge) {
+      setStep({ kind: "upload", reason: tooLarge, unsupported: [] });
+      return;
+    }
     setStep({ kind: "reading", file });
     const attempt = session.begin("tpl-read");
     try {
@@ -408,7 +430,8 @@ export function TemplatePanel({ listing, me, onChanged, onRetry, onClose, onToas
 
               <details className="shut">
                 <summary>Building your own HTML template</summary>
-                <Placeholders placeholders={placeholders} month={month} onToast={onToast} />
+                <Placeholders placeholders={placeholders} month={month} onToast={onToast}
+                  onStarter={() => void downloadStarter()} starterBusy={starterBusy} />
               </details>
             </>
           )}
@@ -469,6 +492,8 @@ export function TemplatePanel({ listing, me, onChanged, onRetry, onClose, onToas
               onUpload={choose}
               onSave={() => setConfirming(true)}
               onDiscard={toStart}
+              onStarter={() => void downloadStarter()}
+              starterBusy={starterBusy}
               examplesFrom={month}
             />
           )}
@@ -656,12 +681,15 @@ function SectionList({ arrangement, titles, onEdit }: {
 
 /** An HTML file, checked: what was removed, then either the problems (with
  *  line numbers and a suggestion) and no Save, or the preview and Save. */
-function HtmlCheck({ check, fileInput, onUpload, onSave, onDiscard, examplesFrom }: {
+function HtmlCheck({ check, fileInput, onUpload, onSave, onDiscard, onStarter, starterBusy, examplesFrom }: {
   check: MrTemplateHtmlCheck;
   fileInput: ReactNode;
   onUpload: () => void;
   onSave: () => void;
   onDiscard: () => void;
+  /** Saves the starter HTML — the way on for a report with no placeholders. */
+  onStarter: () => void;
+  starterBusy: boolean;
   examplesFrom: string | null;
 }) {
   const removed = removedLine(check.removed);
@@ -687,6 +715,19 @@ function HtmlCheck({ check, fileInput, onUpload, onSave, onDiscard, examplesFrom
               })}
             </ul>
             <p className="cov__w">Fix the file and upload it again to see the preview.</p>
+            {/* A designed report with its numbers typed in has nothing to fix
+                line by line: its author needs the reader (its PDF or PNG) or
+                the starter. Guidance, not an alarm — the same quiet type. */}
+            {hasNoPlaceholders(problems) && (
+              <p className="cov__w">
+                If this is a designed report with the numbers already typed in, upload its PDF or PNG
+                instead and the reader will map the layout. Or start from the{" "}
+                <button type="button" className="lnk" onClick={onStarter} disabled={starterBusy}>
+                  starter template
+                </button>
+                , which has every placeholder in place.
+              </p>
+            )}
           </div>
           <div className="ops" style={{ marginTop: 14 }}>
             <button type="button" className="btn btn--solid btn--sm" onClick={onUpload}>
@@ -800,12 +841,13 @@ function History({ listing, me, switching, onSwitch }: {
 }
 
 /** The placeholder vocabulary, each with its live value, and the starter file. */
-function Placeholders({ placeholders, month, onToast }: {
+function Placeholders({ placeholders, month, onToast, onStarter, starterBusy }: {
   placeholders: MrTemplatePlaceholder[];
   month: string | null;
   onToast: ToastFn;
+  onStarter: () => void;
+  starterBusy: boolean;
 }) {
-  const [busy, setBusy] = useState(false);
   return (
     <>
       <p className="calm">
@@ -814,22 +856,8 @@ function Placeholders({ placeholders, month, onToast }: {
         scripts are removed.
       </p>
       <div className="ops">
-        <button
-          type="button"
-          className="btn btn--quiet btn--sm"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            try {
-              saveFile(await mrTemplateStarterFileUrl(), "vendor-report-template-starter.html");
-            } catch (e: unknown) {
-              onToast(`${clause(e instanceof Error ? e.message : "") || "The starter could not be fetched"}.`, "error");
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          <Ic name="download" />{busy ? "Preparing…" : "Download starter HTML"}
+        <button type="button" className="btn btn--quiet btn--sm" disabled={starterBusy} onClick={onStarter}>
+          <Ic name="download" />{starterBusy ? "Preparing…" : "Download starter HTML"}
         </button>
       </div>
       {placeholders.length > 0 && (

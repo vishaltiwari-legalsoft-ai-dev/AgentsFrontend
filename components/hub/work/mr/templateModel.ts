@@ -7,14 +7,17 @@
  *  rename, and nothing else. The theme and each section's options go back to
  *  the server exactly as they came.
  *
- *  Plain `.ts` with type-only imports from the API: the suite runs without the
- *  `@/` alias and cannot import a `.tsx` module.
+ *  Plain `.ts`: the suite runs without the `@/` alias and cannot import a
+ *  `.tsx` module, so the API's types come in by the alias (erased) and its two
+ *  values — the relay's size ceiling and the megabyte formatter — by relative
+ *  path, the same way the suite itself loads the API client.
  */
 
 import type {
   MrLayout, MrLayoutSection, MrTemplateLine, MrTemplateListing, MrTemplatePlaceholder,
   MrTemplatePreview, MrTemplateProblem, MrTemplateVersion,
 } from "@/lib/api";
+import { RELAY_BODY_LIMIT_BYTES, megabytes } from "../../../../lib/api";
 
 /* -------------------------------- previews -------------------------------- */
 
@@ -146,6 +149,26 @@ export const switchedLine = (v: Pick<MrTemplateVersion, "kind" | "number">): str
     ? "Switched to the built-in template. The team's next report will use it."
     : `Switched to ${versionLabel(v).toLowerCase()}. The team's next report will use it.`;
 
+/* ----------------------------- the file's size ---------------------------- */
+
+/** Room inside the relay's ceiling for the multipart framing — the boundary
+ *  lines and each part's headers — that travels with the file's own bytes. */
+const MULTIPART_FRAMING_BYTES = 8_192;
+
+/** The largest file the panel sends. Anything over it would be refused by the
+ *  relay with a bodiless 413 (`RELAY_BODY_LIMIT_BYTES`), so the panel says so
+ *  itself, with the numbers, and sends nothing. */
+export const MAX_UPLOAD_BYTES = RELAY_BODY_LIMIT_BYTES - MULTIPART_FRAMING_BYTES;
+
+/** "This file is 6.2 MB. Uploads through the console are limited to 4.5 MB.
+ *  Compress the PDF, …" — or null for a file the relay will carry. */
+export function tooLargeLine(size: number): string | null {
+  if (size <= MAX_UPLOAD_BYTES) return null;
+  return `This file is ${megabytes(size)}. Uploads through the console are limited to `
+    + `${megabytes(RELAY_BODY_LIMIT_BYTES)}. Compress the PDF, export only the pages that show the `
+    + "layout, or send one page as a picture.";
+}
+
 /* -------------------------------- readings -------------------------------- */
 
 /** "3 sample readings left today for the team." — only once it is worth
@@ -234,6 +257,17 @@ export function problemsHeading(errors: MrTemplateProblem[]): string {
     ? "1 problem stops this template from being saved."
     : `${n} problems stop this template from being saved.`;
 }
+
+/** Whether the problems include the checker's "no placeholders" refusal — the
+ *  mark of a designed report with its figures typed in, whose author needs a
+ *  different way on (its PDF or PNG for the reader, or the starter file), not
+ *  a line number to fix. By a `code` when a problem carries one; the backend's
+ *  problems carry none today (`TemplateError.to_dict`), so by the message's
+ *  own words until they do. */
+export const hasNoPlaceholders = (
+  problems: readonly (Pick<MrTemplateProblem, "message"> & { code?: string | null })[],
+): boolean =>
+  problems.some((p) => p.code === "no_placeholders" || /\bno placeholders\b/i.test(p.message));
 
 /** One row: "Line 14", "{{totl_spend}}", "Did you mean {{total_spend}}?" — the
  *  suggestion when there is one, else the server's own message. */

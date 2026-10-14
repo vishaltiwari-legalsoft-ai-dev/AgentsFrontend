@@ -22,6 +22,16 @@ export type { RequestOptions, RequestTicket } from "./requestPolicy";
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:8080";
 
+/** Vercel's serverless-function payload ceiling — the platform's limit, not
+ *  ours. Every browser request reaches the backend through the same-origin
+ *  relay (`app/backend/[...path]/route.ts`), and Vercel refuses a body over
+ *  this with a plain-text 413 before the route runs, so the backend never sees
+ *  it and no `detail` comes back. Decimal, the conservative reading of "4.5 MB". */
+export const RELAY_BODY_LIMIT_BYTES = 4_500_000;
+
+/** "6.2 MB" — decimal megabytes to one place, the unit the limit is stated in. */
+export const megabytes = (bytes: number): string => `${(bytes / 1_000_000).toFixed(1)} MB`;
+
 /* ------------------------------ Auth plumbing ---------------------------- */
 
 let authToken: string | null = null;
@@ -98,7 +108,14 @@ async function readErrorReply(response: Response): Promise<{ message: string; bo
       : "Request failed";
     return { message, body };
   } catch {
-    return { message: `Request failed (${response.status})`, body: null };
+    // A reply with no JSON body never came from the backend. The one such
+    // reply with a known cause is the relay's 413: Vercel refused the body on
+    // its size (`RELAY_BODY_LIMIT_BYTES`), so say that in words rather than a
+    // bare status. Every other status keeps the plain fallback.
+    const message = response.status === 413
+      ? `The upload is larger than the console accepts (${megabytes(RELAY_BODY_LIMIT_BYTES)}).`
+      : `Request failed (${response.status})`;
+    return { message, body: null };
   }
 }
 

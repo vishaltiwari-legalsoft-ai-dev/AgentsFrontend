@@ -10,17 +10,19 @@ import type {
 // Values from the API client come in by relative path: the suite runs without
 // the `@/` alias, which only the erased type imports above can use.
 import {
-  ApiError, MR_TEMPLATES_OFF, MR_VENDOR_OFF, apiBody, apiCode, isCampaignKind, isVendorKind,
+  ApiError, MR_TEMPLATES_OFF, MR_VENDOR_OFF, RELAY_BODY_LIMIT_BYTES, apiBody, apiCode, apiStatus,
+  isCampaignKind, isVendorKind, megabytes,
   mrActivateTemplate, mrBoardReportHtml, mrBuildVendorReport, mrReadTemplateSample,
   mrReportTemplates, mrSaveTemplate, mrTemplateLayout, mrTemplateStarterFileUrl, mrVendorReportHtml,
   mrVendorReportPeriods, readTemplateListing, readTemplateReading, readVendorPeriods,
   type MrTemplateLine, type MrTemplatePlaceholder, type MrTemplatePreview, type MrTemplateVersion,
 } from "../../../../lib/api";
 import {
-  arrange, handPlan, historyRows, layoutOf, madeBy, madeFrom, matchedLine, moveRow, moveRowTo,
-  noPreviewLine, previewHoldsSave, previewOf, problemParts, problemsHeading, rateLimitedLine,
-  readFailure, readingsLeftLine, removedLine, renameRow, sameLayout, sectionTitles, sectionTypes,
-  setByLine, showRow, switchedLine, templateBandLine, versionLabel,
+  MAX_UPLOAD_BYTES, arrange, handPlan, hasNoPlaceholders, historyRows, layoutOf, madeBy, madeFrom,
+  matchedLine, moveRow, moveRowTo, noPreviewLine, previewHoldsSave, previewOf, problemParts,
+  problemsHeading, rateLimitedLine, readFailure, readingsLeftLine, removedLine, renameRow,
+  sameLayout, sectionTitles, sectionTypes, setByLine, showRow, switchedLine, templateBandLine,
+  tooLargeLine, versionLabel,
 } from "./templateModel";
 import {
   REPORT_META, REPORT_PERIOD_LIST, absentMetrics, boardPeriodOptions, boardPeriodValues,
@@ -1499,6 +1501,35 @@ describe("reading a sample", () => {
     expect([apiCode(down), readFailure(apiCode(down), 503)]).toEqual(["check_unavailable", "check"]);
   });
 
+  it("words the relay's bodiless 413 — Vercel's ceiling, never the backend's — instead of 'Request failed (413)'", async () => {
+    // Vercel refuses a body over 4.5 MB before the route runs: plain text, no JSON, no code.
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("Request Entity Too Large",
+      { status: 413, headers: { "Content-Type": "text/plain" } })));
+    const big = await mrReadTemplateSample(new File(["x"], "big.pdf")).catch((x: unknown) => x);
+    expect((big as Error).message).toBe("The upload is larger than the console accepts (4.5 MB).");
+    expect([apiCode(big), apiStatus(big), readFailure(apiCode(big), apiStatus(big))]).toEqual([null, 413, "upload"]);
+    // The save path reads the same message, so its toast says the same.
+    const saved = await mrSaveTemplate({ source_kind: "html", html: "<p></p>" }).catch((x: unknown) => x);
+    expect((saved as Error).message).toBe("The upload is larger than the console accepts (4.5 MB).");
+    // Every other bodiless status keeps the plain fallback.
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("Bad Gateway", { status: 502 })));
+    const gone = await mrReadTemplateSample(new File(["x"], "a.pdf")).catch((x: unknown) => x);
+    expect((gone as Error).message).toBe("Request failed (502)");
+  });
+
+  it("refuses a file over the relay's ceiling itself, with its size and the limit, before any request", () => {
+    expect(RELAY_BODY_LIMIT_BYTES).toBe(4_500_000);
+    expect(MAX_UPLOAD_BYTES).toBeLessThan(RELAY_BODY_LIMIT_BYTES);           // headroom for multipart framing
+    expect(RELAY_BODY_LIMIT_BYTES - MAX_UPLOAD_BYTES).toBeLessThanOrEqual(16_384);
+    expect(megabytes(6_200_000)).toBe("6.2 MB");
+    expect(megabytes(RELAY_BODY_LIMIT_BYTES)).toBe("4.5 MB");
+    expect(tooLargeLine(6_200_000)).toBe(
+      "This file is 6.2 MB. Uploads through the console are limited to 4.5 MB. Compress the PDF, export only the pages that show the layout, or send one page as a picture.");
+    expect(tooLargeLine(MAX_UPLOAD_BYTES)).toBeNull();
+    expect(tooLargeLine(MAX_UPLOAD_BYTES + 1)).toMatch(/^This file is 4\.5 MB\./);
+    expect(tooLargeLine(0)).toBeNull();
+  });
+
   it("carries a coded refusal's code and fields to the screen", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json(503, {
       code: "timeout", reason: "The AI reader did not answer within 150 seconds.",
@@ -1717,6 +1748,20 @@ describe("an HTML template, checked", () => {
       .toEqual({ line: "Line 14", placeholder: "{{totl_spend}}", text: "Did you mean {{total_spend}}?" });
     expect(problemParts({ line: null, placeholder: null, message: "This file uses no placeholders.", suggestion: null }))
       .toEqual({ line: null, placeholder: null, text: "This file uses no placeholders." });
+  });
+
+  it("recognises the checker's no-placeholders refusal — by a code when there is one, else its words", () => {
+    // The backend's own sentence (report_templates.py), carried with no code.
+    const none = { line: null, placeholder: null, suggestion: null,
+      message: "This template has no placeholders, so it would show none of the report's figures. "
+        + "Typed-in numbers are never used; add placeholders such as {{total_spend}} where the figures belong." };
+    const typo = { line: 14, placeholder: "{{totl_spend}}", message: "Unknown placeholder.", suggestion: "{{total_spend}}" };
+    expect(hasNoPlaceholders([none])).toBe(true);
+    expect(hasNoPlaceholders([typo, none])).toBe(true);
+    expect(hasNoPlaceholders([typo])).toBe(false);
+    expect(hasNoPlaceholders([])).toBe(false);
+    expect(hasNoPlaceholders([{ ...typo, code: "no_placeholders" }])).toBe(true);
+    expect(hasNoPlaceholders([{ ...typo, code: "unknown_placeholder" }])).toBe(false);
   });
 });
 
@@ -1976,6 +2021,20 @@ describe("the template panel's own words and wiring", () => {
     // On save, the same: an Oops whose Try again sends the same save.
     expect(panel()).toContain('} else if (code === "check_unavailable") {');
     expect(panel()).toMatch(/saveError\.tone === "check" \? \(\s*<Oops\s+what="We couldn't check your template, so nothing was saved\."\s+error=\{saveError\.text\}\s+onRetry=\{\(\) => void save\(\)\}/);
+  });
+
+  it("checks the file's size against the relay's ceiling before any request, and lands on the upload step", () => {
+    // The check comes before the reading step is ever shown, and sends nothing.
+    expect(panel()).toMatch(/const tooLarge = tooLargeLine\(file\.size\);\s*if \(tooLarge\) \{\s*setStep\(\{ kind: "upload", reason: tooLarge, unsupported: \[\] \}\);\s*return;\s*\}\s*setStep\(\{ kind: "reading", file \}\);/);
+    expect(panel()).not.toMatch(/file\.size\s*[<>]/);
+  });
+
+  it("routes a designed report with its numbers typed in to the reader or the starter — calm, under the problems", () => {
+    expect(panel()).toContain("{hasNoPlaceholders(problems) && (");
+    expect(panel()).toMatch(/If this is a designed report with the numbers already typed in, upload its PDF or PNG\s+instead and the reader will map the layout\. Or start from the\{" "\}\s*<button type="button" className="lnk" onClick=\{onStarter\} disabled=\{starterBusy\}>\s*starter template\s*<\/button>\s*, which has every placeholder in place\./);
+    // One starter download, offered from both places.
+    expect(panel().match(/onStarter=\{\(\) => void downloadStarter\(\)\}/g)).toHaveLength(2);
+    expect(panel().match(/mrTemplateStarterFileUrl\(\)/g)).toHaveLength(1);
   });
 
   it("shows the server's own reason for a 413 too_large, on reading and on saving", () => {
