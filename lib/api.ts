@@ -2609,10 +2609,23 @@ export interface MrTemplatePlaceholder {
    *  the report prints it. Null from a backend older than the field. */
   title: string | null;
   description: string;
-  kind: string;                 // scalar, or the section's kind (chart, table…)
+  /** `scalar`, or the section's kind — one of `MR_PLACEHOLDER_KINDS` today;
+   *  a kind the server adds later is still a string here, never a crash. */
+  kind: string;
+  /** A scalar's format (`money`, `pct`, `int`, `date`, `text`). Null for a
+   *  block, and from a backend that does not send it — the listing route does
+   *  not yet; the description carries the word instead. */
+  format: string | null;
   /** The live value from the newest month ("$2,737"); null with no figures. */
   example: string | null;
 }
+
+/** The placeholder kinds the renderer's registry has, as the listing sends
+ *  them. `cards` is `{{cards:vendor_detail}}`, the per-vendor card grid. */
+export const MR_PLACEHOLDER_KINDS = [
+  "scalar", "band", "tiles", "chart", "table", "list", "block", "note", "cards",
+] as const;
+export type MrPlaceholderKind = (typeof MR_PLACEHOLDER_KINDS)[number];
 
 export interface MrTemplateListing {
   enabled: boolean;
@@ -2687,6 +2700,7 @@ export function readTemplateListing(raw: unknown): MrTemplateListing {
           return token
             ? [{ token, title: str(o.title), description: str(o.description) || "",
                  kind: str(o.kind) || "scalar",
+                 format: str(o.format),
                  example: typeof o.example === "string" ? o.example : null }]
             : [];
         })
@@ -2735,8 +2749,27 @@ export interface MrTemplateSampleReading extends MrTemplatePreview {
   layout: MrLayout;
   /** Sections the sample has that no figures exist for — left out, not invented. */
   unsupported: { title: string; description: string }[];
+  /** Every sample section that is not in `layout`, each with why: the
+   *  unsupported ones first, then duplicates the reader dropped. Empty when
+   *  nothing was left out — and from a backend older than the field, where
+   *  `unsupported` is the whole story. */
+  left_out: MrLeftOut[];
   matched_count: number | null;
   readings_left_today: number | null;
+}
+
+/** One sample section that is not in the template, and the reason. */
+export interface MrLeftOut {
+  title: string;
+  reason: string;
+}
+
+/** `left_out` as the extract route sends it — on its 200 body and on its 422
+ *  `nothing_matched` body alike. Anything that is not a list is "none said". */
+export function readLeftOut(raw: unknown): MrLeftOut[] {
+  return Array.isArray(raw)
+    ? raw.map((u) => ({ title: str(obj(u).title) || "A section", reason: str(obj(u).reason) || "" }))
+    : [];
 }
 
 /** One reason an HTML template cannot be saved. */
@@ -2821,6 +2854,7 @@ export function readTemplateReading(raw: unknown): MrTemplateReading {
         ? r.unsupported.map((u) => ({ title: str(obj(u).title) || "A section",
                                        description: str(obj(u).description) || "" }))
         : [],
+      left_out: readLeftOut(r.left_out),
       matched_count: num(r.matched_count),
       readings_left_today: num(r.readings_left_today),
       ...readPreview(r),

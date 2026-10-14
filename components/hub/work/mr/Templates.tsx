@@ -19,8 +19,8 @@ import { useCallback, useEffect, useRef, useState, type DragEvent, type ReactNod
 import {
   apiBody, apiCode, apiStatus, mrActivateTemplate, mrPreviewTemplateLayout,
   mrReadTemplateSample, mrSaveTemplate, mrTemplateLayout, mrTemplateStarterFileUrl,
-  readTemplateProblems,
-  type MrLayout, type MrTemplateHtmlCheck, type MrTemplateListing, type MrTemplatePlaceholder,
+  readLeftOut, readTemplateProblems,
+  type MrLayout, type MrLeftOut, type MrTemplateHtmlCheck, type MrTemplateListing, type MrTemplatePlaceholder,
   type MrTemplatePreview, type MrTemplateProblem, type MrTemplateSampleReading,
   type MrTemplateSave, type MrTemplateVersion,
 } from "@/lib/api";
@@ -31,7 +31,7 @@ import { Oops, RuleHead, Wait } from "../../ui";
 import type { ToastFn } from "../../context";
 import { ReportFrame } from "./reportFrame";
 import {
-  arrange, clause, handPlan, hasNoPlaceholders, historyRows, layoutOf, madeBy, madeFrom,
+  arrange, clause, handPlan, hasNoPlaceholders, historyRows, kindLabel, layoutOf, madeBy, madeFrom,
   matchedLine, moveRow, moveRowTo, noPreviewLine, previewHoldsSave, previewOf, problemParts,
   problemsHeading, rateLimitedLine, readFailure, readingsLeftLine, removedLine, renameRow,
   sameLayout, sectionTitles, sectionTypes, setByLine, showRow, switchedLine, tooLargeLine,
@@ -44,7 +44,12 @@ type Step =
   | { kind: "start" }
   | { kind: "reading"; file: File }
   | { kind: "opening" }
-  | { kind: "upload"; reason: string; unsupported: { title: string; description: string }[] }
+  | {
+      kind: "upload"; reason: string;
+      unsupported: { title: string; description: string }[];
+      /** The 422 `nothing_matched` body's `left_out`; empty from an older backend. */
+      leftOut: MrLeftOut[];
+    }
   | { kind: "reader"; file: File; reason: string; billed: boolean }
   | { kind: "check"; file: File; reason: string }
   | { kind: "html"; file: File; check: MrTemplateHtmlCheck }
@@ -187,7 +192,7 @@ export function TemplatePanel({ listing, me, onChanged, onRetry, onClose, onToas
     // size and the limit, and send nothing.
     const tooLarge = tooLargeLine(file.size);
     if (tooLarge) {
-      setStep({ kind: "upload", reason: tooLarge, unsupported: [] });
+      setStep({ kind: "upload", reason: tooLarge, unsupported: [], leftOut: [] });
       return;
     }
     setStep({ kind: "reading", file });
@@ -223,7 +228,7 @@ export function TemplatePanel({ listing, me, onChanged, onRetry, onClose, onToas
                        description: typeof o.description === "string" ? o.description : "" };
             })
           : [];
-        setStep({ kind: "upload", reason: message, unsupported });
+        setStep({ kind: "upload", reason: message, unsupported, leftOut: readLeftOut(body.left_out) });
       }
     }
   }, [session, openArrange]);
@@ -458,7 +463,9 @@ export function TemplatePanel({ listing, me, onChanged, onRetry, onClose, onToas
             <>
               {fileInput}
               <p className="calm" role="status">{step.reason}</p>
-              {step.unsupported.length > 0 && <Unsupported items={step.unsupported} />}
+              {step.leftOut.length > 0
+                ? <LeftOut items={step.leftOut} />
+                : step.unsupported.length > 0 && <Unsupported items={step.unsupported} />}
               <div className="ops">
                 <button type="button" className="btn btn--solid btn--sm" onClick={choose}>
                   <Ic name="upload" />Choose another file
@@ -504,9 +511,13 @@ export function TemplatePanel({ listing, me, onChanged, onRetry, onClose, onToas
               {step.reading && (
                 <>
                   <p className="calm">{matchedLine(step.reading.matched_count, month)}</p>
-                  {step.reading.unsupported.length > 0
-                    ? <Unsupported items={step.reading.unsupported} />
-                    : <p className="calm">Every section in your sample was matched.</p>}
+                  {/* `left_out` is the whole list (unsupported + dropped duplicates);
+                      a backend older than it sends only `unsupported`. */}
+                  {step.reading.left_out.length > 0
+                    ? <LeftOut items={step.reading.left_out} />
+                    : step.reading.unsupported.length > 0
+                      ? <Unsupported items={step.reading.unsupported} />
+                      : <p className="calm">Every section in your sample was matched.</p>}
                 </>
               )}
               <div className="tarr">
@@ -563,6 +574,25 @@ function Unsupported({ items }: { items: { title: string; description: string }[
       <ul className="cov__miss">
         {items.map((u, i) => (
           <li key={i}><b>{u.title}</b>{u.description ? <em> — {u.description}</em> : null}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** What of the sample is NOT in the template, each with the server's reason —
+ *  information, not an alarm, so it sits in the same quiet block as the
+ *  other guidance. Shown on a reading and on the `nothing_matched` refusal. */
+function LeftOut({ items }: { items: MrLeftOut[] }) {
+  return (
+    <div className="cov">
+      <p className="cov__n">Left out of your template</p>
+      <p className="cov__w">
+        These parts of your sample aren't in the template, and why. Nothing is made up to fill them.
+      </p>
+      <ul className="cov__miss">
+        {items.map((u, i) => (
+          <li key={i}><b>{u.title}</b>{u.reason ? <em> — {u.reason}</em> : null}</li>
         ))}
       </ul>
     </div>
@@ -868,7 +898,7 @@ function Placeholders({ placeholders, month, onToast, onStarter, starterBusy }: 
               <tbody>
                 {placeholders.map((p) => (
                   <tr key={p.token}>
-                    <td><code>{p.token}</code></td>
+                    <td><code>{p.token}</code><span className="tpl__set">{kindLabel(p)}</span></td>
                     <td>
                       {p.title && <b>{p.title}</b>}
                       {p.description && <span className="tpl__set">{p.description}</span>}

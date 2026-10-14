@@ -364,6 +364,22 @@ export const humanise = (type: string): string => {
   return words ? words[0].toUpperCase() + words.slice(1) : type;
 };
 
+/** What a placeholder stands for, in a word, next to its token in the
+ *  vocabulary table. A block by its kind; a scalar by its format when the
+ *  server sends one ("Date" for `{{projected_runout_date}}`), "Figure" when it
+ *  does not. A kind added later is spelled out from its name, never blank. */
+const KIND_LABELS: Record<string, string> = {
+  scalar: "Figure", band: "Band", tiles: "Tiles", chart: "Chart", table: "Table", list: "List",
+  block: "Two-column block", note: "Note", cards: "Cards",
+};
+const FORMAT_LABELS: Record<string, string> = {
+  money: "Amount", pct: "Percent", int: "Count", date: "Date", text: "Text",
+};
+export function kindLabel(p: Pick<MrTemplatePlaceholder, "kind" | "format">): string {
+  if (p.kind === "scalar") return (p.format && FORMAT_LABELS[p.format]) || KIND_LABELS.scalar;
+  return KIND_LABELS[p.kind] || humanise(p.kind);
+}
+
 const row = (s: MrLayoutSection, key: string, shown: boolean): ArrangeRow =>
   ({ key, type: s.type, title: s.title, options: s.options, shown });
 

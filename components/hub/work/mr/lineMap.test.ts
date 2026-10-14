@@ -14,11 +14,12 @@ import {
   isCampaignKind, isVendorKind, megabytes,
   mrActivateTemplate, mrBoardReportHtml, mrBuildVendorReport, mrReadTemplateSample,
   mrReportTemplates, mrSaveTemplate, mrTemplateLayout, mrTemplateStarterFileUrl, mrVendorReportHtml,
-  mrVendorReportPeriods, readTemplateListing, readTemplateReading, readVendorPeriods,
+  mrVendorReportPeriods, readLeftOut, readTemplateListing, readTemplateReading, readVendorPeriods,
+  MR_PLACEHOLDER_KINDS,
   type MrTemplateLine, type MrTemplatePlaceholder, type MrTemplatePreview, type MrTemplateVersion,
 } from "../../../../lib/api";
 import {
-  MAX_UPLOAD_BYTES, arrange, handPlan, hasNoPlaceholders, historyRows, layoutOf, madeBy, madeFrom,
+  MAX_UPLOAD_BYTES, arrange, handPlan, hasNoPlaceholders, historyRows, kindLabel, layoutOf, madeBy, madeFrom,
   matchedLine, moveRow, moveRowTo, noPreviewLine, previewHoldsSave, previewOf, problemParts,
   problemsHeading, rateLimitedLine, readFailure, readingsLeftLine, removedLine, renameRow,
   sameLayout, sectionTitles, sectionTypes, setByLine, showRow, switchedLine, templateBandLine,
@@ -1476,6 +1477,67 @@ describe("reading a sample", () => {
     expect(() => readTemplateReading({})).toThrow(/Nothing was saved/);
   });
 
+  it("reads what was left out of the template — title and reason — off a reading", () => {
+    const r = readTemplateReading({
+      source_kind: "pdf", upload: { filename: "q3.pdf", kind: "pdf", size: 40 }, layout: LAYOUT,
+      unsupported: [{ title: "Social reach", description: "a follower chart" }],
+      left_out: [
+        { title: "Social reach", reason: "a follower chart" },
+        { title: "Standouts", reason: "standouts is already inside highlights; the separate section is dropped." },
+      ],
+      matched_count: 3, notes: [{ kind: "duplicate", section: "standouts", title: "Standouts",
+                                  detail: "standouts is already inside highlights; the separate section is dropped." }],
+      preview_html: null, preview_unavailable_reason: "There are no vendor figures yet.", readings_left_today: 8,
+    });
+    if (r.source_kind === "html") throw new Error("read as HTML");
+    expect(r.left_out).toEqual([
+      { title: "Social reach", reason: "a follower chart" },
+      { title: "Standouts", reason: "standouts is already inside highlights; the separate section is dropped." },
+    ]);
+    // The reading's own list is the whole one; `unsupported` is still read for an older backend.
+    expect(r.unsupported).toEqual([{ title: "Social reach", description: "a follower chart" }]);
+  });
+
+  it("reads a backend older than left_out — or one that left nothing out — as an empty list, not a section", () => {
+    const old = readTemplateReading({ source_kind: "pdf", layout: LAYOUT, preview_html: null,
+      unsupported: [{ title: "Social reach", description: "a follower chart" }] });
+    if (old.source_kind === "html") throw new Error("read as HTML");
+    expect(old.left_out).toEqual([]);
+    const full = readTemplateReading({ source_kind: "image", layout: LAYOUT, preview_html: null,
+      unsupported: [], left_out: [] });
+    if (full.source_kind === "html") throw new Error("read as HTML");
+    expect(full.left_out).toEqual([]);
+    // Not a list → none said. An entry with no title is still named, never blank.
+    expect(readLeftOut(undefined)).toEqual([]);
+    expect(readLeftOut("x")).toEqual([]);
+    expect(readLeftOut([{ reason: "why" }, { title: "T" }])).toEqual([
+      { title: "A section", reason: "why" }, { title: "T", reason: "" }]);
+  });
+
+  it("carries the 422 nothing_matched body's left_out to the upload state, by its code", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(422, {
+      code: "nothing_matched",
+      reason: "None of the 2 section(s) in this sample show data we can fill, so there is no layout to build from it.",
+      detail: "None of the 2 section(s) in this sample show data we can fill, so there is no layout to build from it.",
+      unsupported: [{ title: "Social reach", description: "a follower chart" },
+                    { title: "Press mentions", description: "" }],
+      left_out: [{ title: "Social reach", reason: "a follower chart" },
+                 { title: "Press mentions", reason: "No section of the vendor report shows this." }],
+      billed: true, readings_left_today: 7 })));
+    const e = await mrReadTemplateSample(new File(["%PDF-1.7"], "a.pdf")).catch((x: unknown) => x);
+    expect(apiCode(e)).toBe("nothing_matched");
+    expect(readFailure(apiCode(e), apiStatus(e))).toBe("upload");
+    expect(readLeftOut(apiBody(e).left_out)).toEqual([
+      { title: "Social reach", reason: "a follower chart" },
+      { title: "Press mentions", reason: "No section of the vendor report shows this." },
+    ]);
+    // The same refusal from a backend older than the field: no list, and the panel falls back to `unsupported`.
+    vi.stubGlobal("fetch", vi.fn(async () => json(422, { code: "nothing_matched", reason: "r", detail: "r",
+      unsupported: [{ title: "Social reach", description: "a follower chart" }] })));
+    const old = await mrReadTemplateSample(new File(["%PDF-1.7"], "a.pdf")).catch((x: unknown) => x);
+    expect(readLeftOut(apiBody(old).left_out)).toEqual([]);
+  });
+
   it("reads why a preview is missing as a code to act on, null from an older backend", () => {
     const at = (code?: string) => readTemplateReading({
       source_kind: "pdf", layout: LAYOUT, preview_html: null,
@@ -1772,6 +1834,52 @@ describe("matchedLine", () => {
   });
 });
 
+describe("kindLabel — what each placeholder stands for", () => {
+  const at = (kind: string, format: string | null = null) => kindLabel({ kind, format });
+
+  it("names every kind the listing can send, the card grid among them", () => {
+    expect(MR_PLACEHOLDER_KINDS).toContain("cards");
+    expect(at("cards")).toBe("Cards");
+    expect(at("chart")).toBe("Chart");
+    expect(at("block")).toBe("Two-column block");
+    expect(at("scalar")).toBe("Figure");
+  });
+
+  it("names a scalar by its format when the server sends one — a date is a date", () => {
+    expect(at("scalar", "date")).toBe("Date");
+    expect(at("scalar", "money")).toBe("Amount");
+    expect(at("scalar", "pct")).toBe("Percent");
+    expect(at("scalar", "int")).toBe("Count");
+    expect(at("scalar", "never_seen")).toBe("Figure");
+  });
+
+  it("spells out a kind it has no word for rather than showing nothing", () => {
+    expect(at("heat_map")).toBe("Heat map");
+  });
+
+  it("reads the new tokens off the listing like every other: cards is a section type, the date is a scalar", () => {
+    const l = readTemplateListing({ ...LISTING, placeholders: [...LISTING.placeholders,
+      { token: "{{cards:vendor_detail}}", title: "Vendor detail", kind: "cards", example: "11 cards",
+        description: "Vendor detail: a grid of cards drawn from this report" },
+      { token: "{{projected_runout_date}}", title: "Projected Budget Run-out", kind: "scalar", example: "2026-10-28",
+        description: "Projected Budget Run-out, the portfolio figure (date)" },
+      { token: "{{as_of}}", title: "As of", kind: "scalar", format: "date", example: "2026-09-02",
+        description: "The date of the vendor pull the figures come from (YYYY-MM-DD)" },
+    ] });
+    const cards = l.placeholders.find((p) => p.token === "{{cards:vendor_detail}}")!;
+    expect([cards.kind, cards.format, kindLabel(cards)]).toEqual(["cards", null, "Cards"]);
+    expect(sectionTypes(l.placeholders)).toContain("vendor_detail");
+    expect(sectionTitles(l.placeholders).vendor_detail).toBe("Vendor detail");
+    // Today's listing route sends no `format`: the date scalar reads as a figure, never a section.
+    const runout = l.placeholders.find((p) => p.token === "{{projected_runout_date}}")!;
+    expect([runout.kind, runout.format, kindLabel(runout)]).toEqual(["scalar", null, "Figure"]);
+    expect(sectionTypes(l.placeholders)).not.toContain("projected_runout_date");
+    // The day it does, the label follows.
+    const asOf = l.placeholders.find((p) => p.token === "{{as_of}}")!;
+    expect([asOf.format, kindLabel(asOf)]).toEqual(["date", "Date"]);
+  });
+});
+
 describe("the version history", () => {
   const listing = readTemplateListing(LISTING);
 
@@ -1845,7 +1953,7 @@ describe("arranging by hand", () => {
 
   it("never parses a description for a name — a title, or the key spelled out", () => {
     const p = (title: string | null): MrTemplatePlaceholder => ({
-      token: "{{chart:new_thing}}", title, kind: "chart", example: null,
+      token: "{{chart:new_thing}}", title, kind: "chart", format: null, example: null,
       description: "Something Else Entirely: a chart drawn from this report" });
     expect(sectionTitles([p("Real name")]).new_thing).toBe("Real name");
     expect(sectionTitles([p(null)]).new_thing).toBe("New thing");
@@ -1972,6 +2080,8 @@ describe("the template panel's own words and wiring", () => {
       "Reading ${step.file.name}. This takes a few seconds",
       "Every section in your sample was matched.",
       "Not supported yet ({items.length})",
+      "Left out of your template",
+      "These parts of your sample aren't in the template, and why. Nothing is made up to fill them.",
       "We couldn't read your sample.",
       ". Nothing was saved.",
       "Fix the file and upload it again to see the preview.",
@@ -2025,7 +2135,7 @@ describe("the template panel's own words and wiring", () => {
 
   it("checks the file's size against the relay's ceiling before any request, and lands on the upload step", () => {
     // The check comes before the reading step is ever shown, and sends nothing.
-    expect(panel()).toMatch(/const tooLarge = tooLargeLine\(file\.size\);\s*if \(tooLarge\) \{\s*setStep\(\{ kind: "upload", reason: tooLarge, unsupported: \[\] \}\);\s*return;\s*\}\s*setStep\(\{ kind: "reading", file \}\);/);
+    expect(panel()).toMatch(/const tooLarge = tooLargeLine\(file\.size\);\s*if \(tooLarge\) \{\s*setStep\(\{ kind: "upload", reason: tooLarge, unsupported: \[\], leftOut: \[\] \}\);\s*return;\s*\}\s*setStep\(\{ kind: "reading", file \}\);/);
     expect(panel()).not.toMatch(/file\.size\s*[<>]/);
   });
 
@@ -2039,7 +2149,7 @@ describe("the template panel's own words and wiring", () => {
 
   it("shows the server's own reason for a 413 too_large, on reading and on saving", () => {
     // Reading: readFailure puts it with the file, and the step prints the reason.
-    expect(panel()).toContain('setStep({ kind: "upload", reason: message, unsupported });');
+    expect(panel()).toContain('setStep({ kind: "upload", reason: message, unsupported, leftOut: readLeftOut(body.left_out) });');
     expect(panel()).toContain('<p className="calm" role="status">{step.reason}</p>');
     // Saving: the reason, then "Nothing was saved."
     expect(panel()).toMatch(/code === "invalid_layout" \|\| code === "invalid_template" \|\| code === "too_large"\) \{[\s\S]{0,260}text: `\$\{clause\(reason\)\}\. Nothing was saved\.`/);
@@ -2066,6 +2176,18 @@ describe("the template panel's own words and wiring", () => {
   it("never paints the daily limit or a placeholder problem red", () => {
     expect(panel()).toMatch(/readingsLeft === 0 \? \(\s*<p className="calm" role="status">\{rateLimitedLine/);
     expect(panel()).toMatch(/<div className="cov">\s*<p className="cov__n">\{problemsHeading/);
+  });
+
+  it("shows what was left out as quiet guidance, on a reading and on the nothing-matched refusal, never red", () => {
+    expect(panel()).toMatch(/<div className="cov">\s*<p className="cov__n">Left out of your template<\/p>/);
+    expect(panel()).toMatch(/<li key=\{i\}><b>\{u\.title\}<\/b>\{u\.reason \? <em> — \{u\.reason\}<\/em> : null\}<\/li>/);
+    // The reading's own list first; an older backend's `unsupported` when there is none.
+    expect(panel()).toMatch(/step\.reading\.left_out\.length > 0\s*\? <LeftOut items=\{step\.reading\.left_out\} \/>\s*: step\.reading\.unsupported\.length > 0/);
+    expect(panel()).toMatch(/step\.leftOut\.length > 0\s*\? <LeftOut items=\{step\.leftOut\} \/>\s*: step\.unsupported\.length > 0/);
+    expect(panel()).toContain("leftOut: readLeftOut(body.left_out)");
+    expect(panel()).not.toMatch(/className="err"[^\n]*[Ll]eft out/);
+    // Every placeholder says what it stands for, next to its token.
+    expect(panel()).toContain('<span className="tpl__set">{kindLabel(p)}</span>');
   });
 });
 
