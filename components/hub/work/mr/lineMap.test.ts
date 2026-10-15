@@ -1474,7 +1474,44 @@ describe("reading a sample", () => {
 
   it("refuses an answer it cannot read rather than guessing a layout", () => {
     expect(() => readTemplateReading({ source_kind: "pdf" })).toThrow(/Nothing was saved/);
+    expect(() => readTemplateReading({ source_kind: "html_sample" })).toThrow(/Nothing was saved/);
     expect(() => readTemplateReading({})).toThrow(/Nothing was saved/);
+    // A kind this console does not know is a failure even with a layout attached.
+    expect(() => readTemplateReading({ source_kind: "docx", layout: LAYOUT })).toThrow(/Nothing was saved/);
+  });
+
+  it("reads a designed HTML page with no placeholders as a sample reading, with what the sanitizer took out", () => {
+    const r = readTemplateReading({
+      source_kind: "html_sample", upload: { filename: "board.html", kind: "html", size: 2048 },
+      layout: LAYOUT, unsupported: [], left_out: [{ title: "Standouts", reason: "already inside highlights" }],
+      matched_count: 3, notes: [], removed: { scripts: 1, handlers: 0, external_urls: 2, comments: 3 },
+      preview_html: "<!DOCTYPE html><p>x</p>", preview_unavailable_reason: null, readings_left_today: 7,
+    });
+    expect(r.source_kind).toBe("html_sample");
+    if (r.source_kind === "html") throw new Error("read as an HTML check");
+    expect(r.layout.sections.map((s) => s.type)).toEqual(["header", "vendor_scorecard", "data_gaps"]);
+    expect(r.left_out).toEqual([{ title: "Standouts", reason: "already inside highlights" }]);
+    expect(r.matched_count).toBe(3);
+    expect(r.readings_left_today).toBe(7);
+    expect(r.upload.filename).toBe("board.html");
+    // Zero counts are dropped, the rest kept — the same reading as the HTML check's.
+    expect(r.removed).toEqual({ scripts: 1, external_urls: 2, comments: 3 });
+    expect(removedLine(r.removed)).toBe(
+      "We removed 1 script and 2 outside addresses. Templates can't run code or load anything from outside; everything else is kept.");
+  });
+
+  it("reads `removed` as empty when the reading has none — a PDF, or a backend older than the field", () => {
+    const pdf = readTemplateReading({ source_kind: "pdf", layout: LAYOUT, preview_html: null });
+    if (pdf.source_kind === "html") throw new Error("read as HTML");
+    expect(pdf.removed).toEqual({});
+    const sample = readTemplateReading({ source_kind: "html_sample", layout: LAYOUT, preview_html: null });
+    if (sample.source_kind === "html") throw new Error("read as HTML");
+    expect(sample.removed).toEqual({});
+    const clean = readTemplateReading({ source_kind: "html_sample", layout: LAYOUT, preview_html: null,
+      removed: { scripts: 0, handlers: 0 } });
+    if (clean.source_kind === "html") throw new Error("read as HTML");
+    expect(clean.removed).toEqual({});
+    expect(removedLine(clean.removed)).toBeNull();
   });
 
   it("reads what was left out of the template — title and reason — off a reading", () => {
@@ -1896,6 +1933,8 @@ describe("the version history", () => {
     const v = (source_kind: string, filename: string | null) =>
       ({ kind: "layout", source_kind, filename }) as Pick<MrTemplateVersion, "kind" | "source_kind" | "filename">;
     expect(madeFrom(v("image", "board.png"))).toBe("Sample: board.png");
+    expect(madeFrom(v("html_sample", "board.html"))).toBe("HTML sample: board.html");
+    expect(madeFrom(v("html_sample", null))).toBe("HTML sample: an unnamed file");
     expect(madeFrom(v("html", "ours.html"))).toBe("HTML: ours.html");
     expect(madeFrom(v("builder", null))).toBe("Arranged by hand");
   });
@@ -2112,6 +2151,22 @@ describe("the template panel's own words and wiring", () => {
     expect(panel()).toContain('if (apiCode(e) === "not_a_layout" && data.default_layout)');
     expect(panel()).toContain('{step.note && <p className="calm" role="note">{step.note}</p>}');
     expect(panel()).toContain("rateLimitedLine(data.readings_per_day)");
+  });
+
+  it("sends an HTML sample on to arranging, and says there what the sanitizer took out", () => {
+    const p = panel();
+    // The one branch that is a check is `"html"`; everything else the reader
+    // answers — pdf, image, html_sample — is arranged.
+    expect(p.match(/reading\.source_kind === "/g)).toEqual(['reading.source_kind === "']);
+    expect(p).toContain('if (reading.source_kind === "html") {');
+    expect(p).toContain('{ source_kind: reading.source_kind, filename: reading.upload.filename ?? file.name }, reading);');
+    // The arrange step shows the removed line off the reading, in the same quiet
+    // status line the HTML check uses; the check keeps its own.
+    expect(p).toContain('<p className="calm" role="status">{removedLine(step.reading.removed)}</p>');
+    expect(p).toContain('{removed && <p className="calm" role="status">{removed}</p>}');
+    expect(p.match(/removedLine\(/g)).toHaveLength(3);
+    // The save body carries the reading's own kind — html_sample is a layout save.
+    expect(p).toContain('source_kind: step.source.source_kind, filename: step.source.filename,');
   });
 
   it("puts the confirmation in front of every save, and holds it only on the preview's code", () => {

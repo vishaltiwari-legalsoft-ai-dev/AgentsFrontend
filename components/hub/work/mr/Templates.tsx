@@ -38,6 +38,13 @@ import {
   versionLabel, type Arrangement, type ArrangeRow,
 } from "./templateModel";
 
+/** Where an arranged layout came from — every source but a placeholder HTML
+ *  file, which is saved as a file, not a layout. */
+type LayoutSource = {
+  source_kind: Exclude<MrTemplateSave, { source_kind: "html" }>["source_kind"];
+  filename: string | null;
+};
+
 /** Where the panel is. One at a time, so a reading in flight and a preview
  *  being arranged can never both be on screen. */
 type Step =
@@ -56,7 +63,7 @@ type Step =
   | {
       kind: "arrange";
       /** What a save records as the version's origin. */
-      source: { source_kind: "pdf" | "image" | "builder"; filename: string | null };
+      source: LayoutSource;
       reading: MrTemplateSampleReading | null;
       /** One quiet line about where the sections came from, when it needs saying. */
       note: string | null;
@@ -125,7 +132,7 @@ export function TemplatePanel({ listing, me, onChanged, onRetry, onClose, onToas
    *  not exactly what the given preview was rendered from. */
   const openArrange = useCallback((
     layout: MrLayout,
-    source: { source_kind: "pdf" | "image" | "builder"; filename: string | null },
+    source: LayoutSource,
     reading: MrTemplateSampleReading | null,
     note: string | null = null,
   ) => {
@@ -200,6 +207,9 @@ export function TemplatePanel({ listing, me, onChanged, onRetry, onClose, onToas
     try {
       const reading = await mrReadTemplateSample(file);
       if (!attempt.current()) return;
+      // Only a placeholder HTML file is a check; a PDF, a picture and a
+      // designed HTML page with no placeholders (`html_sample`) are readings
+      // and go on to be arranged.
       if (reading.source_kind === "html") {
         setStep({ kind: "html", file, check: reading });
         return;
@@ -510,6 +520,11 @@ export function TemplatePanel({ listing, me, onChanged, onRetry, onClose, onToas
               {step.note && <p className="calm" role="note">{step.note}</p>}
               {step.reading && (
                 <>
+                  {/* An HTML sample was sanitized before the reader saw it; say
+                      what went, in the same quiet line as the HTML check. */}
+                  {removedLine(step.reading.removed) && (
+                    <p className="calm" role="status">{removedLine(step.reading.removed)}</p>
+                  )}
                   <p className="calm">{matchedLine(step.reading.matched_count, month)}</p>
                   {/* `left_out` is the whole list (unsupported + dropped duplicates);
                       a backend older than it sends only `unsupported`. */}

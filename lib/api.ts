@@ -2742,11 +2742,16 @@ export interface MrTemplatePreview {
   preview_unavailable_code: string | null;
 }
 
-/** A PDF or picture, read by the model into a layout. Nothing is saved. */
+/** A PDF, a picture, or a designed HTML page with no placeholders
+ *  (`html_sample`), read by the model into a layout. Nothing is saved. */
 export interface MrTemplateSampleReading extends MrTemplatePreview {
-  source_kind: "pdf" | "image";
+  source_kind: "pdf" | "image" | "html_sample";
   upload: MrTemplateUpload;
   layout: MrLayout;
+  /** For an HTML sample: what the sanitizer took out before the reader saw
+   *  it, by kind (`scripts`, `handlers`, `external_urls`…), zero counts
+   *  dropped. Empty for a PDF or picture, and from a backend older than it. */
+  removed: Record<string, number>;
   /** Sections the sample has that no figures exist for — left out, not invented. */
   unsupported: { title: string; description: string }[];
   /** Every sample section that is not in `layout`, each with why: the
@@ -2813,6 +2818,15 @@ export function readTemplateProblems(raw: unknown): MrTemplateProblem[] {
     : [];
 }
 
+/** The sanitizer's counts, keeping only the kinds that were actually taken out. */
+function readRemoved(raw: unknown): Record<string, number> {
+  const removed: Record<string, number> = {};
+  for (const [k, v] of Object.entries(obj(raw))) {
+    if (typeof v === "number" && v > 0) removed[k] = v;
+  }
+  return removed;
+}
+
 function readPreview(r: Record<string, unknown>): MrTemplatePreview {
   return {
     preview_html: typeof r.preview_html === "string" && r.preview_html ? r.preview_html : null,
@@ -2826,16 +2840,12 @@ function readPreview(r: Record<string, unknown>): MrTemplatePreview {
 export function readTemplateReading(raw: unknown): MrTemplateReading {
   const r = obj(raw);
   if (r.source_kind === "html") {
-    const removed: Record<string, number> = {};
-    for (const [k, v] of Object.entries(obj(r.removed))) {
-      if (typeof v === "number" && v > 0) removed[k] = v;
-    }
     return {
       source_kind: "html",
       upload: readUpload(r.upload),
       sanitized_html: typeof r.sanitized_html === "string" && r.sanitized_html ? r.sanitized_html : null,
       errors: readTemplateProblems(r.errors),
-      removed,
+      removed: readRemoved(r.removed),
       placeholders_used: Array.isArray(r.placeholders_used)
         ? r.placeholders_used.filter((p): p is string => typeof p === "string") : [],
       // Absent is "cannot save": a save button the server never offered would
@@ -2845,11 +2855,12 @@ export function readTemplateReading(raw: unknown): MrTemplateReading {
     };
   }
   const layout = readLayout(r.layout);
-  if ((r.source_kind === "pdf" || r.source_kind === "image") && layout) {
+  if ((r.source_kind === "pdf" || r.source_kind === "image" || r.source_kind === "html_sample") && layout) {
     return {
       source_kind: r.source_kind,
       upload: readUpload(r.upload),
       layout,
+      removed: readRemoved(r.removed),
       unsupported: Array.isArray(r.unsupported)
         ? r.unsupported.map((u) => ({ title: str(obj(u).title) || "A section",
                                        description: str(obj(u).description) || "" }))
@@ -2865,7 +2876,8 @@ export function readTemplateReading(raw: unknown): MrTemplateReading {
 
 /** Read a sample report — PDF, PNG, JPEG or HTML; the server decides the path.
  *  A PDF or picture is one model call, metered per workspace per day; an HTML
- *  file is checked and costs no reading. Refusals are coded: 422
+ *  file is checked and costs no reading — unless it has no placeholders at
+ *  all, when it is a designed sample and is read like a PDF (`html_sample`). Refusals are coded: 422
  *  `invalid_file` and the reader's upload codes, 413 `too_large` (refused
  *  before auth, on the body's size), 429 `rate_limited`, 503/502 for the reader
  *  itself — each with `billed` and `readings_left_today` — and, for an HTML
@@ -2883,7 +2895,7 @@ export async function mrPreviewTemplateLayout(layout: MrLayout): Promise<MrTempl
 }
 
 export type MrTemplateSave =
-  | { source_kind: "pdf" | "image" | "builder"; filename?: string | null; layout: MrLayout }
+  | { source_kind: "pdf" | "image" | "html_sample" | "builder"; filename?: string | null; layout: MrLayout }
   | { source_kind: "html"; filename?: string | null; html: string };
 
 /** Save a version for the whole workspace; it becomes the active one. The

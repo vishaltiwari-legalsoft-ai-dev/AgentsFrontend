@@ -100,13 +100,16 @@ export function templateBandLine(line: MrTemplateLine | null, me?: string | null
 export const versionLabel = (v: Pick<MrTemplateVersion, "kind" | "number">): string =>
   v.kind === "builtin" ? "Built-in" : v.number !== null ? `Version ${v.number}` : "A team version";
 
-/** "Sample: September-board.pdf" / "HTML: ours.html" / "Arranged by hand". */
+/** "Sample: September-board.pdf" / "HTML sample: ours.html" / "HTML: ours.html"
+ *  / "Arranged by hand". An HTML sample is a layout read from a designed page
+ *  with no placeholders; an HTML template is the file itself. */
 export function madeFrom(v: Pick<MrTemplateVersion, "kind" | "source_kind" | "filename">): string {
   if (v.kind === "builtin") return "Built in";
   const file = v.filename || "an unnamed file";
   switch (v.source_kind) {
     case "pdf":
     case "image": return `Sample: ${file}`;
+    case "html_sample": return `HTML sample: ${file}`;
     case "html": return `HTML: ${file}`;
     case "builder": return "Arranged by hand";
     default: return v.filename || "—";
