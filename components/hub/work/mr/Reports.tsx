@@ -33,7 +33,7 @@ import { useHub, type ToastFn } from "../../context";
 import type { MrData_ } from "../MrWorkspace";
 import { SourceList } from "./parts";
 import { PullWorkbook, useWorkbookPull, type WorkbookPull } from "./Data";
-import { ReportFrame, openReportTab } from "./reportFrame";
+import { ReportFrame, openReportTab, type ReportPdf } from "./reportFrame";
 import { TemplatePanel, saveFile } from "./Templates";
 import { clause, templateBandLine } from "./templateModel";
 
@@ -179,7 +179,18 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
 
       {shown?.kind === "campaign" && <ReportDoc doc={shown.doc} data={data} />}
 
-      {shown?.kind === "board" && <BoardDoc report={shown.report} data={data} onToast={onToast} />}
+      {shown?.kind === "board" && (
+        <BoardDoc
+          report={shown.report}
+          data={data}
+          // The renderer switch is global, but `MR_VENDOR_OFF` — the vendor
+          // feature off, or a backend older than the periods route — also reads
+          // `pdf_available: false` with no reason. Only a server that gave its
+          // reason has said the board PDF is off; otherwise the route is asked.
+          pdfOff={vendor.data?.pdf_available === false ? vendor.data.pdf_unavailable_reason : null}
+          onToast={onToast}
+        />
+      )}
 
       {shown?.kind === "vendor" && (
         <VendorDoc
@@ -187,6 +198,7 @@ export function MrReports({ data, onToast }: { data: MrData_; onToast: ToastFn }
           // Unknown is "ask the server": the PDF route answers 503 with its own
           // reason, so an enabled button can only fail honestly.
           pdfAvailable={vendor.data?.pdf_available !== false}
+          pdfReason={vendor.data?.pdf_unavailable_reason ?? null}
           onToast={onToast}
         />
       )}
@@ -547,9 +559,11 @@ function VendorBuild({
  *
  *  The document is the server's HTML for the stored run, never re-derived
  *  here, so what is read on screen is what the PDF and the new tab hold. */
-function VendorDoc({ run, pdfAvailable, onToast }: {
+function VendorDoc({ run, pdfAvailable, pdfReason, onToast }: {
   run: MrVendorRun;
   pdfAvailable: boolean;
+  /** The server's own words for why not, when it gave them. */
+  pdfReason: string | null;
   onToast: ToastFn;
 }) {
   const session = useLoadSession();
@@ -584,6 +598,11 @@ function VendorDoc({ run, pdfAvailable, onToast }: {
             title={title}
             // The document already on screen when it is; fetched on click when not.
             read={() => (html.data !== null ? Promise.resolve(html.data) : mrVendorReportHtml(run.id))}
+            pdf={{
+              fileName: `${file}.pdf`,
+              unavailable: pdfAvailable ? null : (pdfReason ?? PDF_OFF_LINE),
+              fetchUrl: forTab(() => mrVendorReportPdfUrl(run.id).catch(gone), "The PDF could not be prepared."),
+            }}
             onToast={onToast}
           />
           <VendorPdfButton id={run.id} name={file} available={pdfAvailable} onToast={onToast} />
@@ -640,6 +659,17 @@ function gone(e: unknown): never {
   throw e;
 }
 
+/** What the console says when the server reports no PDF renderer and gives
+ *  no reason of its own. */
+const PDF_OFF_LINE = "PDF downloads aren't set up on this server yet.";
+
+/** A PDF fetch for the report tab. The tab has no toast and imports nothing
+ *  from `@/lib`, so its status line shows whatever the rejection's message
+ *  is — this makes that message the one `describeFailure` would have toasted:
+ *  the server's own words, or the offline and timeout sentences. */
+const forTab = (fetch: () => Promise<string>, fallback: string) => () =>
+  fetch().catch((e: unknown) => { throw new Error(describeFailure(e, fallback)); });
+
 /** The PDF, saved as a file. Disabled with a sentence under it when the server
  *  says PDF export is not set up; when it is, a 503 still comes back in the
  *  server's own words. */
@@ -680,9 +710,11 @@ function VendorPdfButton({ id, name, available, onToast }: {
  *  report inside the same sandboxed iframe as the inline viewer. It is never a
  *  `blob:` URL: one of those runs the report in this origin, beside the login
  *  token. */
-function OpenInTab({ title, read, onToast }: {
+function OpenInTab({ title, read, pdf, onToast }: {
   title: string;
   read: () => Promise<string>;
+  /** The tab's "Download PDF", when the report has one. */
+  pdf?: ReportPdf;
   onToast: ToastFn;
 }) {
   const [busy, setBusy] = useState(false);
@@ -692,7 +724,7 @@ function OpenInTab({ title, read, onToast }: {
       className="btn btn--quiet btn--sm"
       disabled={busy}
       onClick={async () => {
-        const tab = openReportTab(title);
+        const tab = openReportTab(title, pdf ?? null);
         if (!tab) {
           onToast("Your browser blocked the new tab. Allow pop-ups for this site, then try again.", "error");
           return;
@@ -879,9 +911,11 @@ function BoardBuild({ periods, pull, disabled, onBuilt, onToast, onRetry }: {
  *  The ledger itself is the document's job. What belongs here is the thing a
  *  reader cannot get from the document — how much of the board this particular
  *  pull was able to answer. */
-function BoardDoc({ report, data, onToast }: {
+function BoardDoc({ report, data, pdfOff, onToast }: {
   report: MrBoardReport;
   data: MrData_;
+  /** The server's reason the PDF renderer is off, or null to ask the route. */
+  pdfOff: string | null;
   onToast: ToastFn;
 }) {
   const meta = REPORT_META[report.kind];
@@ -909,6 +943,11 @@ function BoardDoc({ report, data, onToast }: {
           <OpenInTab
             title={`${meta?.label || "Board Report"}${(s.columns || []).length ? ` — ${(s.columns || []).join(" vs ")}` : ""}`}
             read={() => mrBoardReportHtml(report.id)}
+            pdf={{
+              fileName: `${fileName}.pdf`,
+              unavailable: pdfOff,
+              fetchUrl: forTab(() => mrBoardReportPdfUrl(report.id).catch(boardPdfGone), "The PDF could not be fetched."),
+            }}
             onToast={onToast}
           />
           <BoardPdfButton id={report.id} name={fileName} onToast={onToast} />
@@ -1006,6 +1045,15 @@ function Coverage({ column, rows }: { column: MrBoardCoverageColumn; rows: MrBoa
   );
 }
 
+/** A 404 from the board PDF route: the deployment predates the document
+ *  routes. Said in words rather than as FastAPI's bare "Not Found". */
+function boardPdfGone(e: unknown): never {
+  if (apiStatus(e) === 404) {
+    throw new Error("This deployment has no PDF of the board report — the document routes are not live here yet.");
+  }
+  throw e;
+}
+
 /** The board report's PDF, saved as a file. The endpoint is authenticated, so
  *  the bytes are fetched with the caller's token and handed over as an object
  *  URL — a plain link would arrive without one and 401. Its HTML opens through
@@ -1027,14 +1075,9 @@ function BoardPdfButton({ id, name, onToast }: {
       onClick={async () => {
         setBusy(true);
         try {
-          saveFile(await mrBoardReportPdfUrl(id), `${name}.pdf`);
+          saveFile(await mrBoardReportPdfUrl(id).catch(boardPdfGone), `${name}.pdf`);
         } catch (e: unknown) {
-          onToast(
-            apiStatus(e) === 404
-              ? "This deployment has no PDF of the board report — the document routes are not live here yet. The figures above are what it holds."
-              : describeFailure(e, "The PDF could not be fetched."),
-            "error",
-          );
+          onToast(describeFailure(e, "The PDF could not be fetched."), "error");
         } finally {
           setBusy(false);
         }

