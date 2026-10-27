@@ -35,7 +35,7 @@ import {
   CLARIFY_SCREEN_FAILED, POLL_MS, STEP_LABEL, actionErrorText, apDate, chipInputOf, clearedToast, coverChips, coverCounts, coverStory,
   createErrorText, escalationRecordLine, escalationSeat, exportFilename, groupRuns, isOwner, lockedBanner, nextAutoStep,
   normaliseCard, normaliseRun, normaliseVersion, quoteResetLine, quoteResetToast, researchPartialNote, resignWarning,
-  retryDelayMs, rowMeta, rowTitle, runChip, sectionStep, shouldPoll, stepLines, stoppedLine, versionLabel,
+  retryDelayMs, rowMeta, rowTitle, runChip, sectionStep, shouldPoll, speakerName, stepLines, stoppedLine, versionLabel,
   versionStatusLabel,
   type Chip, type PrView,
 } from "@/components/hub/work/pr";
@@ -1122,8 +1122,8 @@ function PackageView(p: RunViewProps & {
                     </span>
                     <span className={`bw-chip pr-chip--${q.approval.state === "approved" ? "ok" : "neutral"}`}>
                       {q.approval.state === "approved"
-                        ? `Approved by ${q.speaker_name}${q.approval.at ? `, ${apDate(q.approval.at)}` : ""}`
-                        : `Waiting for ${q.speaker_name}'s approval`}
+                        ? `Approved by ${speakerName(q.speaker_name)}${q.approval.at ? `, ${apDate(q.approval.at)}` : ""}`
+                        : `Waiting for ${speakerName(q.speaker_name)}'s approval`}
                     </span>
                     {q.approval.evidence && <span className="pr-meta">{q.approval.evidence}</span>}
                     {reset && <span className="bw-note">{reset}</span>}

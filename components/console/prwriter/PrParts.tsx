@@ -16,7 +16,7 @@ import { describeFailure } from "@/lib/load";
 import { andList } from "@/components/hub/model";
 import {
   APPROVED_LINE, blockerSentence, escalationRecordLine, markerChip, markerFor, parseMarkers,
-  signoffRowLabel, signoffStateText, signoffTone, versionRow,
+  signoffRowLabel, signoffStateText, signoffTone, speakerName, versionRow,
   type EscalationSeat, type MarkerSegment, type StepLine,
 } from "@/components/hub/work/pr";
 
@@ -287,6 +287,8 @@ export function ClarifyCard({ clarify, busy, onSubmit, onSkip }: {
   const [answers, setAnswers] = useState<Partial<Record<PrClarifyKey, string>>>(() =>
     Object.fromEntries(clarify.fields.map((f) => [f.key, f.answer ?? f.guess ?? ""])));
   const [type, setType] = useState<PrContentType>(clarify.content_type.value);
+  // Which button sent the card, so its own spinner turns, not the other's.
+  const [pressed, setPressed] = useState<"answers" | "placeholders" | null>(null);
   const options = clarify.content_type.options.length
     ? clarify.content_type.options
     : [{ value: clarify.content_type.value, label: clarify.content_type.value.replace(/_/g, " ") }];
@@ -301,7 +303,7 @@ export function ClarifyCard({ clarify, busy, onSubmit, onSkip }: {
       </div>
       <form
         className="pr-form"
-        onSubmit={(e) => { e.preventDefault(); if (!busy) onSubmit(answers, type); }}
+        onSubmit={(e) => { e.preventDefault(); if (!busy) { setPressed("answers"); onSubmit(answers, type); } }}
       >
         <label className="pr-form__row">
           <span>Content type</span>
@@ -322,10 +324,11 @@ export function ClarifyCard({ clarify, busy, onSubmit, onSkip }: {
         ))}
         <div className="pr-actions">
           <button type="submit" className="bw-btn bw-btn--primary" disabled={busy}>
-            {busy ? <Icon name="loader-circle" size={14} className="bw-spin" /> : <Icon name="pen-line" size={14} />}
+            {busy && pressed !== "placeholders" ? <Icon name="loader-circle" size={14} className="bw-spin" /> : <Icon name="pen-line" size={14} />}
             Draft with these
           </button>
-          <button type="button" className="bw-btn" disabled={busy} onClick={() => onSkip(type)}>
+          <button type="button" className="bw-btn" disabled={busy} onClick={() => { setPressed("placeholders"); onSkip(type); }}>
+            {busy && pressed === "placeholders" && <Icon name="loader-circle" size={14} className="bw-spin" />}
             Draft with placeholders
           </button>
         </div>
@@ -551,7 +554,7 @@ export function SignoffPanel({
   // Enabled only when the server says it can be approved and nothing is open.
   const ready = signoffs.can_approve && !!signoffs.version && !b.verify && !b.missing && !b.pending_quotes;
   const close = () => setDialog(null);
-  const speaker = (row: PrSignoffRow) => row.label.replace(/^Quote:\s*/, "") || "the speaker";
+  const speaker = (row: PrSignoffRow) => speakerName(row.label.replace(/^Quote:\s*/, ""));
 
   return (
     <div className="mr-panel pr-signoff" id="pr-signoff">

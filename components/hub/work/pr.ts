@@ -445,15 +445,18 @@ export interface StepLine {
   error?: string;
 }
 
+/** Said only when the server sent no sentence of its own: a 424 can be an
+ *  empty account, a bad key, a rate limit or an outage, and only the server
+ *  knows which (its `message` is safe to show, contract §0.1). */
 export const SEARCH_UNAVAILABLE_TEXT =
-  "Research couldn't run: the web search service is out of credit. Nothing was drafted. An admin needs to top it up.";
+  "Research couldn't run: the web search service refused the request. Nothing was drafted. An admin needs to check it.";
 export const MODEL_UNAVAILABLE_TEXT = "The writing model isn't available right now. Nothing was drafted.";
 
 /** What went wrong, for each code the backend can fail with (contract §0.2),
  *  said as a cause. Each caller adds what that means where it happened:
  *  nothing filed, nothing drafted, nothing changed. Never provider text. */
 export const FAILURE_CAUSE: Record<string, string> = {
-  search_unavailable: "Research couldn't run: the web search service is out of credit.",
+  search_unavailable: "Research couldn't run: the web search service refused the request.",
   credential_missing: "A key PR Writer needs isn't configured, so an admin has to add it.",
   model_unavailable: "The writing model isn't available right now.",
   model_truncated: "The writing model's answer was cut off before it finished.",
@@ -469,12 +472,12 @@ export const FAILURE_CAUSE: Record<string, string> = {
  *  draft that already exists, so their failure must not say otherwise. */
 const BEFORE_DRAFT: ReadonlySet<string> = new Set(["intake", "screen", "research", "draft"]);
 
-/** A failed step in words. The spec's two named failures keep its exact
- *  sentences; the rest is the cause plus what is still safe. */
+/** A failed step in words. A search refusal says what the server said; the
+ *  rest is the cause plus what is still safe. */
 export function stepErrorText(error: PrStep["error"], step: PrStepId | null = null): string {
   if (!error) return "This step stopped. It can run again.";
   const early = !step || BEFORE_DRAFT.has(step);
-  if (error.code === "search_unavailable") return SEARCH_UNAVAILABLE_TEXT;
+  if (error.code === "search_unavailable") return error.message.trim() || SEARCH_UNAVAILABLE_TEXT;
   if (error.code === "model_unavailable") {
     return early ? MODEL_UNAVAILABLE_TEXT : `${FAILURE_CAUSE.model_unavailable} The draft is saved.`;
   }
@@ -721,13 +724,31 @@ export type MarkerSegment =
 
 /** `[VERIFY: x]`, `[MISSING: x]` and `[QUOTE – PENDING APPROVAL: Name, Title]`.
  *  The quote marker's dash is an en dash in the contract; a hyphen or an em
- *  dash is read the same, because a model will write either. */
-const MARKER_RE = /\[(VERIFY|MISSING):\s*([^\]]*?)\s*\]|\[QUOTE\s*[–—-]\s*PENDING APPROVAL:\s*([^\]]*?)\s*\]/g;
+ *  dash is read the same, because a model will write either. A quote whose
+ *  speaker is not known yet carries placeholders one level down —
+ *  `[QUOTE – PENDING APPROVAL: [VERIFY: spokesperson name], [VERIFY: exact title]]`
+ *  — so its label admits bracketed runs, and the whole marker is one token
+ *  with no stray "]" left behind. */
+const MARKER_RE = /\[(VERIFY|MISSING):\s*([^\]]*?)\s*\]|\[QUOTE\s*[–—-]\s*PENDING APPROVAL:\s*((?:[^[\]]|\[[^[\]]*\])*?)\s*\]/g;
 
+/** "Name, Title" split at the first comma outside brackets, so a placeholder
+ *  that itself holds a comma stays whole. */
 export function splitSpeaker(label: string): { name: string; title: string } {
-  const i = label.indexOf(",");
-  if (i < 0) return { name: label.trim(), title: "" };
-  return { name: label.slice(0, i).trim(), title: label.slice(i + 1).trim() };
+  let depth = 0;
+  for (let i = 0; i < label.length; i++) {
+    const ch = label[i];
+    if (ch === "[") depth++;
+    else if (ch === "]") depth = Math.max(0, depth - 1);
+    else if (ch === "," && depth === 0) return { name: label.slice(0, i).trim(), title: label.slice(i + 1).trim() };
+  }
+  return { name: label.trim(), title: "" };
+}
+
+/** A speaker's name as a sentence can carry it: a still-unverified
+ *  placeholder name reads as "the speaker" rather than as raw brackets. */
+export function speakerName(name: string | null | undefined): string {
+  const n = (name || "").trim();
+  return !n || /\[(VERIFY|MISSING):/.test(n) ? "the speaker" : n;
 }
 
 /** A block's text cut into plain runs and marker tokens, in order. Joining
@@ -771,7 +792,7 @@ export function markerChip(
     return marker?.resolved ? { text: "Verified", tone: "ok" } : { text: `Verify: ${seg.label}`, tone: "warn" };
   }
   if (seg.kind !== "quote") return { text: `Missing: ${seg.label}`, tone: "missing" };
-  const name = quote?.speaker_name || seg.name || "the speaker";
+  const name = speakerName(quote?.speaker_name || seg.name);
   if (quote?.approval.state === "approved" || (!quote && marker?.resolved)) {
     const at = quote?.approval.at ? `, ${apDate(quote.approval.at)}` : "";
     return { text: `Approved by ${name}${at}`, tone: "ok" };
@@ -782,7 +803,7 @@ export function markerChip(
 /** "Changed in v1.2. Needs Hamid Kohan's approval again." */
 export function quoteResetLine(q: PrQuote): string | null {
   if (!q.reset_in_version || q.approval.state === "approved") return null;
-  return `Changed in ${versionLabel(q.reset_in_version)}. Needs ${q.speaker_name}'s approval again.`;
+  return `Changed in ${versionLabel(q.reset_in_version)}. Needs ${speakerName(q.speaker_name)}'s approval again.`;
 }
 
 /** The toast after a revision that changed a quote's text (its id, so its

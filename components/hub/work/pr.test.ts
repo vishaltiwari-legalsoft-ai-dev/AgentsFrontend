@@ -4,7 +4,7 @@ import { dispositionFilename } from "../../../lib/api";
 import {
   CARD_SECTIONS, FAILURE_CAUSE, MODEL_UNAVAILABLE_TEXT, NOT_STARTED, NO_CAN, SEARCH_UNAVAILABLE_TEXT,
   actionErrorText, createErrorText, nextMinorVersion, resignWarning, sectionStep,
-  CANNOT_ASSIGN_REVIEWERS, CLARIFY_SCREEN_FAILED, LEGAL_SAME_AS_COMMS, cardSaveError, cardToSend,
+  CANNOT_ASSIGN_REVIEWERS, speakerName, CLARIFY_SCREEN_FAILED, LEGAL_SAME_AS_COMMS, cardSaveError, cardToSend,
   apDate, apDateTime, apTime, blockerSentence, boilerplateChanged, brandNote, cardStoryLine, cardToInput,
   chipInputOf, cleanCardInput, clearedToast, conflictText, coverChips, coverCounts, coverStory, defaultBrand,
   emptyCardInput, escalationRecordLine, escalationSeat, exportFilename, firstSentence, groupRuns, isPrRunId,
@@ -260,7 +260,15 @@ describe("step lines", () => {
 
   it("say each failure honestly, and never claim nothing was drafted once a draft exists", () => {
     const err = (code: string, message = "provider said something") => ({ code, message, at: "", attempts: 1 });
-    expect(stepErrorText(err("search_unavailable"), "research")).toBe(SEARCH_UNAVAILABLE_TEXT);
+    // A 424 is a bad key, a rate limit or an outage as often as an empty
+    // account: the server's own sentence, else a cause that claims none.
+    expect(stepErrorText(err("search_unavailable", "The search key was rejected. An admin needs to replace it."), "research"))
+      .toBe("The search key was rejected. An admin needs to replace it.");
+    expect(stepErrorText(err("search_unavailable", ""), "research")).toBe(SEARCH_UNAVAILABLE_TEXT);
+    expect(SEARCH_UNAVAILABLE_TEXT).toBe(
+      "Research couldn't run: the web search service refused the request. Nothing was drafted. An admin needs to check it.",
+    );
+    expect(SEARCH_UNAVAILABLE_TEXT).not.toContain("credit");
     expect(stepErrorText(err("model_unavailable"), "draft")).toBe(MODEL_UNAVAILABLE_TEXT);
     expect(MODEL_UNAVAILABLE_TEXT).toBe("The writing model isn't available right now. Nothing was drafted.");
     expect(stepErrorText(err("model_unavailable"), "package")).toBe("The writing model isn't available right now. The draft is saved.");
@@ -274,8 +282,9 @@ describe("step lines", () => {
     expect(stepErrorText(err("model_timeout"), "draft")).toBe("The writing model ran out of time. Your brief and earlier steps are saved.");
     // A code this build does not know yet: the server's own sentence.
     expect(stepErrorText(err("brand_new_code", "The server's sentence."), "draft")).toBe("The server's sentence.");
-    // No provider text ever reaches the screen for a known code.
-    for (const code of Object.keys(FAILURE_CAUSE)) {
+    // No provider text reaches the screen for a known code (search keeps the
+    // server's own sentence, which the contract makes safe to show).
+    for (const code of Object.keys(FAILURE_CAUSE).filter((c) => c !== "search_unavailable")) {
       expect(stepErrorText(err(code), "draft")).not.toContain("provider said something");
     }
     const run = normaliseRun(rawRun({ status: "step_failed", next_step: "research", steps: [{ id: "research", state: "failed", error: { code: "search_unavailable", message: "" } }] }));
@@ -434,6 +443,33 @@ describe("inline markers", () => {
 
   it("splits a speaker at the first comma only", () => {
     expect(splitSpeaker("Hamid Kohan, CEO, Legal Soft")).toEqual({ name: "Hamid Kohan", title: "CEO, Legal Soft" });
+  });
+
+  it("reads a pending quote whose speaker is still a placeholder as one marker, with no stray bracket", () => {
+    const token = "[QUOTE – PENDING APPROVAL: [VERIFY: spokesperson name], [VERIFY: exact title]]";
+    const text = `"We built this for firms," the spokesperson said.\n${token} Then more text.`;
+    const segs = parseMarkers(text);
+    expect(segs.map((s) => s.kind)).toEqual(["text", "quote", "text"]);
+    expect(segs[1]).toEqual({
+      kind: "quote", token, label: "[VERIFY: spokesperson name], [VERIFY: exact title]",
+      name: "[VERIFY: spokesperson name]", title: "[VERIFY: exact title]",
+    });
+    expect(segs[2]).toEqual({ kind: "text", text: " Then more text." });
+    expect(segs.map((s) => (s.kind === "text" ? s.text : s.token)).join("")).toBe(text);
+    expect(segs.filter((s) => s.kind === "text").map((s) => (s as { text: string }).text).join("")).not.toMatch(/^\]|\s\]/);
+    // A comma inside a placeholder does not split the speaker.
+    expect(splitSpeaker("[VERIFY: name, from Priya], CEO")).toEqual({ name: "[VERIFY: name, from Priya]", title: "CEO" });
+    // A plain [VERIFY] next to the quote marker still parses on its own.
+    expect(parseMarkers(`[VERIFY: launch date] ${token}`).map((s) => s.kind)).toEqual(["verify", "text", "quote"]);
+  });
+
+  it("names a placeholder speaker as the speaker in every sentence", () => {
+    expect(speakerName("[VERIFY: spokesperson name]")).toBe("the speaker");
+    expect(speakerName("")).toBe("the speaker");
+    expect(speakerName("Hamid Kohan")).toBe("Hamid Kohan");
+    const [quote] = parseMarkers("[QUOTE – PENDING APPROVAL: [VERIFY: spokesperson name], [VERIFY: exact title]]") as
+      Exclude<ReturnType<typeof parseMarkers>[number], { kind: "text" }>[];
+    expect(markerChip(quote)).toEqual({ text: "Waiting for the speaker's approval", tone: "quote" });
   });
 
   it("matches a token to the server's marker by block and exact token", () => {
