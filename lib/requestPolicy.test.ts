@@ -29,6 +29,21 @@ describe("deadlineFor", () => {
     expect(deadlineFor("/api/seo-geo/keywords/b1/run", "POST")).toBe(SLOW_TIMEOUT_MS);
     expect(deadlineFor("/api/seo-geo/competitors/b1/profiles/refresh", "POST")).toBe(SLOW_TIMEOUT_MS);
     expect(deadlineFor("/api/blog/runs/r1/research/step", "POST")).toBe(SLOW_TIMEOUT_MS);
+    // PR writer: creating a run runs intake and screen; steps run to a 270 s
+    // server deadline; revise and claim removal are one model call each; the
+    // export builds a .docx.
+    expect(deadlineFor("/api/pr/runs", "POST")).toBe(SLOW_TIMEOUT_MS);
+    expect(deadlineFor("/api/pr/runs?brand_id=legalsoft")).toBe(DEFAULT_TIMEOUT_MS);
+    expect(deadlineFor("/api/pr/runs/pr-3f9a0b1c2d3e/steps/research", "POST")).toBe(SLOW_TIMEOUT_MS);
+    expect(deadlineFor("/api/pr/runs/pr-3f9a0b1c2d3e/steps/notes", "POST")).toBe(SLOW_TIMEOUT_MS);
+    expect(deadlineFor("/api/pr/runs/pr-3f9a0b1c2d3e/blocks/b-lede/revise", "POST")).toBe(SLOW_TIMEOUT_MS);
+    expect(deadlineFor("/api/pr/runs/pr-3f9a0b1c2d3e/claims/c-1/remove", "POST")).toBe(SLOW_TIMEOUT_MS);
+    expect(deadlineFor("/api/pr/runs/pr-3f9a0b1c2d3e/export?format=docx&v=1.0")).toBe(SLOW_TIMEOUT_MS);
+    // ...while the cheap PR reads and writes keep the default.
+    expect(deadlineFor("/api/pr/runs/pr-3f9a0b1c2d3e")).toBe(DEFAULT_TIMEOUT_MS);
+    expect(deadlineFor("/api/pr/runs/pr-3f9a0b1c2d3e/claims/c-1/verify", "POST")).toBe(DEFAULT_TIMEOUT_MS);
+    expect(deadlineFor("/api/pr/runs/pr-3f9a0b1c2d3e/review", "POST")).toBe(DEFAULT_TIMEOUT_MS);
+    expect(deadlineFor("/api/pr/runs/pr-3f9a0b1c2d3e/approve", "POST")).toBe(DEFAULT_TIMEOUT_MS);
     expect(deadlineFor("/api/geo/brands/b1/poll/step", "POST")).toBe(SLOW_TIMEOUT_MS);
     expect(deadlineFor("/api/mr/snapshots/capture", "POST")).toBe(SLOW_TIMEOUT_MS);
     expect(deadlineFor("/api/mr/snapshots/vendor/lifted/pdf?date_iso=2026-08-14")).toBe(SLOW_TIMEOUT_MS);

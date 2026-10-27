@@ -6,9 +6,9 @@
  *  was an object pushed onto an array. Here the five do not take the same thing,
  *  and pretending they do would be a button that quietly does nothing:
  *
- *  - The **Graphic Designer** and the **Blog Writer** genuinely start from a
- *    sentence and a brand, so this dialog starts their run for real and drops
- *    the reader into it.
+ *  - The **Graphic Designer**, the **Blog Writer** and the **PR Writer**
+ *    genuinely start from a sentence and a brand, so this dialog starts their
+ *    run for real and drops the reader into it.
  *  - The **SEO Analyst**, **Marketing Research** and **GEO** start from a
  *    choice this dialog cannot make for you — which property to crawl, which of
  *    ten reports to build, which engines to sweep. So they say what starting one
@@ -18,15 +18,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  bwBrands, bwCreateRun, gdCreateRun, gdListBrands,
+  apiCode, bwBrands, bwCreateRun, gdCreateRun, gdListBrands, prBrands, prCreateRun,
   type BwBrand, type GdBrandOption,
 } from "@/lib/api";
 import { useLoadSession } from "@/lib/load";
 import { Ic } from "./Sprite";
 import { AGENTS, WORKSPACE_SLUG, agentById, type HubAgent } from "./model";
 import type { ToastFn } from "./context";
+import { createErrorText, normaliseBrand } from "./work/pr";
 
-/** The two that take a written brief, and what the field should say for each. */
+/** The three that take a written brief, and what the field should say for each. */
 const TAKES_BRIEF: Record<string, { label: string; placeholder: string; verb: string }> = {
   a1: {
     label: "The brief",
@@ -38,7 +39,24 @@ const TAKES_BRIEF: Record<string, { label: string; placeholder: string; verb: st
     placeholder: "What a virtual receptionist actually costs — real pricing, evidence-backed, no vendor fluff.",
     verb: "Start the research",
   },
+  a13: {
+    label: "What's the news, in one sentence?",
+    placeholder: "Legal Soft's virtual paralegals now work inside a firm's practice management system, live Nov. 12.",
+    verb: "Start the draft",
+  },
 };
+
+/** What the brief field says when it is left empty, where a specialist has
+ *  its own words for it. */
+const EMPTY_BRIEF: Record<string, string> = {
+  a13: "Write the news in one sentence. Details can come later.",
+};
+
+/** The no-brands line, where a specialist's brands live somewhere else. */
+const NO_BRANDS: Record<string, string> = {
+  a13: "No brands are set up yet. Add one in the SEO Analyst first. PR Writer uses the same brand list.",
+};
+
 
 /** What the other three actually begin with, said plainly rather than pretended away. */
 const OPENS_INSTEAD: Record<string, string> = {
@@ -48,7 +66,8 @@ const OPENS_INSTEAD: Record<string, string> = {
   a12: "Inbox Triage takes no brief. It reads your Gmail on its own clock and writes to your sheet; the workspace is where you connect it and see whether it is running.",
 };
 
-interface BrandOpt { id: string; name: string }
+/** `hasCard` is the PR Writer's only: whether the brand has a brand card. */
+interface BrandOpt { id: string; name: string; hasCard?: boolean }
 
 export function BriefDialog({
   agentId, agents, onClose, onToast, onOpenWork, onQueued,
@@ -70,7 +89,13 @@ export function BriefDialog({
 
   const [who, setWho] = useState<string>(agentId || agents[0]?.id || "");
   const [text, setText] = useState("");
+  const [facts, setFacts] = useState("");
+  const [factsOpen, setFactsOpen] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // The server has no idempotency token for a PR run, so a second press while
+  // the first is in flight must not file a second one. State lags a render;
+  // the ref does not.
+  const inFlight = useRef(false);
   const [brands, setBrands] = useState<BrandOpt[] | null>(null);
   const [brand, setBrand] = useState<string>("");
   const [brandErr, setBrandErr] = useState<string | null>(null);
@@ -91,6 +116,8 @@ export function BriefDialog({
     if (!el) return;
     if (open && !el.open) {
       setText("");
+      setFacts("");
+      setFactsOpen(false);
       setErr(null);
       el.showModal();
       setTimeout(() => area.current?.focus(), 40);
@@ -105,9 +132,11 @@ export function BriefDialog({
     let dead = false;
     setBrands(null);
     setBrandErr(null);
-    const load = who === "a1"
+    const load: Promise<BrandOpt[]> = who === "a1"
       ? gdListBrands().then((r) => r.brands as GdBrandOption[])
-      : bwBrands().then((r) => (r.brands as BwBrand[]).map((b) => ({ id: b.id, name: b.name })));
+      : who === "a13"
+        ? prBrands().then((r) => (r?.brands || []).map(normaliseBrand).map((b) => ({ id: b.id, name: b.name, hasCard: b.has_card })))
+        : bwBrands().then((r) => (r.brands as BwBrand[]).map((b) => ({ id: b.id, name: b.name })));
     load
       .then((list) => {
         if (dead) return;
@@ -125,9 +154,10 @@ export function BriefDialog({
   }, [open, who, takes]);
 
   const start = useCallback(async () => {
+    if (inFlight.current) return;
     const brief = text.trim();
     if (!brief) {
-      setErr("Write what you want made. One or two sentences is enough.");
+      setErr(EMPTY_BRIEF[who] || "Write what you want made. One or two sentences is enough.");
       area.current?.focus();
       return;
     }
@@ -137,6 +167,7 @@ export function BriefDialog({
     }
     setErr(null);
     setBusy(true);
+    inFlight.current = true;
     const agent = agentById(who);
     try {
       if (who === "a1") {
@@ -148,6 +179,14 @@ export function BriefDialog({
         // than claiming it is open.
         onToast(`${agent?.name} has your brief. The run is recorded on Runs; the studio opens at setup.`, "ok");
         onOpenWork("art", run.id, "studio");
+      } else if (who === "a13") {
+        // Runs intake and screen before it answers; the button stays disabled.
+        const run = await prCreateRun({ brand_id: brand, news: brief, facts: facts.trim() || undefined });
+        onQueued();
+        onClose();
+        onToast("PR Writer is reading your brief. The draft fills in step by step.", "ok");
+        // Opening their own run is what starts its steps, so the person lands on it.
+        onOpenWork("pr", brand, run.id);
       } else {
         const run = await bwCreateRun({ brand_id: brand, topic: brief });
         onQueued();
@@ -159,11 +198,16 @@ export function BriefDialog({
       }
     } catch (e: unknown) {
       // A run that did not start must never look like one that did.
-      setErr(e instanceof Error ? e.message : "The run could not be started. Nothing was filed.");
+      if (who === "a13") {
+        setErr(createErrorText(apiCode(e), e instanceof Error ? e.message : null));
+      } else {
+        setErr(e instanceof Error ? e.message : "The run could not be started. Nothing was filed.");
+      }
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
-  }, [text, brand, who, onQueued, onClose, onToast, onOpenWork]);
+  }, [text, facts, brand, who, onQueued, onClose, onToast, onOpenWork]);
 
   const agent = agentById(who);
 
@@ -211,12 +255,17 @@ export function BriefDialog({
               <p className="wait"><i className="wait__spin" aria-hidden="true" />Loading brands…</p>
             ) : brands.length === 0 ? (
               <p className="err">
-                {brandErr || `No brands are set up yet. Add one in ${agent?.name}'s workspace first.`}
+                {brandErr || NO_BRANDS[who] || `No brands are set up yet. Add one in ${agent?.name}'s workspace first.`}
               </p>
             ) : (
               <select value={brand} onChange={(e) => setBrand(e.target.value)}>
                 {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
+            )}
+            {who === "a13" && brands?.find((b) => b.id === brand)?.hasCard === false && (
+              <span className="hint">
+                {brands.find((b) => b.id === brand)?.name} has no brand card yet. You can still draft. Brand details will show as [VERIFY] placeholders.
+              </span>
             )}
           </label>
 
@@ -231,6 +280,26 @@ export function BriefDialog({
             />
             {err && <p className="err">{err}</p>}
           </label>
+
+          {who === "a13" && (
+            <>
+              <button type="button" className="bw-collapse" aria-expanded={factsOpen} onClick={() => setFactsOpen(!factsOpen)}>
+                <Ic name="chevron" className={factsOpen ? "pr-rot90" : undefined} />
+                Add facts or quotes you already have (optional)
+              </button>
+              {factsOpen && (
+                <label className="field pr-brief-facts">
+                  <span className="pr-sr">Facts or quotes you already have</span>
+                  <textarea
+                    rows={4}
+                    value={facts}
+                    onChange={(e) => setFacts(e.target.value)}
+                    placeholder="Dates, figures and where they come from, an approved quote, the embargo time. PR Writer cites this as coming from you."
+                  />
+                </label>
+              )}
+            </>
+          )}
 
           <div className="dialog__actions">
             <button type="button" className="btn btn--quiet" onClick={onClose}>Cancel</button>

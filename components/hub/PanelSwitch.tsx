@@ -30,6 +30,7 @@ import { MrWorkspace } from "./work/MrWorkspace";
 import { InboxWorkspace } from "./work/InboxWorkspace";
 import { SeoWorkspace } from "./work/SeoWorkspace";
 import { BlogWorkspace } from "./work/BlogWorkspace";
+import { PrWorkspace } from "./work/PrWorkspace";
 
 import { GraphicsStudioV2 } from "@/components/console/gd2/GraphicsStudioV2";
 
@@ -69,6 +70,9 @@ export function PanelSwitch({ route }: { route: Route }) {
     }
     if (agent.id === "a9") {
       return <BlogWorkspace subject={route.work.subject} section={route.work.section} />;
+    }
+    if (agent.id === "a13") {
+      return <PrWorkspace subject={route.work.subject} section={route.work.section} />;
     }
     // One account, one sheet, one section: the route carries nothing it needs.
     if (agent.id === "a12") {

@@ -20,7 +20,7 @@ import {
   Download, ExternalLink, Feather, Files, FileText, Filter, Gauge, Globe, GripVertical,
   Hash, HeartPulse, Upload,
   House, Images, Inbox, Info, Layers, LayoutDashboard, LayoutGrid, Link2, MailPlus,
-  Megaphone, MessageCircle, Minus, Moon, NotebookPen, Palette, PenLine, Plug, Plus,
+  Megaphone, MessageCircle, Minus, Moon, Newspaper, NotebookPen, Palette, PenLine, Plug, Plus,
   RotateCcw, Search, SearchCheck, Send, Settings, ShieldCheck,
   SlidersVertical, Sparkles, Store, Sun, Swords, Target, TrendingUp,
   TriangleAlert, Type, UserRound, Wrench, X,
@@ -51,7 +51,7 @@ const ICONS: Record<string, LucideIcon> = {
   // the specialists, one mark each — keyed by agent id so a card can say
   // `<Ic name={agent.id} />` and be sure of a face
   a1: Brush, a2: SearchCheck, a6: ChartPie, a9: NotebookPen, a10: Globe,
-  a12: Inbox, a3: Feather, a4: CalendarClock, a5: Megaphone, a7: MailPlus,
+  a12: Inbox, a13: Newspaper, a3: Feather, a4: CalendarClock, a5: Megaphone, a7: MailPlus,
   a8: Compass,
 };
 

@@ -87,6 +87,20 @@ export const WORKSPACES: WorkspaceDef[] = [
     ],
   },
   {
+    // Same shape as the Blog Writer: the subject is a seo_geo brand and an
+    // open draft rides Drafts as `#/w/pr/<brandId>/<runId>`. The brand card
+    // belongs to the brand, so it is a section beside the drafts.
+    slug: "pr",
+    agentId: "a13",
+    subjectNoun: "brand",
+    subjectPlural: "brands",
+    sections: [
+      { id: "drafts", label: "Drafts", icon: "reports" },
+      { id: "write", label: "Write", icon: "draft" },
+      { id: "card", label: "Brand card", icon: "kit" },
+    ],
+  },
+  {
     slug: "art",
     agentId: "a1",
     subjectNoun: "creative",

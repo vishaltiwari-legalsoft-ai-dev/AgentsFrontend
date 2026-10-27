@@ -70,6 +70,13 @@ export const DEADLINE_RULES: readonly DeadlineRule[] = [
   // Blog writer: deep research, drafting, visual prompts, site inventory.
   { pattern: /^\/api\/blog\/runs\/[^/]+\/(research\/step|draft|visuals|export)$/, ms: SLOW_TIMEOUT_MS },
   { pattern: /^\/api\/blog\/brands\/[^/]+\/(inventory|voice)$/, ms: SLOW_TIMEOUT_MS },
+  // PR writer: creating a run runs intake and screen before it answers; a
+  // step, a block revision and a claim removal are model work; the export
+  // builds a .docx. The backend answers within ~270 s (under the relay's 300 s
+  // cut); the default 90 s would cut a healthy call off and report a failure
+  // the backend never had. Listing the drafts (GET) stays on the default.
+  { pattern: /^\/api\/pr\/runs$/, methods: ["POST"], ms: SLOW_TIMEOUT_MS },
+  { pattern: /^\/api\/pr\/runs\/[^/]+\/(steps\/[^/]+|blocks\/[^/]+\/revise|claims\/[^/]+\/remove|export)$/, ms: SLOW_TIMEOUT_MS },
   // SEO: analysis runs, crawls, SERP-backed research.
   { pattern: /^\/api\/seo-geo\/(run|site-review)\//, ms: SLOW_TIMEOUT_MS },
   { pattern: /^\/api\/seo-geo\/(audit|keywords)\/[^/]+\/run$/, ms: SLOW_TIMEOUT_MS },

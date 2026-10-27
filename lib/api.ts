@@ -258,9 +258,10 @@ async function sendForm<T>(path: string, form: FormData, opts?: RequestOptions):
 }
 
 /** A body we stream instead of parsing — an artifact, a font, a report PDF, the
- *  extension bundle. This is the one place `request()` is called: the deadline
- *  is released once the headers land, so a large download is never cut off
- *  mid-stream by a timer meant for a slow *server*, not a slow *transfer*. */
+ *  extension bundle. This and `fetchFile` are the only places `request()` is
+ *  called: the deadline is released once the headers land, so a large download
+ *  is never cut off mid-stream by a timer meant for a slow *server*, not a slow
+ *  *transfer*. */
 async function fetchBlob(
   path: string,
   init: RequestInit = {},
@@ -274,6 +275,27 @@ async function fetchBlob(
   // sites that only read `.message` are untouched.
   if (!response.ok) throw await apiError(response);
   return response.blob();
+}
+
+/** The filename a `Content-Disposition` header names, or null. Prefers the
+ *  RFC 5987 `filename*=UTF-8''…` form when both are sent. */
+export function dispositionFilename(header: string | null): string | null {
+  const h = header || "";
+  const m = /filename\*=(?:UTF-8'')?"?([^";]+)"?/i.exec(h) || /filename="?([^";]+)"?/i.exec(h);
+  if (!m) return null;
+  try { return decodeURIComponent(m[1]); } catch { return m[1]; }
+}
+
+/** `fetchBlob` plus the name the server gave the file, for a download the
+ *  backend names itself (the PR Writer's export). Same deadline discipline. */
+async function fetchFile(
+  path: string,
+  init: RequestInit = {},
+  opts?: RequestOptions,
+): Promise<{ blob: Blob; filename: string | null }> {
+  const response = await request(path, init, opts);
+  if (!response.ok) throw await apiError(response);
+  return { blob: await response.blob(), filename: dispositionFilename(response.headers.get("Content-Disposition")) };
 }
 
 /** `fetchBlob` read as text — for a document the console shows inside a
@@ -3583,6 +3605,405 @@ export const bwPlanVisuals = (id: string) => postJson<BwRun>(`/api/blog/runs/${i
 
 export async function bwExport(id: string, format: BwExportFormat): Promise<Blob> {
   return fetchBlob(`/api/blog/runs/${id}/export?format=${format}`, { method: "GET" });
+}
+
+/* ---------------------------------------------------------------- PR writer (a13) */
+// The contract is `docs/pr-writer-api.md`; these types are its §4 as serialised.
+// Every reply is passed through `normaliseRun` / `normaliseSummary`
+// (components/hub/work/pr.ts) before a screen reads it, because Vercel and
+// Cloud Run deploy at different times and a field added on one side must read
+// as its default on the other.
+
+export interface PrUserRef { id: string; name: string }
+export type PrStepId = "intake" | "screen" | "research" | "draft" | "package" | "notes";
+export type PrStepState = "pending" | "running" | "done" | "partial" | "failed";
+export type PrRole = "owner" | "comms_lead" | "brand_owner" | "legal" | "fallback_admin" | "participant";
+export type PrContentType =
+  | "press_release" | "media_advisory" | "product_launch" | "partnership"
+  | "milestone" | "award" | "event" | "thought_leadership";
+export type PrRunStatus =
+  | "writing" | "needs_details" | "escalated" | "step_failed" | "draft"
+  | "in_review" | "changes_asked" | "approved" | "withdrawn" | "closed";
+export type PrNeedsYou = "details" | "clearance" | "sign_off" | null;
+export type PrPackageSection = "seo" | "distribution" | "snippets" | "reviewer_notes";
+export type PrSectionState = "pending" | "done" | "failed";
+
+export interface PrStep {
+  id: PrStepId;
+  state: PrStepState;
+  started_at: string | null;
+  finished_at: string | null;
+  /** Per step (contract §4): intake {content_type, content_type_label,
+   *  audience}, screen {escalated, category}, research {sources_read,
+   *  facts_found, partial, sources, notes}, draft {words, quotes_pending},
+   *  package {sections}, notes {notes}. Read through `pr.ts`, with defaults. */
+  result: Record<string, unknown> | null;
+  error: { code: string; message: string; at: string; attempts: number } | null;
+}
+
+export interface PrParticipant {
+  user: PrUserRef;
+  roles: PrRole[];
+  added_by: PrUserRef | null;
+  added_at: string;
+}
+
+export interface PrCan {
+  run_steps: boolean;
+  answer_clarify: boolean;
+  add_escalation_note: boolean;
+  withdraw: boolean;
+  clear_escalation: boolean;
+  keep_paused: boolean;
+  close_escalation: boolean;
+  /** Also covers verify and remove claim. */
+  revise: boolean;
+  send_for_review: boolean;
+  record_quote_approval: boolean;
+  approve: boolean;
+  add_people: boolean;
+  export: boolean;
+}
+
+export interface PrVersionSummary {
+  version: string;
+  created_at: string;
+  created_by: PrUserRef | null;
+  kind: "draft" | "revision" | "claim_removed" | "verification" | "review_lock";
+  what_changed: string;
+  quote_resets: { quote_id: string; speaker_name: string }[];
+  locked: boolean;
+  locked_at: string | null;
+}
+
+export interface PrBlock {
+  /** "release_line" | "headline" | "subheadline" | "dateline" | "b1"… |
+   *  "boilerplate-1" | "media_contact" | "end". */
+  id: string;
+  /** Those, or a body kind: lede, context, quote, detail, cta… */
+  kind: string;
+  text: string;
+  /** Only body blocks (b1…) can be revised. */
+  revisable: boolean;
+  quote_id: string | null;
+  claim_ids: string[];
+  cites: string[];
+  last_comment: string | null;
+}
+
+export interface PrClaim {
+  id: string;
+  n: number;
+  text: string;
+  /** "" for a placeholder outside a body block. */
+  block_id: string;
+  /** The text is a `[VERIFY: …]` token: Mark verified needs a `value`. */
+  placeholder: boolean;
+  source: { kind: "brief" | "brand_card" | "newsroom" | "web" | "reviewer" | "none"; label: string; url: string | null; date: string | null };
+  date_checked: string | null;
+  status: "sourced" | "needs_confirmation" | "verified" | "removed";
+  status_reason: string;
+  owner_to_confirm: string | null;
+  verified: { by: PrUserRef; note: string; at: string } | null;
+}
+
+export interface PrQuote {
+  /** The quote's block id. */
+  id: string;
+  block_id: string;
+  speaker_name: string;
+  speaker_title: string;
+  organization: string | null;
+  text: string;
+  /** Sent back when recording an approval, so it binds to this text. */
+  text_hash: string;
+  approval: { state: "pending" | "approved"; recorded_by: PrUserRef | null; evidence: string | null; at: string | null };
+  reset_in_version: string | null;
+}
+
+export interface PrMarker {
+  id: string;
+  kind: "verify" | "missing" | "quote_pending";
+  block_id: string;
+  token: string;
+  label: string;
+  claim_id: string | null;
+  quote_id: string | null;
+  resolved: boolean;
+}
+
+export interface PrVersion extends PrVersionSummary {
+  headlines: { text: string; chars: number; recommended: boolean }[];
+  subheadline: { recommended: string; alternate: string };
+  news_angle: string;
+  blocks: PrBlock[];
+  claims: PrClaim[];
+  quotes: PrQuote[];
+  markers: PrMarker[];
+}
+
+export type PrClarifyKey = "why_now" | "audience" | "key_facts" | "spokespeople" | "release_timing" | "partner_details";
+
+export interface PrClarify {
+  state: "open" | "answered" | "skipped";
+  fields: { key: PrClarifyKey; label: string; guess: string | null; answer: string | null }[];
+  content_type: { value: PrContentType; guessed: boolean; options: { value: PrContentType; label: string }[] };
+  answered_at: string | null;
+}
+
+export type PrEscalationNoteKind = "requester" | "keep_paused" | "clear" | "close" | "withdraw";
+
+export interface PrEscalation {
+  state: "paused" | "cleared" | "closed" | "withdrawn";
+  category: string;
+  category_label: string;
+  excerpt: string;
+  /** The screen's one-sentence reason. */
+  reason: string;
+  raised_at: string | null;
+  clearer: { role: "legal" | "comms_lead" | "fallback_admin"; user: PrUserRef | null };
+  notes: { kind: PrEscalationNoteKind; by: PrUserRef; at: string; text: string }[];
+}
+
+export interface PrSignoffRow {
+  id: string;
+  kind: "role" | "quote";
+  label: string;
+  assignee: PrUserRef | null;
+  fallback: boolean;
+  unassigned: boolean;
+  state: "waiting" | "signed_off" | "changes_asked" | "pending" | "approved";
+  version: string | null;
+  by: PrUserRef | null;
+  at: string | null;
+  note: string | null;
+  viewer_can_act: boolean;
+}
+
+export interface PrBlockers { verify: number; missing: number; pending_quotes: number }
+
+export interface PrSignoffs {
+  version: string | null;
+  rows: PrSignoffRow[];
+  summary: { signed: number; total: number };
+  blockers: PrBlockers;
+  approved: boolean;
+  can_approve: boolean;
+}
+
+export interface PrPackage {
+  based_on_version: string;
+  sections: Record<PrPackageSection, { state: PrSectionState; error: string | null }>;
+  seo: {
+    seo_title: string; meta_description: string; slug: string;
+    internal_links: { url: string; anchor: string }[];
+    external_link: { url: string; why: string } | null;
+    images: { description: string; alt_text: string }[];
+    hashtags: string[]; social_summary: string;
+    primary_keyword: string; secondary_keywords: string[];
+  } | null;
+  distribution: {
+    channels: { channel: string; why: string; outlet_examples: string[]; timing: string; pitch_angle: string; reporter_beat: string }[];
+    wire: { recommended: boolean; circuit: string; timing: string; notes: string };
+    embargo_notes: string;
+  } | null;
+  snippets: { linkedin_post: string; social_summary: string; reporter_pitch: string } | null;
+  reviewer_notes: { kind: "assumption" | "open_question" | "risk" | "checklist"; text: string }[] | null;
+}
+
+export interface PrRun {
+  id: string;
+  brand_id: string;
+  brand_name: string;
+  brand_domain: string;
+  has_card: boolean;
+  news: string;
+  facts: string;
+  owner: PrUserRef;
+  created_at: string;
+  updated_at: string;
+  status: PrRunStatus;
+  next_step: PrStepId | null;
+  steps: PrStep[];
+  content_type: PrContentType | null;
+  content_type_label: string | null;
+  audience: string | null;
+  clarify: PrClarify | null;
+  escalation: PrEscalation | null;
+  reviewers: { comms_lead: PrUserRef | null; brand_owner: PrUserRef | null; legal: PrUserRef | null };
+  fallback_admins: PrUserRef[];
+  participants: PrParticipant[];
+  viewer_role: PrRole;
+  viewer_roles: PrRole[];
+  needs_you: PrNeedsYou;
+  can: PrCan;
+  current_version: string | null;
+  versions: PrVersionSummary[];
+  draft: PrVersion | null;
+  markers: PrBlockers;
+  signoffs: PrSignoffs;
+  package: PrPackage | null;
+}
+
+export interface PrRunSummary {
+  id: string;
+  brand_id: string;
+  brand_name: string;
+  news: string;
+  headline: string | null;
+  content_type_label: string | null;
+  owner: PrUserRef;
+  is_owner: boolean;
+  created_at: string;
+  updated_at: string;
+  status: PrRunStatus;
+  next_step: PrStepId | null;
+  running_step: PrStepId | null;
+  failed_step: PrStepId | null;
+  current_version: string | null;
+  signoff_summary: { signed: number; total: number } | null;
+  needs_you: PrNeedsYou;
+  viewer_role: PrRole;
+}
+
+export interface PrBrand {
+  id: string;
+  name: string;
+  domain: string;
+  has_card: boolean;
+  card_sections_complete: number;
+  card_sections_total: number;
+}
+
+export type PrCardSection = "reviewers" | "identity" | "boilerplate" | "messaging" | "proof_points"
+  | "spokespeople" | "product_names" | "avoid" | "media_contact" | "press_kit" | "keywords";
+
+export interface PrBrandCard {
+  reviewers: { comms_lead: PrUserRef | null; brand_owner: PrUserRef | null; legal: PrUserRef | null };
+  identity: { legal_name: string; short_name: string; website: string; newsroom_url: string;
+    hq_city: string; hq_state: string; dateline: string };
+  boilerplate: { text: string; approved_by: string; approved_on: string | null;
+    changed_by: PrUserRef | null; changed_at: string | null };
+  messaging: { mission: string; positioning: string; key_messages: string[] };
+  proof_points: { claim: string; source: string; date: string }[];
+  spokespeople: { name: string; title: string; topics: string; quote_style: string; approval_contact: string }[];
+  product_names: string[];
+  avoid: { words: string[]; competitor_policy: string };
+  media_contact: { name: string; title: string; email: string; phone: string };
+  press_kit: { label: string; url: string }[];
+  keywords: string[];
+}
+
+export type PrBrandCardInput = Omit<PrBrandCard, "reviewers" | "boilerplate"> & {
+  reviewers: { comms_lead: string | null; brand_owner: string | null; legal: string | null };
+  boilerplate: { text: string };
+};
+
+export interface PrBrandCardResponse {
+  brand_id: string;
+  brand_name: string;
+  exists: boolean;
+  revision: number;
+  updated_at: string | null;
+  updated_by: PrUserRef | null;
+  can_edit: boolean;
+  sections: Partial<Record<PrCardSection, boolean>>;
+  card: PrBrandCard | null;
+}
+
+export interface PrMember { id: string; name: string; email: string }
+
+export type PrExportFormat = "docx" | "md";
+export type PrEscalationAction = "clear" | "keep-paused" | "close" | "withdraw" | "notes";
+
+const prRunPath = (runId: string) => `/api/pr/runs/${pathSegment(runId)}`;
+
+export const prBrands = async (opts?: RequestOptions) =>
+  getJson<{ brands: PrBrand[] }>("/api/pr/brands", opts);
+
+export const prCard = async (brandId: string, opts?: RequestOptions) =>
+  getJson<PrBrandCardResponse>(`/api/pr/brands/${pathSegment(brandId)}/card`, opts);
+
+export const prSaveCard = async (
+  brandId: string,
+  body: { base_revision: number; card: PrBrandCardInput; boilerplate_approval?: { approved_by: string; approved_on: string } },
+) => putJson<PrBrandCardResponse>(`/api/pr/brands/${pathSegment(brandId)}/card`, body);
+
+export const prMembers = async (opts?: RequestOptions) =>
+  getJson<{ members: PrMember[] }>("/api/pr/members", opts);
+
+export const prRuns = async (brandId?: string, opts?: RequestOptions) =>
+  getJson<{ runs: PrRunSummary[] }>(
+    brandId ? `/api/pr/runs?brand_id=${encodeURIComponent(brandId)}` : "/api/pr/runs",
+    opts,
+  );
+
+/** Runs intake and screen before it answers (up to two model calls), so it
+ *  rides the slow deadline. There is no idempotency token: the callers keep
+ *  their button disabled while this is in flight. */
+export const prCreateRun = async (body: { brand_id: string; news: string; facts?: string }) =>
+  postJson<PrRun>("/api/pr/runs", body);
+
+export const prRun = async (runId: string, opts?: RequestOptions) => getJson<PrRun>(prRunPath(runId), opts);
+
+export const prVersion = async (runId: string, version: string, opts?: RequestOptions) =>
+  getJson<PrVersion>(`${prRunPath(runId)}/versions/${pathSegment(version)}`, opts);
+
+export const prStep = async (runId: string, step: PrStepId) =>
+  postJson<PrRun>(`${prRunPath(runId)}/steps/${pathSegment(step)}`, {});
+
+export const prClarify = async (
+  runId: string,
+  body: { mode: "answers" | "placeholders"; answers?: Partial<Record<PrClarifyKey, string>>; content_type?: PrContentType },
+) => postJson<PrRun>(`${prRunPath(runId)}/clarify`, body);
+
+/** The five escalation writes share one shape: a note (optional only on
+ *  withdraw), and the fresh run back. */
+export const prEscalation = async (runId: string, action: PrEscalationAction, note: string) =>
+  postJson<PrRun>(`${prRunPath(runId)}/escalation/${action}`, note || action !== "withdraw" ? { note } : {});
+
+export const prRevise = async (runId: string, blockId: string, comment: string, version: string) =>
+  postJson<PrRun>(`${prRunPath(runId)}/blocks/${pathSegment(blockId)}/revise`, { comment, version });
+
+/** Writes a new version. A `[VERIFY: x]` placeholder needs the confirmed
+ *  `value`, which replaces the token wherever it is printed. */
+export const prVerifyClaim = async (runId: string, claimId: string, body: { version: string; note: string; value?: string }) =>
+  postJson<PrRun>(`${prRunPath(runId)}/claims/${pathSegment(claimId)}/verify`, body);
+
+export const prRemoveClaim = async (runId: string, claimId: string, version: string) =>
+  postJson<PrRun>(`${prRunPath(runId)}/claims/${pathSegment(claimId)}/remove`, { version });
+
+export const prSendForReview = async (runId: string, version: string) =>
+  postJson<PrRun>(`${prRunPath(runId)}/review`, { version });
+
+export const prSignOff = async (runId: string, rowId: string, version: string) =>
+  postJson<PrRun>(`${prRunPath(runId)}/signoffs/${pathSegment(rowId)}/sign-off`, { version });
+
+export const prAskChanges = async (runId: string, rowId: string, version: string, note: string) =>
+  postJson<PrRun>(`${prRunPath(runId)}/signoffs/${pathSegment(rowId)}/ask-changes`, { version, note });
+
+/** The comms lead's explicit "Mark approved" — the only way a run becomes
+ *  `approved`. `409 approval_blocked` carries `blockers: string[]`. */
+export const prApprove = async (runId: string, version: string) =>
+  postJson<PrRun>(`${prRunPath(runId)}/approve`, { version });
+
+export const prRecordQuote = async (runId: string, quoteId: string, evidence: string, textHash: string) =>
+  postJson<PrRun>(`${prRunPath(runId)}/quotes/${pathSegment(quoteId)}/approval`, { evidence, text_hash: textHash });
+
+export const prAddPeople = async (runId: string, userIds: string[]) =>
+  postJson<PrRun>(`${prRunPath(runId)}/participants`, { user_ids: userIds });
+
+/** The export is a file. The backend names it (`Content-Disposition`, the
+ *  blueprint naming); `filename` is null when the header did not come
+ *  through, and the caller falls back to a name of its own. */
+export async function prExport(
+  runId: string,
+  format: PrExportFormat,
+  version?: string,
+): Promise<{ blob: Blob; filename: string | null }> {
+  const q = new URLSearchParams({ format });
+  if (version) q.set("v", version);
+  return fetchFile(`${prRunPath(runId)}/export?${q.toString()}`, { method: "GET" });
 }
 
 /* --------------------------- SEO agent: Pages ------------------------------ */

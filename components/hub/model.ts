@@ -57,6 +57,11 @@ export const AGENTS: HubAgent[] = [
     makes: "A row per message in your own sheet, every five minutes. It never sends, labels, deletes or marks mail — it only reads.",
   },
   {
+    id: "a13", mono: "PR", name: "PR Writer", role: "Press releases & bylines", live: true,
+    desc: "Turns one sentence of company news into a fact-checked press release or byline, packaged for your team's review.",
+    makes: "A draft with its fact-check, quotes for approval, SEO and a distribution plan. It never sends anything.",
+  },
+  {
     id: "a3", mono: "CW", name: "Copywriter", role: "Words that convert", live: false,
     desc: "Drafts landing copy, emails, and posts in your brand voice.",
     makes: "Landing copy and email bodies.",
@@ -86,7 +91,7 @@ export const AGENTS: HubAgent[] = [
 export const LIVE_AGENTS = AGENTS.filter((a) => a.live);
 export const agentById = (id: string): HubAgent | undefined => AGENTS.find((a) => a.id === id);
 
-/** Agent id to workspace slug, for the six that have a workspace behind them. */
+/** Agent id to workspace slug, for the seven that have a workspace behind them. */
 export const WORKSPACE_SLUG: Record<string, string> = {
   a1: "art",
   a2: "seo",
@@ -94,6 +99,7 @@ export const WORKSPACE_SLUG: Record<string, string> = {
   a9: "blog",
   a10: "geo",
   a12: "inbox",
+  a13: "pr",
 };
 
 export const agentBySlug = (slug: string): HubAgent | undefined =>

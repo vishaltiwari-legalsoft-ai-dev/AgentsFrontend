@@ -26,6 +26,7 @@
 }
 .bw-chip--src { margin-right: 6px; text-transform: capitalize; }
 .bw-chip--ok { color: var(--green-500); border-color: color-mix(in srgb, var(--green-500) 45%, transparent); }
+.bw-chip--warn { color: var(--amber-600); background: var(--warning-bg); border-color: color-mix(in srgb, var(--amber-600) 40%, transparent); }
 
 .bw-spin { animation: bw-rotate 0.9s linear infinite; }
 @keyframes bw-rotate { to { transform: rotate(360deg); } }
