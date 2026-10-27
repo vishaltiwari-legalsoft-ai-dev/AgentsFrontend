@@ -7,23 +7,38 @@
  *  editor sends the revision it loaded, and a `409 stale_card` carries the card
  *  someone else saved since. "Load their version and keep mine" then merges
  *  field by field (`mergeThreeWay`), and any field both people changed shows
- *  the reader's own text beside it to copy back. */
+ *  the reader's own text beside it to copy back.
+ *
+ *  "Fill from website" asks the backend to draft the card from the brand's
+ *  public pages (`POST …/card/suggest`). Nothing is saved by that: the
+ *  suggestions land in the form (`applySuggestions`, never over a filled
+ *  section), each prefilled section wears a chip naming its source, and the
+ *  reader saves through the same PUT as any other edit. Reviewers are never
+ *  suggested. */
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  apiBody, apiCode, prSaveCard,
-  type PrBrandCardInput, type PrBrandCardResponse, type PrCardSection, type PrMember,
+  apiBody, apiCode, prSaveCard, prSuggestCard,
+  type PrBrandCardInput, type PrBrandCardResponse, type PrCardSection, type PrMember, type PrSuggestSection,
 } from "@/lib/api";
 import { Icon } from "@/lib/kit-ui";
 import { describeFailure } from "@/lib/load";
 import type { ToastFn } from "@/components/hub/context";
 import {
-  CARD_SECTIONS, boilerplateChanged, cardSaveError, cardStoryLine, cardToInput, cardToSend, conflictText, mergeThreeWay, normaliseCard, sectionSummary, staleCardMessage, type MergeConflict,
+  BOILERPLATE_APPROVAL_HINT, CARD_SECTIONS, MEDIA_CONTACT_HINT, NOTHING_FOUND_ON_SITE, SUGGESTION_AVAILABLE,
+  applySuggestions, boilerplateChanged, cardSaveError, cardStoryLine, cardToInput, cardToSend, conflictText,
+  fillFromBody, fillFromLabel, mergeThreeWay, normaliseCard, normaliseSuggestions, readingSiteText, retryDelayMs,
+  sectionSummary, staleCardMessage, suggestBanner, suggestChipLabel, suggestErrorText, takeSuggestion,
+  type MergeConflict, type PrCardSuggestions, type PrSectionSuggestion,
 } from "@/components/hub/work/pr";
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export interface BrandCardEditorProps {
   brandId: string;
   brandName: string;
+  /** The brand's site, as the backend knows it; empty from an older backend. */
+  brandDomain: string;
   card: PrBrandCardResponse;
   canEdit: boolean;
   members: PrMember[];
@@ -33,7 +48,20 @@ export interface BrandCardEditorProps {
 
 type Path = string;
 
-export function BrandCardEditor({ brandId, brandName, card, canEdit, members, onSaved, onToast }: BrandCardEditorProps) {
+/** What the site drafted and where it went: sections prefilled, sections the
+ *  reader had already filled (suggestion offered beside them), sections the
+ *  site had nothing for. Cleared on discard and on save. */
+interface SuggestState {
+  result: PrCardSuggestions;
+  applied: Set<PrSuggestSection>;
+  held: Set<PrSuggestSection>;
+  missing: Set<PrSuggestSection>;
+}
+
+/** How many `409 suggest_running` waits before giving up and saying so. */
+const MAX_SUGGEST_WAITS = 10;
+
+export function BrandCardEditor({ brandId, brandName, brandDomain, card, canEdit, members, onSaved, onToast }: BrandCardEditorProps) {
   const [base, setBase] = useState<PrBrandCardInput>(() => cardToInput(card.card));
   const [revision, setRevision] = useState(card.revision);
   const [mine, setMine] = useState<PrBrandCardInput>(() => cardToInput(card.card));
@@ -46,11 +74,20 @@ export function BrandCardEditor({ brandId, brandName, card, canEdit, members, on
   const [legalErr, setLegalErr] = useState<string | null>(null);
   const canEditReviewers = canEdit && card.can_edit_reviewers;
   const [open, setOpen] = useState<Partial<Record<PrCardSection, boolean>>>({});
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestErr, setSuggestErr] = useState<string | null>(null);
+  const [suggest, setSuggest] = useState<SuggestState | null>(null);
+  // The form the reply merges into is the one on screen when it lands, not
+  // the one when the request left; and an unmounted editor writes nothing.
+  const mineRef = useRef(mine);
+  mineRef.current = mine;
+  const alive = useRef(true);
+  useEffect(() => () => { alive.current = false; }, []);
 
   const complete = CARD_SECTIONS.filter((s) => card.sections[s.id]).length;
   const dirty = JSON.stringify(mine) !== JSON.stringify(base);
   const newBoilerplate = boilerplateChanged(base, mine);
-  const locked = !canEdit || saving;
+  const locked = !canEdit || saving || suggesting;
 
   const nameOf = (id: string | null): string => {
     if (!id) return "nobody named";
@@ -93,6 +130,7 @@ export function BrandCardEditor({ brandId, brandName, card, canEdit, members, on
       setRevision(saved.revision);
       setConflicts([]);
       setApproval({ approved_by: "", approved_on: "" });
+      setSuggest(null);
       onSaved(saved);
       onToast(`${brandName}'s card is saved. New drafts use it from now on.`, "ok");
     } catch (e) {
@@ -136,6 +174,64 @@ export function BrandCardEditor({ brandId, brandName, card, canEdit, members, on
     setConflicts([]);
     setApproval({ approved_by: "", approved_on: "" });
     setErr(null);
+    setSuggest(null);
+    setSuggestErr(null);
+  }
+
+  /** Ask the backend to draft the card from the site, then merge what came
+   *  back into the form. On `409 suggest_running` (another tab, a double
+   *  click) wait `retry_after_s` and ask again, never starting a second
+   *  read. Nothing is saved here. */
+  async function runSuggest() {
+    if (suggesting) return;
+    setSuggesting(true);
+    setSuggestErr(null);
+    setErr(null);
+    try {
+      let raw: unknown = null;
+      for (let waits = 0; raw === null; waits++) {
+        try {
+          raw = await prSuggestCard(brandId);
+        } catch (e) {
+          if (apiCode(e) !== "suggest_running" || waits >= MAX_SUGGEST_WAITS) throw e;
+          const detail = (apiBody(e).detail ?? {}) as Record<string, unknown>;
+          await sleep(retryDelayMs(detail.retry_after_s));
+          if (!alive.current) return;
+        }
+      }
+      if (!alive.current) return;
+      const result = normaliseSuggestions(raw);
+      const { next, applied, held, missing } = applySuggestions(mineRef.current, result.suggestions);
+      setMine(next);
+      setSuggest({ result, applied: new Set(applied), held: new Set(held), missing: new Set(missing) });
+      setStarted(true);
+      // Prefilled sections open so the reader checks them; held ones show
+      // their offer on the closed row.
+      setOpen((o) => {
+        const nextOpen = { ...o };
+        for (const s of applied) nextOpen[s] = true;
+        return nextOpen;
+      });
+    } catch (e) {
+      if (!alive.current) return;
+      const code = apiCode(e);
+      setSuggestErr(code ? suggestErrorText(code, e instanceof Error ? e.message : null) : describeFailure(e, suggestErrorText(null, null)));
+    } finally {
+      if (alive.current) setSuggesting(false);
+    }
+  }
+
+  function takeHeld<K extends PrSuggestSection>(section: K) {
+    const sug = suggest?.result.suggestions[section] as PrSectionSuggestion<K> | undefined;
+    if (!sug) return;
+    setMine((prev) => takeSuggestion(prev, section, sug));
+    setSuggest((s) => {
+      if (!s) return s;
+      const held = new Set(s.held); held.delete(section);
+      const applied = new Set(s.applied); applied.add(section);
+      return { ...s, held, applied };
+    });
+    if (err) setErr(null);
   }
 
   if (!started) {
@@ -148,14 +244,83 @@ export function BrandCardEditor({ brandId, brandName, card, canEdit, members, on
             workspace admins until reviewers are named here.
           </p>
           {canEdit && (
-            <button type="button" className="bw-btn bw-btn--primary" onClick={() => { setStarted(true); setOpen({ reviewers: true }); }}>
-              <Icon name="plus" size={14} /> Start the card
-            </button>
+            <>
+              <p>{fillFromBody(brandDomain)}</p>
+              {suggestErr && <p className="err" role="alert">{suggestErr}</p>}
+              <div className="pr-actions">
+                <button type="button" className="bw-btn bw-btn--primary" disabled={suggesting} onClick={() => void runSuggest()}>
+                  {suggesting ? <Icon name="loader-circle" size={14} className="bw-spin" /> : <Icon name="globe" size={14} />}
+                  {fillFromLabel(brandDomain)}
+                </button>
+                <button type="button" className="bw-btn" disabled={suggesting} onClick={() => { setStarted(true); setOpen({ reviewers: true }); }}>
+                  Start blank
+                </button>
+              </div>
+              {suggesting && <p className="pr-reading" role="status">{readingSiteText(brandDomain)}</p>}
+            </>
           )}
         </div>
       </div>
     );
   }
+
+  /* ------------------------------------------------------- suggestions -- */
+
+  const suggestionOf = <K extends PrSuggestSection>(section: K): PrSectionSuggestion<K> | undefined =>
+    suggest?.result.suggestions[section] as PrSectionSuggestion<K> | undefined;
+
+  /** The closed row's marker: what the site drafted here, or that it is
+   *  waiting to replace the reader's own text. */
+  const suggestMark = (id: PrCardSection): ReactNode => {
+    if (!suggest || id === "reviewers") return null;
+    const sug = suggestionOf(id);
+    if (!sug) return null;
+    if (suggest.held.has(id)) return <span className="bw-chip pr-chip--brand">{SUGGESTION_AVAILABLE}</span>;
+    if (!suggest.applied.has(id)) return null;
+    return (
+      <span className="bw-chip pr-chip--neutral pr-suggested">
+        <i className={`pr-dot pr-dot--${sug.confidence}`} aria-hidden="true" />
+        {suggestChipLabel(sug)}
+      </span>
+    );
+  };
+
+  /** Above a section's fields: the source to open, the backend's note, the
+   *  Replace offer on a section the reader had already filled, or that the
+   *  site had nothing. */
+  const suggestRow = (id: PrCardSection): ReactNode => {
+    if (!suggest || id === "reviewers") return null;
+    const sug = suggestionOf(id);
+    if (!sug) {
+      return suggest.missing.has(id) ? <p className="bw-hint">{NOTHING_FOUND_ON_SITE}</p> : null;
+    }
+    const source = sug.sources[0];
+    const held = suggest.held.has(id);
+    return (
+      <div className="pr-suggest">
+        {source ? (
+          <a className="bw-chip pr-chip--neutral pr-suggested" href={source} target="_blank" rel="noopener noreferrer"
+            title={held ? `Suggested from ${source}` : `Open ${source}`}>
+            <i className={`pr-dot pr-dot--${sug.confidence}`} aria-hidden="true" />
+            {suggestChipLabel(sug)}
+            <Icon name="external-link" size={11} />
+            <span className="pr-sr">, {sug.confidence} confidence, opens in a new tab</span>
+          </a>
+        ) : (
+          <span className="bw-chip pr-chip--neutral pr-suggested">
+            <i className={`pr-dot pr-dot--${sug.confidence}`} aria-hidden="true" />
+            {suggestChipLabel(sug)}
+          </span>
+        )}
+        {sug.note && <span className="pr-suggest__note">{sug.note}</span>}
+        {held && !locked && (
+          <button type="button" className="bw-btn pr-suggest__take" onClick={() => takeHeld(id)}>
+            Replace with the site&apos;s version
+          </button>
+        )}
+      </div>
+    );
+  };
 
   /* ---------------------------------------------------------- field kit -- */
 
@@ -294,10 +459,13 @@ export function BrandCardEditor({ brandId, brandName, card, canEdit, members, on
           </p>
         )}
         {newBoilerplate && (
-          <div className="pr-form__pair">
-            {text("Approved by", "", approval.approved_by, (v) => setApproval((a) => ({ ...a, approved_by: v })))}
-            {text("Approved on", "", approval.approved_on, (v) => setApproval((a) => ({ ...a, approved_on: v })), { type: "date" })}
-          </div>
+          <>
+            {suggest?.applied.has("boilerplate") && <p className="bw-hint">{BOILERPLATE_APPROVAL_HINT}</p>}
+            <div className="pr-form__pair">
+              {text("Approved by", "", approval.approved_by, (v) => setApproval((a) => ({ ...a, approved_by: v })))}
+              {text("Approved on", "", approval.approved_on, (v) => setApproval((a) => ({ ...a, approved_on: v })), { type: "date" })}
+            </div>
+          </>
         )}
       </>
     ),
@@ -328,6 +496,7 @@ export function BrandCardEditor({ brandId, brandName, card, canEdit, members, on
         {text("Title", "media_contact.title", mine.media_contact.title, (v) => set((c) => { c.media_contact.title = v; }))}
         {text("Email", "media_contact.email", mine.media_contact.email, (v) => set((c) => { c.media_contact.email = v; }), { type: "email" })}
         {text("Phone", "media_contact.phone", mine.media_contact.phone, (v) => set((c) => { c.media_contact.phone = v; }), { type: "tel" })}
+        {suggest && <p className="bw-hint">{MEDIA_CONTACT_HINT}</p>}
       </>
     ),
     press_kit: rows("press_kit", mine.press_kit, [{ key: "label", label: "Label" }, { key: "url", label: "Link" }] as const,
@@ -345,14 +514,28 @@ export function BrandCardEditor({ brandId, brandName, card, canEdit, members, on
         </div>
         {canEdit && (
           <div className="pr-actions">
-            <button type="button" className="bw-btn" disabled={saving || !dirty} onClick={discard}>Discard changes</button>
-            <button type="button" className="bw-btn bw-btn--primary" disabled={saving || (!dirty && card.exists)} onClick={() => void save()}>
+            <button type="button" className="bw-btn" disabled={saving || suggesting} onClick={() => void runSuggest()}
+              aria-describedby={suggesting ? "pr-suggest-status" : undefined}>
+              {suggesting ? <Icon name="loader-circle" size={14} className="bw-spin" /> : <Icon name="globe" size={14} />}
+              Suggest from website
+            </button>
+            <button type="button" className="bw-btn" disabled={saving || suggesting || !dirty} onClick={discard}>Discard changes</button>
+            <button type="button" className="bw-btn bw-btn--primary" disabled={saving || suggesting || (!dirty && card.exists)} onClick={() => void save()}>
               {saving ? <Icon name="loader-circle" size={14} className="bw-spin" /> : <Icon name="check" size={14} />}
               Save card
             </button>
           </div>
         )}
       </div>
+
+      {suggesting && <p className="pr-reading" id="pr-suggest-status" role="status">{readingSiteText(brandDomain)}</p>}
+      {suggestErr && <p className="err" role="alert">{suggestErr}</p>}
+      {suggest && !suggesting && (
+        <div className="pr-suggest-banner" role="status">
+          <Icon name="globe" size={14} />
+          <p>{suggestBanner(suggest.result.read_pages.length)}</p>
+        </div>
+      )}
 
       {stale && (
         <div className="pr-stale" role="alert">
@@ -383,9 +566,13 @@ export function BrandCardEditor({ brandId, brandName, card, canEdit, members, on
               <Icon name={open[s.id] ? "chevron-down" : "chevron-right"} size={14} />
               <b>{s.label}</b>
               {card.sections[s.id] && <Icon name="check" size={13} className="pr-group__ok" />}
+              {!open[s.id] && suggestMark(s.id)}
               {!open[s.id] && <span className="pr-group__sum">{sectionSummary(s.id, mine, nameOf)}</span>}
             </summary>
-            <div className="pr-group__body pr-form">{body[s.id]}</div>
+            <div className="pr-group__body pr-form">
+              {suggestRow(s.id)}
+              {body[s.id]}
+            </div>
           </details>
         ))}
       </div>

@@ -77,6 +77,9 @@ export const DEADLINE_RULES: readonly DeadlineRule[] = [
   // the backend never had. Listing the drafts (GET) stays on the default.
   { pattern: /^\/api\/pr\/runs$/, methods: ["POST"], ms: SLOW_TIMEOUT_MS },
   { pattern: /^\/api\/pr\/runs\/[^/]+\/(steps\/[^/]+|blocks\/[^/]+\/revise|claims\/[^/]+\/remove|export)$/, ms: SLOW_TIMEOUT_MS },
+  // Suggesting a brand card reads the brand's public pages and runs a model
+  // over them in one request; reading or saving the card stays on the default.
+  { pattern: /^\/api\/pr\/brands\/[^/]+\/card\/suggest$/, methods: ["POST"], ms: SLOW_TIMEOUT_MS },
   // SEO: analysis runs, crawls, SERP-backed research.
   { pattern: /^\/api\/seo-geo\/(run|site-review)\//, ms: SLOW_TIMEOUT_MS },
   { pattern: /^\/api\/seo-geo\/(audit|keywords)\/[^/]+\/run$/, ms: SLOW_TIMEOUT_MS },

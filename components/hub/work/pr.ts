@@ -23,7 +23,8 @@
 import type {
   PrBlockers, PrBrand, PrBrandCard, PrBrandCardInput, PrBrandCardResponse, PrCan, PrCardSection,
   PrClarify, PrEscalation, PrMarker, PrPackage, PrPackageSection, PrQuote, PrRun, PrRunSummary,
-  PrSignoffRow, PrSignoffs, PrStep, PrStepId, PrUserRef, PrVersion, PrVersionSummary,
+  PrSignoffRow, PrSignoffs, PrStep, PrStepId, PrSuggestConfidence, PrSuggestSection, PrUserRef, PrVersion,
+  PrVersionSummary,
 } from "@/lib/api";
 import { andList } from "../model";
 import { draftCountLabel } from "./blog";
@@ -1217,6 +1218,182 @@ export function sectionSummary(
     case "press_kit": return n(c.press_kit, "link");
     case "keywords": return c.keywords.filter(Boolean).join(", ") || "None yet";
   }
+}
+
+/* ===================================================== fill from website == */
+
+/** The sections the site can draft. Reviewers are never suggested: who signs
+ *  off is always the reader's choice. */
+export const SUGGEST_SECTIONS: readonly PrSuggestSection[] =
+  CARD_SECTIONS.map((s) => s.id).filter((id): id is PrSuggestSection => id !== "reviewers");
+
+export interface PrSectionSuggestion<K extends PrSuggestSection = PrSuggestSection> {
+  value: PrBrandCardInput[K];
+  sources: string[];
+  confidence: PrSuggestConfidence;
+  note: string;
+}
+
+export type PrSuggestionMap = { [K in PrSuggestSection]?: PrSectionSuggestion<K> };
+
+export interface PrCardSuggestions {
+  generated_at: string | null;
+  read_pages: { url: string; title: string }[];
+  suggestions: PrSuggestionMap;
+}
+
+const CONFIDENCES: readonly PrSuggestConfidence[] = ["high", "medium", "low"];
+
+/** A confidence the backend did not send, or one this build does not know,
+ *  reads as low: the reader checks it, which is the safe side. */
+export const confidenceOf = (v: unknown): PrSuggestConfidence =>
+  CONFIDENCES.includes(v as PrSuggestConfidence) ? (v as PrSuggestConfidence) : "low";
+
+const EMPTY_SECTIONS = cleanCardInput(emptyCardInput());
+
+/** Whether the form holds anything in this section once blanks are dropped. */
+export function sectionFilled(section: PrSuggestSection, input: PrBrandCardInput): boolean {
+  return !same(cleanCardInput(input)[section], EMPTY_SECTIONS[section]);
+}
+
+/** One suggestion's value in the editor's shape, read the way a stored card
+ *  is read (`cardToInput`), so a field the backend adds later or leaves out
+ *  is its empty value. Boilerplate may arrive as a bare string. */
+function suggestedValue<K extends PrSuggestSection>(section: K, raw: unknown): PrBrandCardInput[K] {
+  const value = section === "boilerplate" && typeof raw === "string" ? { text: raw } : raw;
+  return cardToInput({ [section]: value } as unknown as PrBrandCard)[section];
+}
+
+/** The suggest reply with defaults. Sections are keyed as the card keys them
+ *  (contract §5: identity carries `hq_state` and the AP `dateline`);
+ *  `press_kit_links`, an earlier spelling of `press_kit`, is still read. A
+ *  suggestion whose value is empty once cleaned counts as nothing found and
+ *  is dropped. */
+export function normaliseSuggestions(v: unknown): PrCardSuggestions {
+  const o = rec(v);
+  const raw = rec(o.suggestions);
+  const suggestions: PrSuggestionMap = {};
+  const put = <K extends PrSuggestSection>(section: K, entry: unknown) => {
+    if (!entry || typeof entry !== "object") return;
+    const e = rec(entry);
+    const value = suggestedValue(section, e.value);
+    if (same(cleanCardInput({ ...emptyCardInput(), [section]: value })[section], EMPTY_SECTIONS[section])) return;
+    const entryOut: PrSectionSuggestion<K> = {
+      value,
+      sources: arr(e.sources, (x) => str(x)).filter(Boolean),
+      confidence: confidenceOf(e.confidence),
+      note: str(e.note),
+    };
+    // A mapped type's K-indexed write collapses to the intersection of every
+    // section's shape; the value is built for exactly this K above.
+    (suggestions as Record<K, PrSectionSuggestion<K>>)[section] = entryOut;
+  };
+  for (const section of SUGGEST_SECTIONS) {
+    put(section, section === "press_kit" ? (raw.press_kit_links ?? raw.press_kit) : raw[section]);
+  }
+  return {
+    generated_at: strOrNull(o.generated_at),
+    read_pages: arr(o.read_pages, (p) => ({ url: str(rec(p).url), title: str(rec(p).title) })).filter((p) => p.url),
+    suggestions,
+  };
+}
+
+export interface SuggestionApply {
+  next: PrBrandCardInput;
+  /** Sections that were empty and now hold the suggestion. */
+  applied: PrSuggestSection[];
+  /** Sections the reader had already filled: kept as they were, with the
+   *  suggestion offered beside them. */
+  held: PrSuggestSection[];
+  /** Sections the site had nothing for. */
+  missing: PrSuggestSection[];
+}
+
+/** Suggestions into the form. A filled section is never overwritten; its
+ *  suggestion waits for the reader to take it (`takeSuggestion`). Reviewers
+ *  are untouched by construction. */
+export function applySuggestions(mine: PrBrandCardInput, s: PrSuggestionMap): SuggestionApply {
+  const next = structuredClone(mine);
+  const applied: PrSuggestSection[] = [];
+  const held: PrSuggestSection[] = [];
+  const missing: PrSuggestSection[] = [];
+  for (const section of SUGGEST_SECTIONS) {
+    const sug = s[section];
+    if (!sug) { missing.push(section); continue; }
+    if (sectionFilled(section, mine)) { held.push(section); continue; }
+    (next as Record<string, unknown>)[section] = structuredClone(sug.value);
+    applied.push(section);
+  }
+  return { next, applied, held, missing };
+}
+
+/** The reader replaces one filled section with its suggestion. */
+export function takeSuggestion<K extends PrSuggestSection>(mine: PrBrandCardInput, section: K, sug: PrSectionSuggestion<K>): PrBrandCardInput {
+  const next = structuredClone(mine);
+  (next as Record<string, unknown>)[section] = structuredClone(sug.value);
+  return next;
+}
+
+/** `legalsoft.com` from a page URL; empty when the URL does not parse. */
+export function sourceHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+/** The chip on a prefilled section: "Suggested · legalsoft.com". */
+export function suggestChipLabel(s: Pick<PrSectionSuggestion, "sources">): string {
+  const host = s.sources.length ? sourceHost(s.sources[0]) : "";
+  return host ? `Suggested · ${host}` : "Suggested";
+}
+
+export const SUGGESTION_AVAILABLE = "Suggestion available";
+export const NOTHING_FOUND_ON_SITE = "Nothing found on the site.";
+export const BOILERPLATE_APPROVAL_HINT = "Needs the comms lead's approval before it counts.";
+export const MEDIA_CONTACT_HINT = "Only shown if the site publishes one.";
+export const SITE_UNREADABLE = "PR Writer couldn't read the site right now. Nothing changed.";
+export const BRAND_DOMAIN_MISSING = "This brand has no website on record. Add its domain in the SEO Analyst first.";
+export const CANNOT_FILL_CARD = "Only the comms lead or an admin can fill this card.";
+
+/** Model failures on a suggest (424 `model_unavailable`, the 502s, 504): the
+ *  reader hears one thing — the site could not be read, nothing changed. */
+const SUGGEST_MODEL_CODES: ReadonlySet<string> =
+  new Set(["model_unavailable", "model_truncated", "model_refused", "model_output_invalid", "model_timeout"]);
+
+/** The site as the reader knows it. An older backend sends no domain. */
+export const siteName = (domain: string): string => domain.trim() || "the website";
+
+export const fillFromLabel = (domain: string): string =>
+  domain.trim() ? `Fill from ${domain.trim()}` : "Fill from website";
+
+export const readingSiteText = (domain: string): string =>
+  `Reading ${siteName(domain)}'s public pages. About a minute.`;
+
+export const fillFromBody = (domain: string): string =>
+  `PR Writer reads ${siteName(domain)}'s public pages and drafts the card. You check it, fix anything wrong and save. Reviewers are always chosen by you.`;
+
+/** "Drafted from 6 pages. Nothing is saved yet: check each section, then
+ *  Save card." */
+export function suggestBanner(pages: number): string {
+  const from = pages > 0 ? `Drafted from ${plural(pages, "page")}.` : "Drafted from the site.";
+  return `${from} Nothing is saved yet: check each section, then Save card.`;
+}
+
+/** A refused or failed suggest (contract §5 "Card suggestions"). A 424 from
+ *  search or a missing key says what the server said (only it knows which
+ *  key or why); a model failure says the site could not be read; no domain
+ *  and no right to edit have their own sentences; the rest keeps the server's
+ *  sentence. `suggest_running` is waited out by the caller. */
+export function suggestErrorText(code: string | null, message: string | null): string {
+  const said = message?.trim() || "";
+  if (code === "search_unavailable") return said || SEARCH_UNAVAILABLE_TEXT;
+  if (code === "credential_missing") return said || `${FAILURE_CAUSE.credential_missing} Nothing changed.`;
+  if (code && SUGGEST_MODEL_CODES.has(code)) return SITE_UNREADABLE;
+  if (code === "brand_domain_missing") return BRAND_DOMAIN_MISSING;
+  if (code === "cannot_edit_card") return CANNOT_FILL_CARD;
+  return said || SITE_UNREADABLE;
 }
 
 /* ================================================================= export == */

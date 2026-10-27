@@ -254,6 +254,37 @@ button.bw-chip:focus-visible, .pr-group > summary:focus-visible, .bw-ledger > su
 }
 .pr-stale p { margin: 0; flex: 1 1 260px; font: var(--fw-medium) var(--fs-body-sm)/var(--lh-body-sm) var(--font-sans); color: var(--text-primary); }
 
+/* Fill from website: what the site drafted, where it came from, and that
+   nothing is saved yet. Brand-tinted, never amber: a suggestion is an offer,
+   not a warning. Low confidence is the dashed dot. */
+.pr-reading { margin: 0; font: var(--fw-medium) var(--fs-caption)/var(--lh-caption) var(--font-sans); color: var(--text-secondary); }
+.blank .pr-actions { margin-top: var(--space-2); }
+.blank .pr-reading { margin-top: var(--space-2); }
+.pr-suggest-banner {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--brand-bg);
+  border: 1px solid var(--brand-border);
+  border-radius: var(--radius-md);
+  color: var(--brand);
+}
+.pr-suggest-banner p { margin: 0; font: var(--fw-medium) var(--fs-body-sm)/var(--lh-body-sm) var(--font-sans); color: var(--text-primary); }
+.pr-suggest { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.pr-suggest__note { font: var(--fw-medium) var(--fs-caption)/var(--lh-caption) var(--font-sans); color: var(--text-secondary); }
+.pr-suggest__take { margin-left: auto; }
+a.pr-suggested { text-decoration: none; cursor: pointer; }
+a.pr-suggested:hover { border-color: var(--border-strong); color: var(--text-primary); }
+a.pr-suggested:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pr-suggested { display: inline-flex; align-items: center; gap: var(--space-1); }
+.pr-dot {
+  display: inline-block; width: 8px; height: 8px; flex: none;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--green-600);
+  background: var(--green-600);
+}
+.pr-dot--medium { background: transparent; border-color: var(--amber-600); }
+.pr-dot--low { background: transparent; border-style: dashed; border-color: var(--text-tertiary); }
+
 /* Amber messages: the escalation dialogs (a pause, never red) and the
    "this asks reviewers to sign off again" warning. */
 .pr-warnmsg { margin: var(--space-1) 0 0; font: var(--fw-semibold) var(--fs-caption)/var(--lh-caption) var(--font-sans); color: var(--amber-600); }

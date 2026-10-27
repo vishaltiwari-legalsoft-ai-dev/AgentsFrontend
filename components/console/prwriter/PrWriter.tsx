@@ -608,6 +608,7 @@ export function PrWriter({
               key={`${brandId}-${card.revision}-${card.exists}`}
               brandId={brandId}
               brandName={brand.name}
+              brandDomain={brand.domain}
               card={card}
               canEdit={card.can_edit}
               members={members}

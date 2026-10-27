@@ -13,6 +13,10 @@ import {
   readRoute, readVersionParam, researchPartialNote, retryDelayMs, rowMeta, rowTitle, runChip, sectionOf,
   sectionSummary, shouldPoll, signoffRowLabel, signoffStateText, splitSpeaker, staleCardMessage, stepErrorText,
   stepLines, stoppedLine, versionLabel, versionRow, versionStatusLabel, viewSegment, withVersionParam,
+  BOILERPLATE_APPROVAL_HINT, BRAND_DOMAIN_MISSING, CANNOT_FILL_CARD, MEDIA_CONTACT_HINT, NOTHING_FOUND_ON_SITE,
+  SITE_UNREADABLE, SUGGEST_SECTIONS,
+  applySuggestions, confidenceOf, fillFromBody, fillFromLabel, normaliseSuggestions, readingSiteText, sectionFilled,
+  sourceHost, suggestBanner, suggestChipLabel, suggestErrorText, takeSuggestion,
   type ChipInput,
 } from "./pr";
 
@@ -822,6 +826,165 @@ describe("the three-way card merge", () => {
     const { merged, conflicts } = mergeThreeWay(empty, mine, theirs);
     expect(conflicts.map((c) => c.path)).toEqual(["keywords"]);
     expect(merged.identity.legal_name).toBe("Legal Soft LLC");
+  });
+});
+
+/* ===================================================== fill from website == */
+
+describe("fill from website", () => {
+  const reply = {
+    brand_id: "legalsoft",
+    generated_at: "2026-10-28T10:00:00Z",
+    read_pages: [
+      { url: "https://www.legalsoft.com/about", title: "About" },
+      { url: "https://www.legalsoft.com/newsroom", title: "Newsroom" },
+      { url: "", title: "dropped: no url" },
+    ],
+    suggestions: {
+      identity: {
+        // The card's own keys: `hq_state` spelled out, the AP form in `dateline`.
+        value: { legal_name: "Legal Soft LLC", website: "https://legalsoft.com", hq_city: "Woodland Hills", hq_state: "California", dateline: "WOODLAND HILLS, Calif." },
+        sources: ["https://www.legalsoft.com/about"], confidence: "high", note: "From the footer.",
+      },
+      boilerplate: { value: { text: "Legal Soft builds software for law firms." }, sources: ["https://www.legalsoft.com/about"], confidence: "medium", note: null },
+      product_names: { value: ["LegalSoft Intake™", "  "], sources: [], confidence: "low" },
+      press_kit: { value: [{ label: "Logos", url: "https://legalsoft.com/press" }], sources: ["https://legalsoft.com/press"] },
+      keywords: { value: [" ", ""], sources: ["https://legalsoft.com"], confidence: "high", note: "empty once cleaned" },
+      reviewers: { value: { comms_lead: { id: "u-x", name: "X" } }, sources: [], confidence: "high", note: "never read" },
+      some_future_section: { value: "ignored", sources: [], confidence: "high", note: "" },
+    },
+  };
+
+  it("never lists reviewers among the sections the site can draft", () => {
+    expect(SUGGEST_SECTIONS).toHaveLength(10);
+    expect(SUGGEST_SECTIONS).not.toContain("reviewers");
+  });
+
+  it("reads the reply with defaults: the card's shape and keys per section, empty values dropped", () => {
+    const s = normaliseSuggestions(reply);
+    expect(s.generated_at).toBe("2026-10-28T10:00:00Z");
+    expect(s.read_pages).toEqual([
+      { url: "https://www.legalsoft.com/about", title: "About" },
+      { url: "https://www.legalsoft.com/newsroom", title: "Newsroom" },
+    ]);
+    // Identity reads `hq_state` and `dateline` under the card's own keys; a
+    // field the reply leaves out is "".
+    expect(s.suggestions.identity?.value).toEqual({
+      legal_name: "Legal Soft LLC", short_name: "", website: "https://legalsoft.com", newsroom_url: "",
+      hq_city: "Woodland Hills", hq_state: "California", dateline: "WOODLAND HILLS, Calif.",
+    });
+    expect(s.suggestions.identity?.confidence).toBe("high");
+    expect(s.suggestions.identity?.note).toBe("From the footer.");
+    // Boilerplate is `{ text }`; a null note reads as "".
+    expect(s.suggestions.boilerplate?.value).toEqual({ text: "Legal Soft builds software for law firms." });
+    expect(s.suggestions.boilerplate?.note).toBe("");
+    // A bare string for boilerplate still reads.
+    expect(normaliseSuggestions({ suggestions: { boilerplate: { value: "Plain." } } }).suggestions.boilerplate?.value).toEqual({ text: "Plain." });
+    // An earlier spelling of the press-kit key still lands.
+    expect(normaliseSuggestions({ suggestions: { press_kit_links: { value: [{ label: "L", url: "https://x" }] } } }).suggestions.press_kit?.value)
+      .toEqual([{ label: "L", url: "https://x" }]);
+    // A missing confidence reads as low; a missing note as "".
+    expect(s.suggestions.press_kit?.value).toEqual([{ label: "Logos", url: "https://legalsoft.com/press" }]);
+    expect(s.suggestions.press_kit?.confidence).toBe("low");
+    expect(s.suggestions.press_kit?.note).toBe("");
+    expect(s.suggestions.product_names?.value).toEqual(["LegalSoft Intake™", "  "]);
+    // Blank-only keywords are nothing found; reviewers and unknown keys never land.
+    expect(s.suggestions.keywords).toBeUndefined();
+    expect(Object.keys(s.suggestions).sort()).toEqual(["boilerplate", "identity", "press_kit", "product_names"]);
+    // No body at all is a reply with nothing in it, not a crash.
+    expect(normaliseSuggestions(undefined)).toEqual({ generated_at: null, read_pages: [], suggestions: {} });
+  });
+
+  it("maps confidence, with anything unknown read as low", () => {
+    expect(confidenceOf("high")).toBe("high");
+    expect(confidenceOf("medium")).toBe("medium");
+    expect(confidenceOf("low")).toBe("low");
+    expect(confidenceOf("certain")).toBe("low");
+    expect(confidenceOf(undefined)).toBe("low");
+  });
+
+  it("knows a filled section from an empty one, ignoring blanks", () => {
+    const e = emptyCardInput();
+    expect(sectionFilled("identity", e)).toBe(false);
+    expect(sectionFilled("identity", { ...e, identity: { ...e.identity, hq_city: "  " } })).toBe(false);
+    expect(sectionFilled("identity", { ...e, identity: { ...e.identity, hq_city: "LA" } })).toBe(true);
+    expect(sectionFilled("product_names", { ...e, product_names: ["", " "] })).toBe(false);
+    expect(sectionFilled("press_kit", { ...e, press_kit: [{ label: "", url: " " }] })).toBe(false);
+    expect(sectionFilled("press_kit", { ...e, press_kit: [{ label: "", url: "https://x" }] })).toBe(true);
+    expect(sectionFilled("boilerplate", { ...e, boilerplate: { text: " x " } })).toBe(true);
+  });
+
+  it("fills empty sections, never overwrites a filled one, and names what the site had nothing for", () => {
+    const s = normaliseSuggestions(reply).suggestions;
+    const mine = cardToInput(storedCard({ identity: { ...storedCard().identity, legal_name: "", website: "", hq_city: "", hq_state: "", dateline: "", short_name: "", newsroom_url: "" }, product_names: [] }));
+    const { next, applied, held, missing } = applySuggestions(mine, s);
+    // Empty on my side → prefilled, in the card's section order.
+    expect(applied).toEqual(["identity", "product_names", "press_kit"]);
+    expect(next.identity.legal_name).toBe("Legal Soft LLC");
+    expect(next.product_names).toEqual(["LegalSoft Intake™", "  "]);
+    expect(next.press_kit).toEqual([{ label: "Logos", url: "https://legalsoft.com/press" }]);
+    // Filled on my side → kept exactly, suggestion held.
+    expect(held).toEqual(["boilerplate"]);
+    expect(next.boilerplate).toEqual(mine.boilerplate);
+    expect(missing).toEqual(["messaging", "proof_points", "spokespeople", "avoid", "media_contact", "keywords"]);
+    // Reviewers are untouched, and the form I started from is not mutated.
+    expect(next.reviewers).toEqual(mine.reviewers);
+    expect(mine.boilerplate.text).toBe("Legal Soft builds software for law firms.");
+    expect(mine.identity.legal_name).toBe("");
+  });
+
+  it("lets the reader take one held suggestion over their own text", () => {
+    const s = normaliseSuggestions(reply).suggestions;
+    const mine = cardToInput(storedCard({ boilerplate: { ...storedCard().boilerplate, text: "Our own words." } }));
+    const next = takeSuggestion(mine, "boilerplate", s.boilerplate!);
+    expect(next.boilerplate.text).toBe("Legal Soft builds software for law firms.");
+    expect(mine.boilerplate.text).toBe("Our own words.");
+    expect(next.identity).toEqual(mine.identity);
+  });
+
+  it("labels the chip with the first source's host", () => {
+    expect(sourceHost("https://www.legalsoft.com/about?x=1")).toBe("legalsoft.com");
+    expect(sourceHost("not a url")).toBe("");
+    expect(suggestChipLabel({ sources: ["https://www.legalsoft.com/about", "https://other.com"] })).toBe("Suggested · legalsoft.com");
+    expect(suggestChipLabel({ sources: [] })).toBe("Suggested");
+    expect(suggestChipLabel({ sources: ["nope"] })).toBe("Suggested");
+  });
+
+  it("words the empty state, the wait and the banner around the brand's site", () => {
+    expect(fillFromLabel("legalsoft.com")).toBe("Fill from legalsoft.com");
+    expect(fillFromLabel("")).toBe("Fill from website");
+    expect(fillFromBody("legalsoft.com")).toBe(
+      "PR Writer reads legalsoft.com's public pages and drafts the card. You check it, fix anything wrong and save. Reviewers are always chosen by you.",
+    );
+    expect(readingSiteText("legalsoft.com")).toBe("Reading legalsoft.com's public pages. About a minute.");
+    expect(readingSiteText("")).toBe("Reading the website's public pages. About a minute.");
+    expect(suggestBanner(6)).toBe("Drafted from 6 pages. Nothing is saved yet: check each section, then Save card.");
+    expect(suggestBanner(1)).toBe("Drafted from 1 page. Nothing is saved yet: check each section, then Save card.");
+    expect(suggestBanner(0)).toBe("Drafted from the site. Nothing is saved yet: check each section, then Save card.");
+    expect(NOTHING_FOUND_ON_SITE).toBe("Nothing found on the site.");
+    expect(BOILERPLATE_APPROVAL_HINT).toBe("Needs the comms lead's approval before it counts.");
+    expect(MEDIA_CONTACT_HINT).toBe("Only shown if the site publishes one.");
+  });
+
+  it("says what a failed suggest means, per the contract's codes", () => {
+    // 424 search / key: the server's sentence, since only it knows which key or why.
+    expect(suggestErrorText("search_unavailable", "Serper credits are exhausted.")).toBe("Serper credits are exhausted.");
+    expect(suggestErrorText("search_unavailable", "  ")).toBe(SEARCH_UNAVAILABLE_TEXT);
+    expect(suggestErrorText("credential_missing", "The search key isn't configured.")).toBe("The search key isn't configured.");
+    expect(suggestErrorText("credential_missing", null)).toBe("A key PR Writer needs isn't configured, so an admin has to add it. Nothing changed.");
+    // 424 model_unavailable, the 502s and the 504: one sentence, never provider text.
+    for (const code of ["model_unavailable", "model_truncated", "model_refused", "model_output_invalid", "model_timeout"]) {
+      expect(suggestErrorText(code, "The writing model didn't respond after 3 tries. The card wasn't changed.")).toBe(SITE_UNREADABLE);
+    }
+    expect(SITE_UNREADABLE).toBe("PR Writer couldn't read the site right now. Nothing changed.");
+    // 422 no domain, 403 no right to edit.
+    expect(suggestErrorText("brand_domain_missing", "x")).toBe(BRAND_DOMAIN_MISSING);
+    expect(BRAND_DOMAIN_MISSING).toBe("This brand has no website on record. Add its domain in the SEO Analyst first.");
+    expect(suggestErrorText("cannot_edit_card", "x")).toBe(CANNOT_FILL_CARD);
+    expect(CANNOT_FILL_CARD).toBe("Only the comms lead or an admin can fill this card.");
+    // Anything else keeps the server's sentence, or the generic line.
+    expect(suggestErrorText("brand_not_found", "No such brand.")).toBe("No such brand.");
+    expect(suggestErrorText(null, null)).toBe(SITE_UNREADABLE);
   });
 });
 

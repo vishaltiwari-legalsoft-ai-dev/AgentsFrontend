@@ -3916,6 +3916,30 @@ export interface PrBrandCardResponse {
 
 export interface PrMember { id: string; name: string; email: string }
 
+/** `POST /brands/{id}/card/suggest`: a draft of the card read off the brand's
+ *  public pages. Nothing is saved by it; the editor merges it into the form
+ *  and the reader saves through the ordinary PUT. Reviewers are never
+ *  suggested, and an omitted section means nothing was found. */
+export type PrSuggestConfidence = "high" | "medium" | "low";
+export type PrSuggestSection = Exclude<PrCardSection, "reviewers">;
+export interface PrCardSuggestionRaw {
+  /** The section's value in the card's own shape (contract §5). */
+  value: unknown;
+  /** Page URLs from `read_pages` whose text supports the value. */
+  sources: string[];
+  /** high = verbatim on the page; medium = paraphrase; low = weak overlap. */
+  confidence: PrSuggestConfidence;
+  note: string | null;
+}
+export interface PrCardSuggestResponse {
+  brand_id: string;
+  generated_at: string;
+  /** Exactly the pages read, in order. */
+  read_pages: { url: string; title: string }[];
+  /** Keyed by the card's section keys; an absent key = nothing found. */
+  suggestions: Partial<Record<PrSuggestSection, PrCardSuggestionRaw>>;
+}
+
 export type PrExportFormat = "docx" | "md";
 export type PrEscalationAction = "clear" | "keep-paused" | "close" | "withdraw" | "notes";
 
@@ -3931,6 +3955,9 @@ export const prSaveCard = async (
   brandId: string,
   body: { base_revision: number; card: PrBrandCardInput; boilerplate_approval?: { approved_by: string; approved_on: string } },
 ) => putJson<PrBrandCardResponse>(`/api/pr/brands/${pathSegment(brandId)}/card`, body);
+
+export const prSuggestCard = async (brandId: string, opts?: RequestOptions) =>
+  postJson<PrCardSuggestResponse>(`/api/pr/brands/${pathSegment(brandId)}/card/suggest`, {}, opts);
 
 export const prMembers = async (opts?: RequestOptions) =>
   getJson<{ members: PrMember[] }>("/api/pr/members", opts);

@@ -39,7 +39,11 @@ describe("deadlineFor", () => {
     expect(deadlineFor("/api/pr/runs/pr-3f9a0b1c2d3e/blocks/b-lede/revise", "POST")).toBe(SLOW_TIMEOUT_MS);
     expect(deadlineFor("/api/pr/runs/pr-3f9a0b1c2d3e/claims/c-1/remove", "POST")).toBe(SLOW_TIMEOUT_MS);
     expect(deadlineFor("/api/pr/runs/pr-3f9a0b1c2d3e/export?format=docx&v=1.0")).toBe(SLOW_TIMEOUT_MS);
+    // Suggesting a brand card crawls the site and runs a model in one call.
+    expect(deadlineFor("/api/pr/brands/legalsoft/card/suggest", "POST")).toBe(SLOW_TIMEOUT_MS);
     // ...while the cheap PR reads and writes keep the default.
+    expect(deadlineFor("/api/pr/brands/legalsoft/card")).toBe(DEFAULT_TIMEOUT_MS);
+    expect(deadlineFor("/api/pr/brands/legalsoft/card", "PUT")).toBe(DEFAULT_TIMEOUT_MS);
     expect(deadlineFor("/api/pr/runs/pr-3f9a0b1c2d3e")).toBe(DEFAULT_TIMEOUT_MS);
     expect(deadlineFor("/api/pr/runs/pr-3f9a0b1c2d3e/claims/c-1/verify", "POST")).toBe(DEFAULT_TIMEOUT_MS);
     expect(deadlineFor("/api/pr/runs/pr-3f9a0b1c2d3e/review", "POST")).toBe(DEFAULT_TIMEOUT_MS);
