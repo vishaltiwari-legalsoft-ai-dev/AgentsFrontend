@@ -4,6 +4,7 @@ import { dispositionFilename } from "../../../lib/api";
 import {
   CARD_SECTIONS, FAILURE_CAUSE, MODEL_UNAVAILABLE_TEXT, NOT_STARTED, NO_CAN, SEARCH_UNAVAILABLE_TEXT,
   actionErrorText, createErrorText, nextMinorVersion, resignWarning, sectionStep,
+  CANNOT_ASSIGN_REVIEWERS, CLARIFY_SCREEN_FAILED, LEGAL_SAME_AS_COMMS, cardSaveError, cardToSend,
   apDate, apDateTime, apTime, blockerSentence, boilerplateChanged, brandNote, cardStoryLine, cardToInput,
   chipInputOf, cleanCardInput, clearedToast, conflictText, coverChips, coverCounts, coverStory, defaultBrand,
   emptyCardInput, escalationRecordLine, escalationSeat, exportFilename, firstSentence, groupRuns, isPrRunId,
@@ -681,6 +682,31 @@ describe("the brand card editor", () => {
     expect(clean.keywords).toEqual(["virtual paralegal", "intake"]);
     expect(clean.messaging.key_messages).toEqual(["a", "b", "c"]);
     expect(clean.press_kit).toEqual([{ label: "Logos", url: "https://x.test/logos" }]);
+  });
+
+  it("sends the loaded reviewers back unchanged unless the viewer may assign them", () => {
+    const base = cardToInput(storedCard());
+    const mine = structuredClone(base);
+    mine.reviewers.legal = "u-someone-else";
+    mine.keywords = [" intake ", ""];
+    const asLead = cardToSend(base, mine, false);
+    expect(asLead.reviewers).toEqual({ comms_lead: "u-priya", brand_owner: null, legal: "u-hamid" });
+    expect(asLead.keywords).toEqual(["intake"]);
+    expect(cardToSend(base, mine, true).reviewers.legal).toBe("u-someone-else");
+    // An older reply without the flag reads as "may not assign".
+    expect(normaliseCard({ can_edit: true }).can_edit_reviewers).toBe(false);
+  });
+
+  it("places a refused save where the reader can fix it", () => {
+    expect(cardSaveError("cannot_assign_reviewers", undefined)).toEqual({ where: "form", text: CANNOT_ASSIGN_REVIEWERS });
+    expect(CANNOT_ASSIGN_REVIEWERS).toBe("Only workspace admins can change who reviews this brand's drafts. Nothing was saved.");
+    expect(cardSaveError("invalid_card", "reviewers.legal")).toEqual({ where: "reviewers.legal", text: LEGAL_SAME_AS_COMMS });
+    expect(LEGAL_SAME_AS_COMMS).toBe("Legal review needs a different person from the comms lead.");
+    expect(cardSaveError("invalid_card", "identity.website")).toBeNull();
+    expect(cardSaveError("too_long", "boilerplate.text")).toBeNull();
+    expect(CLARIFY_SCREEN_FAILED).toBe(
+      "PR Writer couldn't check these details for topics that need legal first. Nothing was saved; try again.",
+    );
   });
 
   it("knows when a save changes the boilerplate", () => {

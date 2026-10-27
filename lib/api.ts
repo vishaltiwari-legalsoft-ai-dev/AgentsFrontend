@@ -3907,6 +3907,9 @@ export interface PrBrandCardResponse {
   updated_at: string | null;
   updated_by: PrUserRef | null;
   can_edit: boolean;
+  /** Only an admin named by exact address may change who reviews. Everyone
+   *  else sends the current reviewer ids back unchanged. */
+  can_edit_reviewers: boolean;
   sections: Partial<Record<PrCardSection, boolean>>;
   card: PrBrandCard | null;
 }

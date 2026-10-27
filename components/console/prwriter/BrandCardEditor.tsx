@@ -18,7 +18,7 @@ import { Icon } from "@/lib/kit-ui";
 import { describeFailure } from "@/lib/load";
 import type { ToastFn } from "@/components/hub/context";
 import {
-  CARD_SECTIONS, boilerplateChanged, cardStoryLine, cardToInput, cleanCardInput, conflictText, mergeThreeWay, normaliseCard, sectionSummary, staleCardMessage, type MergeConflict,
+  CARD_SECTIONS, boilerplateChanged, cardSaveError, cardStoryLine, cardToInput, cardToSend, conflictText, mergeThreeWay, normaliseCard, sectionSummary, staleCardMessage, type MergeConflict,
 } from "@/components/hub/work/pr";
 
 export interface BrandCardEditorProps {
@@ -43,6 +43,8 @@ export function BrandCardEditor({ brandId, brandName, card, canEdit, members, on
   const [stale, setStale] = useState<PrBrandCardResponse | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [legalErr, setLegalErr] = useState<string | null>(null);
+  const canEditReviewers = canEdit && card.can_edit_reviewers;
   const [open, setOpen] = useState<Partial<Record<PrCardSection, boolean>>>({});
 
   const complete = CARD_SECTIONS.filter((s) => card.sections[s.id]).length;
@@ -67,6 +69,7 @@ export function BrandCardEditor({ brandId, brandName, card, canEdit, members, on
       return next;
     });
     if (err) setErr(null);
+    if (legalErr) setLegalErr(null);
   };
 
   async function save() {
@@ -76,10 +79,11 @@ export function BrandCardEditor({ brandId, brandName, card, canEdit, members, on
     }
     setSaving(true);
     setErr(null);
+    setLegalErr(null);
     try {
       const raw = await prSaveCard(brandId, {
         base_revision: revision,
-        card: cleanCardInput(mine),
+        card: cardToSend(base, mine, canEditReviewers),
         ...(newBoilerplate ? { boilerplate_approval: { approved_by: approval.approved_by.trim(), approved_on: approval.approved_on } } : {}),
       });
       const saved = normaliseCard(raw);
@@ -92,9 +96,16 @@ export function BrandCardEditor({ brandId, brandName, card, canEdit, members, on
       onSaved(saved);
       onToast(`${brandName}'s card is saved. New drafts use it from now on.`, "ok");
     } catch (e) {
-      if (apiCode(e) === "stale_card") {
-        const detail = apiBody(e).detail as Record<string, unknown> | undefined;
+      const code = apiCode(e);
+      const detail = apiBody(e).detail as Record<string, unknown> | undefined;
+      const placed = cardSaveError(code, detail?.field);
+      if (code === "stale_card") {
         setStale(normaliseCard(detail?.current));
+      } else if (placed?.where === "reviewers.legal") {
+        setLegalErr(placed.text);
+        setOpen((o) => ({ ...o, reviewers: true }));
+      } else if (placed) {
+        setErr(placed.text);
       } else {
         setErr(describeFailure(e, "The card could not be saved. Nothing was changed."));
       }
@@ -221,17 +232,31 @@ export function BrandCardEditor({ brandId, brandName, card, canEdit, members, on
   }
 
   const reviewer = (label: string, key: keyof PrBrandCardInput["reviewers"]) => {
+    // Without the right to assign reviewers the names are read-only, and the
+    // save sends the loaded ids back unchanged (`cardToSend`).
+    if (!canEditReviewers) {
+      return (
+        <div className="pr-form__row">
+          <span>{label}</span>
+          <span className="pr-readonly">{base.reviewers[key] ? nameOf(base.reviewers[key]) : "Nobody named"}</span>
+        </div>
+      );
+    }
     const value = mine.reviewers[key];
     const listed = !value || members.some((m) => m.id === value);
+    const fieldErr = key === "legal" ? legalErr : null;
     return (
       <label className="pr-form__row">
         <span>{label}</span>
         <select className="pr-input" value={value || ""} disabled={locked}
+          aria-invalid={fieldErr ? true : undefined}
+          aria-describedby={fieldErr ? "pr-legal-err" : undefined}
           onChange={(e) => set((c) => { c.reviewers[key] = e.target.value || null; })}>
           <option value="">Nobody named</option>
           {!listed && value && <option value={value}>{nameOf(value)}</option>}
           {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select>
+        {fieldErr && <p className="err" id="pr-legal-err" role="alert">{fieldErr}</p>}
         {conflictBox(`reviewers.${key}`)}
       </label>
     );
@@ -243,6 +268,9 @@ export function BrandCardEditor({ brandId, brandName, card, canEdit, members, on
         {reviewer("Comms lead", "comms_lead")}
         {reviewer("Brand owner", "brand_owner")}
         {reviewer("Legal", "legal")}
+        {canEdit && !canEditReviewers && (
+          <p className="bw-hint">Only workspace admins can change who reviews this brand&apos;s drafts.</p>
+        )}
       </>
     ),
     identity: (

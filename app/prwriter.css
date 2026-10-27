@@ -61,6 +61,7 @@ button.pr-chip--missing { background: var(--surface-sunken); }
 .pr-input:disabled { color: var(--text-secondary); background: var(--surface-sunken); }
 textarea.pr-input { resize: vertical; }
 .pr-write { display: grid; gap: var(--space-3); }
+.pr-readonly { font: var(--fw-medium) var(--fs-body-sm)/var(--lh-body-sm) var(--font-sans); color: var(--text-primary); }
 
 .bw-btn:focus-visible, .pr-link:focus-visible, .pr-mark:focus-visible, .pr-version:focus-visible,
 button.bw-chip:focus-visible, .pr-group > summary:focus-visible, .bw-ledger > summary:focus-visible {

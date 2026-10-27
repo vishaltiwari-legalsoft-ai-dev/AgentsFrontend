@@ -32,7 +32,7 @@ import { useReportWork } from "@/lib/work";
 import type { ToastFn } from "@/components/hub/context";
 import { Oops, Wait } from "@/components/hub/ui";
 import {
-  POLL_MS, STEP_LABEL, actionErrorText, apDate, chipInputOf, clearedToast, coverChips, coverCounts, coverStory,
+  CLARIFY_SCREEN_FAILED, POLL_MS, STEP_LABEL, actionErrorText, apDate, chipInputOf, clearedToast, coverChips, coverCounts, coverStory,
   createErrorText, escalationRecordLine, escalationSeat, exportFilename, groupRuns, isOwner, lockedBanner, nextAutoStep,
   normaliseCard, normaliseRun, normaliseVersion, quoteResetLine, quoteResetToast, researchPartialNote, resignWarning,
   retryDelayMs, rowMeta, rowTitle, runChip, sectionStep, shouldPoll, stepLines, stoppedLine, versionLabel,
@@ -339,13 +339,41 @@ export function PrWriter({
   async function act(
     key: string,
     call: () => Promise<PrRunDoc>,
-    opts: { fallback: string; rethrow?: boolean; after?: (next: PrRunDoc, before: PrRunDoc) => void } = { fallback: "That didn't save." },
+    opts: {
+      fallback: string;
+      rethrow?: boolean;
+      after?: (next: PrRunDoc, before: PrRunDoc) => void;
+      /** Revise and remove-claim: one model-backed edit per run at a time.
+       *  On `409 revision_running` wait `retry_after_s`, re-read, and send
+       *  again — but only while the version is still the one this edit was
+       *  written against; never over someone else's new text. */
+      waitOnBusy?: boolean;
+      /** A code this action words its own way. */
+      errorText?: (code: string | null) => string | null;
+    } = { fallback: "That didn't save." },
   ): Promise<boolean> {
     if (!shown) return false;
     const before = shown;
     setBusy(key);
     try {
-      const next = normaliseRun(await call());
+      let raw: PrRunDoc | null = null;
+      for (let waits = 0; raw === null; waits++) {
+        try {
+          raw = await call();
+        } catch (e) {
+          if (!opts.waitOnBusy || apiCode(e) !== "revision_running" || waits >= 10) throw e;
+          const detail = (apiBody(e).detail ?? {}) as Record<string, unknown>;
+          await sleep(retryDelayMs(detail.retry_after_s));
+          if (openRef.current !== before.id) return false;
+          const fresh = normaliseRun(await prRun(before.id));
+          land(fresh);
+          if (fresh.current_version !== before.current_version) {
+            onToast("Someone else changed this draft while yours waited. Read it again, then send your change.", "warn");
+            return false;
+          }
+        }
+      }
+      const next = normaliseRun(raw);
       if (land(next)) opts.after?.(next, before);
       onRunsChanged();
       return true;
@@ -355,7 +383,11 @@ export function PrWriter({
         prRun(before.id).then((raw) => land(normaliseRun(raw)), () => undefined);
       }
       if (opts.rethrow) throw e;
-      if (openRef.current === before.id) fail(e, opts.fallback);
+      if (openRef.current === before.id) {
+        const own = opts.errorText?.(code);
+        if (own) onToast(own, "error");
+        else fail(e, opts.fallback);
+      }
       return false;
     } finally {
       if (openRef.current === before.id) setBusy(null);
@@ -396,6 +428,10 @@ export function PrWriter({
   async function answerClarify(mode: "answers" | "placeholders", answers: Partial<Record<PrClarifyKey, string>>, type: PrContentType) {
     await act("clarify", () => prClarify(shown!.id, mode === "answers" ? { mode, answers, content_type: type } : { mode, content_type: type }), {
       fallback: "Your details could not be saved.",
+      // The answers are screened like the brief: a sensitive one comes back
+      // as an escalated run (the pause card renders from it), and a screen
+      // that could not run saves nothing and leaves the card open.
+      errorText: (code) => (code === "screen_failed" ? CLARIFY_SCREEN_FAILED : null),
       after: (next) => { if (nextAutoStep(next)) void drive(next); },
     });
   }
@@ -419,6 +455,7 @@ export function PrWriter({
     const comment = (comments[block.id] ?? "").trim();
     if (!shown || !comment || busy || !shown.current_version) return;
     const ok = await act(`revise-${block.id}`, () => prRevise(shown.id, block.id, comment, shown.current_version!), {
+      waitOnBusy: true,
       fallback: "The revision didn't save.",
       after: (next, before) => {
         const t = quoteResetToast(next, before.current_version);
@@ -431,6 +468,7 @@ export function PrWriter({
   async function removeClaim(claim: PrClaim) {
     if (!shown?.current_version || busy) return;
     await act(`remove-${claim.id}`, () => prRemoveClaim(shown.id, claim.id, shown.current_version!), {
+      waitOnBusy: true,
       fallback: "The claim could not be removed.",
       after: (next, before) => {
         const t = quoteResetToast(next, before.current_version);

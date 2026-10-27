@@ -1078,6 +1078,30 @@ export function cleanCardInput(input: PrBrandCardInput): PrBrandCardInput {
   };
 }
 
+/** What a save sends. Without the right to assign reviewers the card goes
+ *  back with the reviewer ids it was loaded with, whatever the form holds, so
+ *  a comms lead's content edit can never also be a reassignment. */
+export function cardToSend(base: PrBrandCardInput, mine: PrBrandCardInput, canEditReviewers: boolean): PrBrandCardInput {
+  const clean = cleanCardInput(mine);
+  return canEditReviewers ? clean : { ...clean, reviewers: { ...base.reviewers } };
+}
+
+export const CANNOT_ASSIGN_REVIEWERS =
+  "Only workspace admins can change who reviews this brand's drafts. Nothing was saved.";
+export const LEGAL_SAME_AS_COMMS = "Legal review needs a different person from the comms lead.";
+
+/** A refused card save, placed where the reader can act on it: under one
+ *  field (`field`) or above the form (`form`). Null means "say the
+ *  server's sentence". */
+export function cardSaveError(code: string | null, field: unknown): { where: "form" | "reviewers.legal"; text: string } | null {
+  if (code === "cannot_assign_reviewers") return { where: "form", text: CANNOT_ASSIGN_REVIEWERS };
+  if (code === "invalid_card" && field === "reviewers.legal") return { where: "reviewers.legal", text: LEGAL_SAME_AS_COMMS };
+  return null;
+}
+
+export const CLARIFY_SCREEN_FAILED =
+  "PR Writer couldn't check these details for topics that need legal first. Nothing was saved; try again.";
+
 /** Whether a save changes the boilerplate text (Rule 4: it then needs who
  *  approved it and when). */
 export const boilerplateChanged = (base: PrBrandCardInput, mine: PrBrandCardInput): boolean =>
@@ -1146,7 +1170,7 @@ export function normaliseCard(v: unknown): PrBrandCardResponse {
     brand_id: str(o.brand_id), brand_name: str(o.brand_name),
     exists: bool(o.exists), revision: num(o.revision),
     updated_at: strOrNull(o.updated_at), updated_by: user(o.updated_by),
-    can_edit: bool(o.can_edit), sections: out,
+    can_edit: bool(o.can_edit), can_edit_reviewers: bool(o.can_edit_reviewers), sections: out,
     card: o.card && typeof o.card === "object" ? (o.card as PrBrandCard) : null,
   };
 }
